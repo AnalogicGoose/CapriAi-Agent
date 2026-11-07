@@ -5,7 +5,7 @@ function settingsPatch(input, displays = []) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw Error('Invalid settings.');
   const result = {};
   for (const [key, value] of Object.entries(input)) {
-    if (['muted', 'wander', 'possess', 'windowTracking'].includes(key) && typeof value === 'boolean') result[key] = value;
+    if (['muted', 'wander', 'possess', 'windowTracking', 'proactiveEnabled'].includes(key) && typeof value === 'boolean') result[key] = value;
     else if (key === 'scale' && [0.45, 0.6, 0.8].includes(value)) result[key] = value;
     else if (key === 'volume' && Number.isFinite(value) && value >= 0 && value <= 1) result[key] = value;
     else if (key === 'lang' && ['auto', 'en', 'es', 'fr', 'pt', 'ru'].includes(value)) result[key] = value;

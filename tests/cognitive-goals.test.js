@@ -59,6 +59,12 @@ test('attempt budget survives restarts and clearing the journal', t => {
   assert.equal(f.journal.attemptsLastHour(), 2);
   f.advance(3_600_000); assert.equal(f.journal.reserveAttempt(), true);
 });
+test('conversation cadence persists separately from curiosity questions', t => {
+  const f = fixture(t), state = { nextAt: 1_900_000, recent: [], lastSource: 'smalltalk' };
+  f.journal.conversationState(state); f.reopen();
+  assert.deepEqual(f.journal.conversationState(), state);
+  f.journal.clear(); assert.deepEqual(f.journal.conversationState(), state);
+});
 test('bounded history is deleted along with questions', t => {
   const f = fixture(t), q = f.observe();
   for (let i = 1; i <= 9; i++) {

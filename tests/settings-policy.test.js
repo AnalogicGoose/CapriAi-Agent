@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const { settingsPatch } = require('../src/main/settings-policy');
 
 test('settings accept displayed preferences and reject hidden agent/action switches and invalid values', () => {
+  assert.deepEqual(settingsPatch({proactiveEnabled:false}),{proactiveEnabled:false});
+  assert.throws(()=>settingsPatch({proactiveEnabled:'false'}));
   assert.deepEqual(settingsPatch({privacy:{memoryConfirmChanges:false}}),{privacy:{memoryConfirmChanges:false}});
   assert.throws(()=>settingsPatch({privacy:{memoryConfirmChanges:'false'}}));
   assert.deepEqual(settingsPatch({ scale:0.8, volume:0.5, displayId:42, privacy:{memoryEnabled:true,retentionDays:30} },[{id:42}]),

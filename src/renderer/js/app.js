@@ -255,6 +255,19 @@ async function boot() {
   host.onAgentSuggestion(text => {
     if (!chat.open && typeof text === 'string') panel.say({ kind: 'info', face: 'look', line: text, hold: 8000 });
   });
+  host.onConversation?.(text => {
+    if (chat.open || panel.visible || capri.fullscreen || typeof text !== 'string' || text.length > 320) return;
+    const es = brain.lang === 'es';
+    panel.say({ kind: 'info', face: 'look', line: text, hold: 20_000,
+      actions: [{ id: 'reply', label: es ? 'Responder' : 'Reply', primary: true },
+        { id: 'quiet', label: es ? 'Silenciar charlas' : 'Pause check-ins' }],
+      onAction: async id => {
+        panel.hide();
+        if (id === 'reply') await chat.start(false, text);
+        if (id === 'quiet') await host.personalRoute('/companion off');
+      },
+    });
+  });
   new FullscreenPresence({ capri, host, onChange: () => {
     refreshHit();
     if (capri.fullscreen) dictation.cancel();

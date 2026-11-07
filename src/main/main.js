@@ -37,6 +37,7 @@ const { createAgentBrowser } = require('./agent-browser');
 const { WorldState } = require('./world-state');
 const { CognitiveFoundation } = require('./cognitive-foundation');
 const { ReflectionEngine } = require('./cognitive-reflection');
+const { ProactiveConversation } = require('./proactive-conversation');
 const capabilities = require('./capabilities');
 let memoryStore;
 const memory = () => {
@@ -48,11 +49,11 @@ const memory = () => {
 const pcContext = new ContextService({ settings: () => config.load() });
 const world = new WorldState({ context: pcContext });
 const closeApp = require('./action-confirmation').createCloseHandler({ config, apps, dialog });
-const foreground = new ForegroundPriority(() => [agent, reflection]);
+const foreground = new ForegroundPriority(() => [agent, reflection, proactive]);
 const agent = new Agent({
   settings: () => config.load(), world, models: () => ollama.models(), apps, close: closeApp,
   infer: (request, signal) => ollama.chat(request, () => {}, signal),
-  idle: () => !chats.size && !actions.busy && !memoryRequests.busy,
+  idle: () => !chats.size && !actions.busy && !memoryRequests.busy && !proactive.busy && !reflection.busy,
   foregroundBusy: () => foreground.active > 0,
   recall: query => {
     const p = permissions(config.load().privacy);
@@ -102,7 +103,23 @@ const reflection = new ReflectionEngine({
   journal: curiosity, settings: () => config.load(), models: () => ollama.models(),
   infer: (request, signal) => ollama.chat(request, () => {}, signal),
   canRun: () => foreground.active === 0 && !chats.size && !agent.busy &&
-    !actions.busy && !memoryRequests.busy && !gamingTransition && !fullscreenState.active,
+    !actions.busy && !memoryRequests.busy && !gamingTransition && !fullscreenState.active && !proactive.busy,
+});
+let conversationOpen = false;
+let sessionAvailable = true;
+const proactive = new ProactiveConversation({ settings: rendererConfig, journal: curiosity,
+  observe: () => pcContext.snapshot('companion-conversation', ['contextForeground']),
+  memories: () => memory().list(10), models: () => ollama.models(),
+  infer: (request, signal) => ollama.chat(request, () => {}, signal),
+  canRun: () => !foreground.active && !chats.size && !agent.busy && !reflection.busy &&
+    !actions.busy && !memoryRequests.busy && !speech.current && !conversationOpen &&
+    !gamingTransition && sessionAvailable && !fullscreenState.active && Boolean(overlay && !overlay.isDestroyed() && overlay.isVisible()) &&
+    powerMonitor.getSystemIdleTime() < 300,
+  notify: text => {
+    if (!overlay || overlay.isDestroyed() || conversationOpen || fullscreenState.active) return false;
+    overlay.webContents.send('companion:conversation', text);
+    return true;
+  },
 });
 const PORT = Number(process.env.CAPRI_PORT) || 47823;
 const SOUND_EXT = /\.(mp3|wav|ogg|m4a)$/i;
@@ -252,6 +269,7 @@ async function setGamingMode(on) {
       await Promise.allSettled(pending.map(({ done }) => done));
       await agent.done;
       await reflection.done;
+      await proactive.done;
       await actions.done;
       agentBrowser.stop();
       try { await Promise.all([...new Set([pickModel(), capabilities.AGENT_MODEL])].map(model => ollama.unload(model))); }
@@ -272,7 +290,7 @@ function watchWindows() {
   if (windowWatch || config.load().gamingMode || !config.load().windowTracking) return;
   windowWatch = startWindowWatch({ overlay, onUpdate: (data) => {
     if (lastWindows && lastWindows.fg !== data.fg) {
-      agent.event('foreground-change');
+      // ProactiveConversation owns unsolicited messages and their cadence.
       // Cheap, bounded observation only. No AI call and no unsolicited message.
       curiosity.foregroundChanged().then(question => {
         if (question) reflection.schedule();
@@ -362,6 +380,7 @@ function updateConfig(patch) {
   // Revoke in-flight work only when its policy changes. Cosmetic changes (volume, scale,
   // Capri coming back out of her chip) must not abort a memory review the user just confirmed.
   const changes = key => Object.hasOwn(patch, key);
+  if (['gamingMode', 'agentEnabled', 'cognitiveEnabled', 'proactiveEnabled', 'visible', 'privacy', 'lang'].some(changes)) proactive.touch();
   if (['gamingMode', 'agentEnabled', 'cognitiveEnabled', 'desktopActions', 'privacy'].some(changes)) { agent.cancel(); actions.cancel(); reflection.cancel(); }
   if (['gamingMode', 'privacy'].some(changes)) memoryRequests.cancel();
   if (patch.privacy) patch = { ...patch, privacy: permissions({ ...config.load().privacy, ...patch.privacy }) };
@@ -402,7 +421,7 @@ async function settingsAction(name, value) {
       const error = await shell.openPath(userSoundsDir()); if (error) throw Error(error); break;
     }
     case 'memory-export': return (await personal.route('/memory export')).text;
-    case 'memory-delete': return (await personal.route('/memory delete-all')).text;
+    case 'memory-delete': proactive.touch(); return (await personal.route('/memory delete-all')).text;
     case 'memory-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing memory.'); sendCommand('memory'); break;
     case 'refresh': return runtime().currentSource ? 'Current local source is loaded.' : 'Local changes found. Restart Capri to load them.';
     case 'restart': app.relaunch(); app.quit(); break;
@@ -441,6 +460,7 @@ function registerIpc() {
   const speechCaller = event => event.sender === overlay?.webContents;
   ipcMain.handle('speech:start', (event, request) => {
     if (!speechCaller(event)) return { ok: false, error: 'speech-unavailable' };
+    proactive.touch();
     return speech.start(request);
   });
   ipcMain.handle('speech:stop', (event, request) => {
@@ -478,11 +498,18 @@ function registerIpc() {
            updateConfig({ cognitiveEnabled: arg === 'on' });
            return { handled: true, text: `Curiosity ${arg === 'on' ? 'enabled' : 'paused'}.` };
          }
-         if (arg === 'clear') { reflection.cancel(); curiosity.clear(); return { handled: true, text: 'Curiosity journal cleared.' }; }
+         if (arg === 'clear') { reflection.cancel(); proactive.touch(); curiosity.clear(); return { handled: true, text: 'Curiosity journal cleared.' }; }
          const decision = /^(resolve|dismiss)\s+(\d+)$/.exec(arg);
          if (decision) return { handled: true, text: curiosity.update(Number(decision[2]), decision[1] === 'resolve' ? 'resolved' : 'dismissed') ? 'Question updated.' : 'Open question not found.' };
          return { handled: true, text: 'Use /curiosity status, /curiosity list, /curiosity history <id>, /curiosity on|off, /curiosity resolve <id>, /curiosity dismiss <id>, or /curiosity clear.' };
        }
+       const companionCommand = /^\/companion(?:\s+(on|off|status))?$/i.exec(text.trim());
+       if (companionCommand) {
+         const arg = (companionCommand[1] || 'status').toLowerCase();
+         if (arg !== 'status') updateConfig({ proactiveEnabled: arg === 'on' });
+         return { handled: true, text: JSON.stringify(proactive.status(), null, 2) };
+       }
+       proactive.touch();
        const result = await agent.route(text.trim());
       if (result !== null) return { handled: true, text: result };
       const local = await personal.route(text);
@@ -527,6 +554,7 @@ function registerIpc() {
   });
   // her answer, streamed to the overlay piece by piece as `chat:delta`
   ipcMain.handle('chat:send', async (_e, { id, messages }) => foreground.run(async () => {
+    proactive.touch();
     if (config.load().gamingMode) return { ok: false, error: 'Gaming mode is on' };
     if (chats.size || agent.busy || actions.busy || memoryRequests.busy) return { ok: false, error: 'One local reply at a time' };
     if (actions.willHandle(messages?.at(-1)?.content||'')) return {ok:false,error:'Send action requests through the local task route.'};
@@ -575,7 +603,10 @@ function registerIpc() {
     ? appInfo(await apps.find(wanted).catch(() => null)) : null);
   ipcMain.handle('apps:close', closeApp);
   // typing to her: the overlay takes the keyboard while the chat is open, and gives it back after
-  ipcMain.on('overlay:focus', (_e, on) => {
+  ipcMain.on('overlay:focus', (event, on) => {
+    if (!speechCaller(event)) return;
+    conversationOpen = Boolean(on);
+    proactive.touch();
     if (!overlay) return;
     if (fullscreenState.active || config.load().gamingMode) return;
     overlay.setFocusable(Boolean(on));
@@ -695,6 +726,12 @@ function main() {
     const inquiryTimer = setInterval(() => reflection.schedule(), 60_000);
     inquiryTimer.unref();
     app.once('before-quit', () => clearInterval(inquiryTimer));
+    const conversationTimer = setInterval(() => proactive.run().catch(() => {}), 15_000);
+    conversationTimer.unref();
+    app.once('before-quit', () => clearInterval(conversationTimer));
+    for (const event of ['suspend', 'resume', 'lock-screen', 'unlock-screen']) powerMonitor.on(event, () => {
+      sessionAvailable = event === 'resume' || event === 'unlock-screen'; proactive.touch();
+    });
     // Prepare local chat without loading a model or delaying Capri's entrance.
     // Existing Ollama servers are reused; absent installations keep the setup UI.
     if (!config.load().gamingMode && ollamaRuntime.executable()) {
@@ -714,7 +751,7 @@ function main() {
     watchWindows();
     // Existing OS events only; at most one in-memory snapshot with a 60-second TTL.
     for (const [event, reason] of [['resume', 'resume'], ['on-ac', 'power-change'], ['on-battery', 'power-change']]) {
-      powerMonitor.on(event, () => { pcContext.onEvent(reason).catch(() => {}); agent.event(reason); });
+      powerMonitor.on(event, () => { pcContext.onEvent(reason).catch(() => {}); });
     }
     // Apply expiry on startup even if no memory is recalled this run.
     if (fs.existsSync(path.join(app.getPath('userData'), 'personal-memory.sqlite'))) {
@@ -767,7 +804,7 @@ function main() {
     screen.on('display-removed', () => { fitOverlay(); rebuildTray(); });
   });
 
-  app.on('before-quit', () => { speech.cancel(); agent.cancel(); reflection.close(); actions.cancel(); memoryRequests.cancel(); for (const { abort } of chats.values()) abort.abort(); });
+  app.on('before-quit', () => { speech.cancel(); agent.cancel(); reflection.close(); proactive.close(); actions.cancel(); memoryRequests.cancel(); for (const { abort } of chats.values()) abort.abort(); });
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     windowWatch?.stop();

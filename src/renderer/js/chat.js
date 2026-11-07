@@ -38,7 +38,7 @@ export class Chat {
     return this.brain.t.chat;
   }
 
-  async start(commandsOnly = false) {
+  async start(commandsOnly = false, opening = null) {
     const { capri, host, t } = this;
     // Switching modes: hide the open chat panel (its onLeave closes this chat). Closing
     // alone would leave the panel up, and it refuses a new chat on top of a chat.
@@ -98,7 +98,8 @@ export class Chat {
       badge: commandsOnly ? 'LOCAL' : t.badge,
       tag: `${status.version ? `v${status.version} · ` : ''}${status.model.replace(/:latest$/, '')}`,
       activity: this.brain.integrationActivity?.(),
-      line: commandsOnly ? 'Use /memory for help, remember <fact>, recall <words>, or /context. No AI needed.' : pick(this.history.length ? t.again : t.hello),
+      line: commandsOnly ? 'Use /memory for help, remember <fact>, recall <words>, or /context. No AI needed.' :
+        (typeof opening === 'string' ? opening : pick(this.history.length ? t.again : t.hello)),
       chat: {
         placeholder: t.placeholder,
         send: t.send,
@@ -113,6 +114,9 @@ export class Chat {
       return;
     }
     this.open = true;
+    if (!commandsOnly && typeof opening === 'string' && opening.length <= 320) {
+      this.history.push({ role: 'assistant', content: opening }); this.trimHistory();
+    }
     this.commandsOnly = commandsOnly;
     setTimeout(() => this.panel.chatInput.focus(), 150); // once the overlay has the keyboard
     capri.perform('listen', capri.towardCenter());

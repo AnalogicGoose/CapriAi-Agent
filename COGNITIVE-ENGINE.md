@@ -37,6 +37,8 @@ This branch implements three stages of a bounded, local-first curiosity pipeline
 
 This is bounded self-questioning behavior, not evidence of consciousness. Repeated app focus does not prove a user wants help. Model output must not be treated as observation or authorization, and it never initiates a spoken conversation at this stage.
 
+The separate [proactive conversation loop](PROACTIVE-CONVERSATION.md) now provides user-authorized text openings every 5–15 eligible minutes. It can gently surface an `ask_later` question while retaining its speculative status. The private reflection engine itself continues to generate no notifications or speech.
+
 ## Next milestone
 
 Add explicit user-goal and feedback signals with verified provenance; measure useful questions and false positive rates; add opt-in interruption policies and a soft, non-invasive UI for inspecting curiosity. Only then consider proactive conversation.

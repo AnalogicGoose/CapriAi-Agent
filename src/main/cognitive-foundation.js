@@ -38,7 +38,8 @@ class CognitiveFoundation {
     this.db.exec(`CREATE TABLE IF NOT EXISTS curiosity_reviews (
       id INTEGER PRIMARY KEY, question_id INTEGER NOT NULL, evidence_revision INTEGER NOT NULL,
       reflection TEXT NOT NULL, created_at INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS curiosity_attempts (at INTEGER NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS curiosity_attempts (at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS conversation_state (id INTEGER PRIMARY KEY CHECK(id=1), state TEXT NOT NULL);`);
     this.settings = settings;
     this.context = context;
     this.now = now;
@@ -156,6 +157,16 @@ class CognitiveFoundation {
   attemptsLastHour() {
     return Number(this.db.prepare('SELECT count(*) AS count FROM curiosity_attempts WHERE at>?')
       .get(this.now() - 3_600_000).count);
+  }
+
+  conversationState(value) {
+    if (value !== undefined) {
+      this.db.prepare('INSERT INTO conversation_state(id,state) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state')
+        .run(JSON.stringify(value));
+      return;
+    }
+    const row = this.db.prepare('SELECT state FROM conversation_state WHERE id=1').get();
+    try { return row ? JSON.parse(row.state) : null; } catch { return null; }
   }
 
   list(limit = 20) {

@@ -12,11 +12,16 @@ fs.mkdirSync(scratch, { recursive: true });
 process.env.CAPRIGPT_TEST_PROFILE = fs.mkdtempSync(path.join(scratch, 'caprigpt-smoke-'));
 process.env.CAPRIGPT_CONNECTION_FILE = path.join(process.env.CAPRIGPT_TEST_PROFILE, 'integration.json');
 let cognitiveProbe;
+let proactiveProbe;
 if (process.argv.includes('--cognitive-only')) {
   require('../src/main/ollama-runtime').executable = () => null;
   require('../src/main/ollama').models = async () => ['qwen3.5:9b'];
   const module = require('../src/main/cognitive-foundation'), Original = module.CognitiveFoundation;
   module.CognitiveFoundation = class extends Original { constructor(options) { super(options); cognitiveProbe = this; } };
+  const conversationModule = require('../src/main/proactive-conversation'), Conversation = conversationModule.ProactiveConversation;
+  conversationModule.ProactiveConversation = class extends Conversation {
+    constructor(options) { super(options); proactiveProbe = this; }
+  };
 }
 if (process.argv.includes('--conversation-only')) {
   require('../src/main/ollama-runtime').executable = () => null;
@@ -97,7 +102,24 @@ app.whenReady().then(async () => {
       assert.equal(JSON.parse((await route('/curiosity status')).text).reflection.enabled, false);
       await route('/curiosity clear');
       assert.deepEqual(JSON.parse((await route(`/curiosity history ${question.id}`)).text), []);
-      console.log('PASS: isolated Electron profile, SQLite review history, preload/IPC curiosity commands, pause and clear. Inference not exercised.');
+      await js("document.querySelector('#panel').click()"); await pause(400);
+      proactiveProbe.observe = async () => ({ foreground: { app: 'Code' } });
+      proactiveProbe.infer = async () => JSON.stringify({ speak: true, message: 'What kind of game would you like to build?' });
+      proactiveProbe.canRun = () => true;
+      proactiveProbe.state.nextAt = 0;
+      assert.equal(await proactiveProbe.run(), true);
+      for (let i = 0; i < 40 && !await js("document.querySelector('.panel__line').textContent.includes('What kind of game')"); i++) await pause(50);
+      assert.match(await js("document.querySelector('.panel__line').textContent"), /What kind of game/);
+      assert.equal(win.isFocusable(), false, 'An unsolicited message must not take keyboard focus');
+      await js("document.querySelector('[data-id=reply]').click()");
+      for (let i = 0; i < 60 && !await js("document.querySelector('#panel').classList.contains('is-chat')"); i++) await pause(50);
+      assert.equal(await js("document.querySelector('#panel').classList.contains('is-chat')"), true);
+      for (let i = 0; i < 60 && !await js("document.querySelector('.panel__line').textContent.includes('What kind of game')"); i++) await pause(50);
+      assert.match(await js("document.querySelector('.panel__line').textContent"), /What kind of game/);
+      await route('/companion off');
+      assert.equal(JSON.parse((await route('/companion status')).text).enabled, false);
+      assert.equal(await proactiveProbe.run(), false);
+      console.log('PASS: isolated Electron SQLite/IPC curiosity commands; proactive bubble without focus, Reply opens chat with its question, pause stops check-ins. Generated text mocked.');
       clearTimeout(limit); app.exit(0); return;
     }
     if (process.argv.includes('--conversation-only')) {
