@@ -275,7 +275,7 @@ function watchWindows() {
       agent.event('foreground-change');
       // Cheap, bounded observation only. No AI call and no unsolicited message.
       curiosity.foregroundChanged().then(question => {
-        if (question && !question.reflected_at) reflection.schedule();
+        if (question) reflection.schedule();
       }).catch(() => {});
     }
     lastWindows = data;
@@ -472,6 +472,8 @@ function registerIpc() {
          const arg = (curiosityCommand[1] || 'status').trim().toLowerCase();
          if (arg === 'status') return { handled: true, text: JSON.stringify({ ...curiosity.status(), reflection: reflection.status() }, null, 2) };
          if (arg === 'list') return { handled: true, text: JSON.stringify(curiosity.list(), null, 2) };
+         const history = /^history (\d+)$/.exec(arg);
+         if (history) return { handled: true, text: JSON.stringify(curiosity.reviewContext(Number(history[1])), null, 2) };
          if (arg === 'off' || arg === 'on') {
            updateConfig({ cognitiveEnabled: arg === 'on' });
            return { handled: true, text: `Curiosity ${arg === 'on' ? 'enabled' : 'paused'}.` };
@@ -479,7 +481,7 @@ function registerIpc() {
          if (arg === 'clear') { reflection.cancel(); curiosity.clear(); return { handled: true, text: 'Curiosity journal cleared.' }; }
          const decision = /^(resolve|dismiss)\s+(\d+)$/.exec(arg);
          if (decision) return { handled: true, text: curiosity.update(Number(decision[2]), decision[1] === 'resolve' ? 'resolved' : 'dismissed') ? 'Question updated.' : 'Open question not found.' };
-         return { handled: true, text: 'Use /curiosity status, /curiosity list, /curiosity on|off, /curiosity resolve <id>, /curiosity dismiss <id>, or /curiosity clear.' };
+         return { handled: true, text: 'Use /curiosity status, /curiosity list, /curiosity history <id>, /curiosity on|off, /curiosity resolve <id>, /curiosity dismiss <id>, or /curiosity clear.' };
        }
        const result = await agent.route(text.trim());
       if (result !== null) return { handled: true, text: result };
@@ -687,6 +689,12 @@ function main() {
   if (process.platform === 'win32') app.setAppUserModelId('caprigpt.desktop');
 
   app.whenReady().then(() => {
+    reflection.schedule();
+    // Wake due inquiries after restarts/cooldowns without collecting more context.
+    // No inference occurs unless a persisted question has fresh, unreviewed evidence.
+    const inquiryTimer = setInterval(() => reflection.schedule(), 60_000);
+    inquiryTimer.unref();
+    app.once('before-quit', () => clearInterval(inquiryTimer));
     // Prepare local chat without loading a model or delaying Capri's entrance.
     // Existing Ollama servers are reused; absent installations keep the setup UI.
     if (!config.load().gamingMode && ollamaRuntime.executable()) {

@@ -11,6 +11,13 @@ const scratch = path.resolve(__dirname, '../../../work');
 fs.mkdirSync(scratch, { recursive: true });
 process.env.CAPRIGPT_TEST_PROFILE = fs.mkdtempSync(path.join(scratch, 'caprigpt-smoke-'));
 process.env.CAPRIGPT_CONNECTION_FILE = path.join(process.env.CAPRIGPT_TEST_PROFILE, 'integration.json');
+let cognitiveProbe;
+if (process.argv.includes('--cognitive-only')) {
+  require('../src/main/ollama-runtime').executable = () => null;
+  require('../src/main/ollama').models = async () => ['qwen3.5:9b'];
+  const module = require('../src/main/cognitive-foundation'), Original = module.CognitiveFoundation;
+  module.CognitiveFoundation = class extends Original { constructor(options) { super(options); cognitiveProbe = this; } };
+}
 if (process.argv.includes('--conversation-only')) {
   require('../src/main/ollama-runtime').executable = () => null;
   require('../src/main/ollama').models = async () => ['qwen3.5:9b'];
@@ -72,6 +79,27 @@ app.whenReady().then(async () => {
     const js = (source) => win.webContents.executeJavaScript(source);
     for (let i = 0; i < 120 && !await js("document.documentElement.dataset.caprigptReady === 'true'"); i++) await pause(500);
     assert.equal(await js("document.documentElement.dataset.caprigptReady"), 'true');
+    if (process.argv.includes('--cognitive-only')) {
+      await js('host.setConfig({gamingMode:false,agentEnabled:true,cognitiveEnabled:true,privacy:{contextEvents:true,contextForeground:true}})');
+      cognitiveProbe.observeApp('Code'); cognitiveProbe.observeApp('Code');
+      const question = cognitiveProbe.observeApp('Code');
+      assert.ok(question);
+      assert.equal(cognitiveProbe.recordReflection(question.id, {
+        question: 'What evidence would help?', hypothesis: 'Possibly ordinary work.',
+        counterpoint: 'Visits cannot establish intent.', confidence: 0.3, priority: 0.4, next_step: 'wait',
+      }, question.evidence_revision), true);
+      const route = text => js(`host.personalRoute(${JSON.stringify(text)})`);
+      const history = await route(`/curiosity history ${question.id}`);
+      assert.equal(JSON.parse(history.text)[0].reflection.hypothesis, 'Possibly ordinary work.');
+      assert.equal(JSON.parse((await route('/curiosity list')).text).length, 1);
+      assert.equal(JSON.parse((await route('/curiosity status')).text).stage, 'persistent-inquiry');
+      await route('/curiosity off');
+      assert.equal(JSON.parse((await route('/curiosity status')).text).reflection.enabled, false);
+      await route('/curiosity clear');
+      assert.deepEqual(JSON.parse((await route(`/curiosity history ${question.id}`)).text), []);
+      console.log('PASS: isolated Electron profile, SQLite review history, preload/IPC curiosity commands, pause and clear. Inference not exercised.');
+      clearTimeout(limit); app.exit(0); return;
+    }
     if (process.argv.includes('--conversation-only')) {
       const requests = [];
       const originalFetch = global.fetch;

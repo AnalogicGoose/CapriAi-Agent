@@ -29,7 +29,16 @@ class CognitiveFoundation {
     for (const [name, type] of [
       ['reflection', 'TEXT'], ['priority', 'REAL'], ['next_step', 'TEXT'],
       ['reflected_at', 'INTEGER'],
+      ['evidence_revision', 'INTEGER NOT NULL DEFAULT 1'],
+      ['reviewed_revision', 'INTEGER NOT NULL DEFAULT 0'],
+      ['revisit_at', 'INTEGER'],
     ]) if (!columns.includes(name)) this.db.exec(`ALTER TABLE curiosity_questions ADD COLUMN ${name} ${type}`);
+    if (!columns.includes('reviewed_revision')) this.db.exec(`UPDATE curiosity_questions
+      SET reviewed_revision=evidence_revision, revisit_at=reflected_at+21600000 WHERE reflected_at IS NOT NULL`);
+    this.db.exec(`CREATE TABLE IF NOT EXISTS curiosity_reviews (
+      id INTEGER PRIMARY KEY, question_id INTEGER NOT NULL, evidence_revision INTEGER NOT NULL,
+      reflection TEXT NOT NULL, created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS curiosity_attempts (at INTEGER NOT NULL);`);
     this.settings = settings;
     this.context = context;
     this.now = now;
@@ -52,7 +61,7 @@ class CognitiveFoundation {
     try {
       const snapshot = await this.context.snapshot('curiosity-foreground', ['contextForeground']);
       // Revalidate after awaiting native collection / revoked permissions.
-      if (!this.allowed() || snapshot.unavailable || snapshot.provider?.unavailable) return null;
+      if (!this.allowed() || this.closed || snapshot.unavailable || snapshot.provider?.unavailable) return null;
       return this.observeApp(snapshot.foreground?.app);
     } finally { this.busy = false; }
   }
@@ -71,7 +80,13 @@ class CognitiveFoundation {
     if (seen.length < 3 || time - (this.last.get(subject) ?? -Infinity) < COOLDOWN_MS) return null;
     this.last.set(subject, time);
     const existing = this.db.prepare("SELECT * FROM curiosity_questions WHERE subject=? AND status='open'").get(subject);
-    if (existing) return existing;
+    if (existing) {
+      this.db.prepare(`UPDATE curiosity_questions SET evidence_revision=evidence_revision+1, updated_at=? WHERE id=?`)
+        .run(time, existing.id);
+      return this.db.prepare('SELECT * FROM curiosity_questions WHERE id=?').get(existing.id);
+    }
+    // Respect a previous dismissal/resolution across restarts and event windows.
+    if (this.db.prepare("SELECT id FROM curiosity_questions WHERE subject=? AND status!='open'").get(subject)) return null;
     // Store only a validated application name and event count, never window titles,
     // screenshots, typed text, conversation transcripts or process inventories.
     const question = `The user returned to ${app} several times. Is there a useful reason to offer help, or should I stay quiet?`;
@@ -84,23 +99,63 @@ class CognitiveFoundation {
 
   openQuestions(limit = 1) {
     this.prune();
-    return this.db.prepare("SELECT * FROM curiosity_questions WHERE status='open' AND reflected_at IS NULL ORDER BY created_at LIMIT ?")
-      .all(Math.min(10, Math.max(1, limit)));
+    return this.db.prepare(`SELECT * FROM curiosity_questions WHERE status='open'
+      AND evidence_revision>reviewed_revision AND (revisit_at IS NULL OR revisit_at<=?)
+      ORDER BY COALESCE(priority,0.5) DESC, COALESCE(reflected_at,created_at), id LIMIT ?`)
+      .all(this.now(), Math.min(10, Math.max(1, limit)));
   }
 
-  recordReflection(id, reflection) {
+  recordReflection(id, reflection, revision) {
     if (!this.allowed() || this.closed) return false;
     // Validate at the trust boundary even if a caller has already validated.
     const { validateReflection } = require('./cognitive-reflection');
     const value = validateReflection(reflection);
     const now = this.now();
-    const result = this.db.prepare(`UPDATE curiosity_questions
-      SET question=?,reflection=?,confidence=?,priority=?,next_step=?,reflected_at=?,updated_at=?,
-          status=CASE WHEN ?='dismiss' THEN 'dismissed' ELSE status END
-      WHERE id=? AND status='open' AND reflected_at IS NULL`)
-      .run(value.question, JSON.stringify({ hypothesis:value.hypothesis, counterpoint:value.counterpoint }),
-        value.confidence, value.priority, value.next_step, now, now, value.next_step, id);
-    return Number(result.changes) === 1;
+    const row = this.db.prepare("SELECT * FROM curiosity_questions WHERE id=? AND status='open'").get(id);
+    if (!row) return false;
+    revision ??= row.evidence_revision;
+    if (!Number.isSafeInteger(revision) || revision <= row.reviewed_revision || revision > row.evidence_revision) return false;
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = this.db.prepare(`UPDATE curiosity_questions
+        SET question=?,reflection=?,confidence=?,priority=?,next_step=?,reflected_at=?,updated_at=?,
+            reviewed_revision=?,revisit_at=?,
+            status=CASE WHEN ?='dismiss' THEN 'dismissed' ELSE status END
+        WHERE id=? AND status='open' AND reviewed_revision<?`)
+        .run(value.question, JSON.stringify({ hypothesis:value.hypothesis, counterpoint:value.counterpoint }),
+          value.confidence, value.priority, value.next_step, now, now, revision, now + 6 * 3_600_000, value.next_step, id, revision);
+      if (Number(result.changes)) {
+        this.db.prepare('INSERT INTO curiosity_reviews(question_id,evidence_revision,reflection,created_at) VALUES(?,?,?,?)')
+          .run(id, revision, JSON.stringify(value), now);
+        this.db.prepare(`DELETE FROM curiosity_reviews WHERE question_id=? AND id NOT IN
+          (SELECT id FROM curiosity_reviews WHERE question_id=? ORDER BY id DESC LIMIT 5)`).run(id, id);
+      }
+      this.db.exec('COMMIT');
+      return Number(result.changes) === 1;
+      } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
+
+  reviewContext(id) {
+    return this.db.prepare('SELECT evidence_revision,reflection,created_at FROM curiosity_reviews WHERE question_id=? ORDER BY id DESC LIMIT 3')
+      .all(id).reverse().map(row => ({ ...row, reflection: JSON.parse(row.reflection) }));
+  }
+
+  reserveAttempt() {
+    const now = this.now();
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.db.prepare('DELETE FROM curiosity_attempts WHERE at<=?').run(now - 3_600_000);
+      const rows = this.db.prepare('SELECT at FROM curiosity_attempts').all();
+      const allowed = rows.length < 2 && rows.every(row => now - row.at >= 30_000);
+      if (allowed) this.db.prepare('INSERT INTO curiosity_attempts(at) VALUES(?)').run(now);
+      this.db.exec('COMMIT');
+      return allowed;
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
+
+  attemptsLastHour() {
+    return Number(this.db.prepare('SELECT count(*) AS count FROM curiosity_attempts WHERE at>?')
+      .get(this.now() - 3_600_000).count);
   }
 
   list(limit = 20) {
@@ -120,17 +175,19 @@ class CognitiveFoundation {
     this.db.prepare('DELETE FROM curiosity_questions WHERE updated_at < ?').run(cutoff);
     this.db.exec(`DELETE FROM curiosity_questions WHERE id NOT IN
       (SELECT id FROM curiosity_questions ORDER BY updated_at DESC LIMIT ${MAX_QUESTIONS})`);
+    this.db.exec('DELETE FROM curiosity_reviews WHERE question_id NOT IN (SELECT id FROM curiosity_questions)');
   }
 
   clear() {
     this.db.exec('DELETE FROM curiosity_questions');
+    this.db.exec('DELETE FROM curiosity_reviews');
     this.seen.clear();
     this.last.clear();
   }
 
   status() {
     return { enabled: this.allowed(), busy: this.busy, questions: this.list().length,
-      modelCalls: 0, unsolicitedMessages: 0, stage: 'local-reflection' };
+      modelCalls: this.attemptsLastHour(), unsolicitedMessages: 0, stage: 'persistent-inquiry' };
   }
 
   close() {
