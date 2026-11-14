@@ -40,6 +40,9 @@ if (process.argv.includes('--cognitive-only')) {
       if (options.outputSchema.properties.hypothesis) return JSON.stringify({
         question: 'Would a second pair of eyes be useful?', hypothesis: 'Possibly ordinary project work.',
         counterpoint: 'App visits do not establish intent.', confidence: 0.3, priority: 0.4, next_step: 'ask_later' });
+      if (JSON.parse(text).at(-1)?.content?.includes('"source":"return"')) {
+        return JSON.stringify({ speak: true, message: 'Welcome back. Good to see you again.' });
+      }
       return JSON.stringify({ speak: true, message: 'What kind of game would you like to build?' });
     }
     foregroundContext = this.context();
@@ -416,10 +419,47 @@ app.whenReady().then(async () => {
       assert.deepEqual(interestsProbe.context(), []);
       await controls.webContents.executeJavaScript('settingsHost.patch({interestsEnabled:false})');
       assert.equal(interestsProbe.enabled(), false);
+      await controls.webContents.executeJavaScript('settingsHost.patch({proactiveVoice:true,ttsEnabled:true,ttsEngine:"windows",muted:false})');
+      win.webContents.setAudioMuted(true);
+      const {SpeechOutput} = require('../src/main/tts');
+      const speak = SpeechOutput.prototype.speak;
+      let checkInAudio;
+      SpeechOutput.prototype.speak = async function (request) {
+        checkInAudio = 'synthesis requested';
+        const result = await speak.call(this, request);
+        checkInAudio = result.ok ? 'synthesized' : result.error;
+        return result;
+      };
+      await js(`(async () => {
+        const { SpeechPlayer } = await import('./js/speech-output.js');
+        const schedule = SpeechPlayer.prototype.schedule;
+        const speakProactive = SpeechPlayer.prototype.speakProactive;
+        window.spokenCheckInFrames = 0;
+        SpeechPlayer.prototype.speakProactive = function (text, deadline, available) {
+          const started = speakProactive.call(this, text, deadline, available);
+          window.spokenCheckInStart = { enabled: this.enabled, optIn: this.config.proactiveVoice, available: available(), started };
+          return started;
+        };
+        SpeechPlayer.prototype.schedule = function (...args) {
+          schedule.apply(this, args);
+          if (this.proactive && this.playing) window.spokenCheckInFrames++;
+        };
+        document.querySelector('.panel__close').click();
+      })()`);
+      await pause(500);
+      proactiveProbe.observeIdle(300); proactiveProbe.observeIdle(1);
+      assert.equal(await proactiveProbe.run(), false, 'Recent quiet feedback suppresses even a return to the PC');
+      proactiveProbe.state.deferredUntil = 0;
+      assert.equal(await proactiveProbe.run(), true);
+      for (let i=0;i<130 && !await js('window.spokenCheckInFrames');i++) await pause(100);
+      assert.match(await js("document.querySelector('.panel__line').textContent"), /Welcome back/);
+      assert.ok(await js('window.spokenCheckInFrames > 0'),
+        'The current local Windows voice should schedule real check-in audio: ' +
+        JSON.stringify({ audio: checkInAudio, start: await js('window.spokenCheckInStart') }));
       await route('/companion off');
       assert.equal(JSON.parse((await route('/companion status')).text).enabled, false);
       assert.equal(await proactiveProbe.run(), false);
-      console.log('PASS: tool-free interest generation, persistent foreground interest context, review/dismiss/disable controls, reflection lock gate, proactive replies, goals/recall, project picker races, continuity updates, daily recap tools/settings/review button, grounded project inquiries, evidence lookup, feedback, routine teaching/name invocation/tool receipts/review controls and scoped context. Isolated profile, inference mocked.');
+      console.log('PASS: persistent creative drafts, proactive replies and a return-to-PC check-in through real Windows speech; reflection, goals, projects, continuity, reviews and routines. Isolated profile, Codex inference mocked, audio muted at the output.');
       clearTimeout(limit); app.exit(0); return;
     }
     if (process.argv.includes('--tts-only')) {

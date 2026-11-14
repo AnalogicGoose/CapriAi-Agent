@@ -233,15 +233,26 @@ autonomy = new ProactiveConversation({ settings: rendererConfig, journal: curios
   interests,
   model: 'codex', models: decisionModels, infer: inferCognitive,
   observe: () => pcContext.snapshot('companion-conversation', ['contextForeground']),
+  warmVoice: () => tts.warm(),
   memories: () => memory().list(10),
+  sharedContext: () => {
+    const p = permissions(config.load().privacy);
+    const project = goals().projects.selected();
+    const preferences = p.memoryEnabled && p.memoryRecall ? memory().list(20)
+      .filter(row => /^(?:I (?:like|love|enjoy|prefer) |me gusta[n]? |prefiero )/i.test(row.text) &&
+        !/\b(password|token|address|medical|health|bank|salary|contraseña|salud|banco)\b/i.test(row.text))
+      .slice(0, 2).map(row => row.text.slice(0, 140)) : [];
+    const name = project && project.name !== project.root ? project.name.slice(0, 100) : '';
+    return name || preferences.length ? { project: name, preferences } : null;
+  },
   canRun: () => cognitiveIdle() && !reflection.busy && sessionAvailable &&
     (!speech.current || speech.current.mode === 'wake') && !voiceSession && !fullscreenState.active &&
     !presentation.chatOpen && presentation.canSpeak !== false &&
     Boolean(overlay && !overlay.isDestroyed() && overlay.isVisible()) && powerMonitor.getSystemIdleTime() < 300,
-  notify: text => {
+  notify: (text, { voiceUntil } = {}) => {
     if (!overlay || overlay.isDestroyed() || presentation.chatOpen || fullscreenState.active) return false;
     brain.history = [...brain.history, { role: 'assistant', content: text }].slice(-24);
-    overlay.webContents.send('companion:conversation', text); return true;
+    overlay.webContents.send('companion:conversation', voiceUntil ? { text, voiceUntil } : text); return true;
   },
 });
 const PORT = Number(process.env.CAPRI_PORT) || 47823;
@@ -527,7 +538,7 @@ function updateConfig(patch) {
   const changes = key => Object.hasOwn(patch, key);
   const policyChanged = ['routinesEnabled', 'gamingMode', 'agentEnabled', 'desktopActions', 'privacy', 'systemAccess', 'screenAwareness', 'autonomyEnabled', 'autonomyScreen'].some(changes);
   const backendChanged = ['codexModel', 'codexExecutable', 'codexEffort'].some(changes);
-  if (['routinesEnabled', 'projectCuriosityEnabled', 'dailyReviewEnabled', 'dailyReviewNotify', 'proactiveEnabled', 'cognitiveEnabled', 'interestsEnabled', 'visible', 'lang'].some(changes)) {
+  if (['routinesEnabled', 'projectCuriosityEnabled', 'dailyReviewEnabled', 'dailyReviewNotify', 'proactiveEnabled', 'proactiveVoice', 'cognitiveEnabled', 'interestsEnabled', 'visible', 'lang'].some(changes)) {
     if (typeof autonomy !== 'undefined') autonomy?.touch();
     if (typeof reflection !== 'undefined') reflection?.cancel();
   }
@@ -1004,9 +1015,14 @@ function main() {
     }, 60000);
     reflectionTimer.unref(); app.once('before-quit', () => clearInterval(reflectionTimer));
     for (const event of ['suspend', 'resume', 'lock-screen', 'unlock-screen']) powerMonitor.on(event, () => {
-      sessionAvailable = event === 'resume' || event === 'unlock-screen'; autonomy.touch(); reflection.cancel();
+      sessionAvailable = event === 'resume' || event === 'unlock-screen';
+      autonomy.observeIdle(null); autonomy.touch(); reflection.cancel();
+      if (!sessionAvailable) tts.cancel();
     });
     const presenceTimer = setInterval(() => {
+      const cfg = config.load();
+      autonomy.observeIdle(sessionAvailable && cfg.proactiveVoice && permissions(cfg.privacy).contextEvents
+        ? powerMonitor.getSystemIdleTime() : null);
       try {
         groundedCuriosity.sync();
         const offered = goals().reviews.tick({

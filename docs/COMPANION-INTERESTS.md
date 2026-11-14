@@ -11,9 +11,10 @@ During an eligible proactive conversation, the existing tool-free Codex adapter
 may choose/refine one interest: at most once per local day, with twenty-hour
 minimum spacing. Failures, restarts and clearing the list do not bypass the budget.
 There are at most three active interests. Each has a domain, focus, question,
-rationale and state. Private generation receives only general creative domains,
-language and previous self-authored interests—not screenshots, titles, personal
-memories, project paths or user transcripts. Output is schema-validated and stored
+rationale and state. A selected project name and up to two saved preferences
+can inspire a new idea. Preferences require Memory and recall. Project files,
+paths, screenshots, window titles and transcripts stay out of this model
+request. Capri is prompted to generalize the inspiration before saving. Output is schema-validated and stored
 in the existing curiosity SQLite database, not personal memory or user goals.
 
 Active interests enter bounded foreground context and rotate into proactive

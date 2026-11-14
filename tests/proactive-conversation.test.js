@@ -109,6 +109,38 @@ test('suppresses repeated messages across restarts', async t => {
   f.restart(); f.advance(); assert.equal(await f.engine.run(), false);
   assert.equal(f.notifications.length, 1);
 });
+test('a fresh PC return can start an optional spoken check-in before the usual cadence', async t => {
+  const deliveries = [];
+  const f = fixture(t, { notify: (text, options) => { deliveries.push({ text, ...options }); } });
+  f.config({ proactiveVoice: true });
+  f.engine.observeIdle(0);
+  assert.equal(await f.engine.run(), false);
+  f.engine.observeIdle(300);
+  f.engine.observeIdle(1);
+  assert.equal(await f.engine.run(), true);
+  const { selected } = JSON.parse(f.calls[0].messages.at(-1).content);
+  assert.equal(selected.source, 'return');
+  assert.equal(f.observed, 0); assert.equal(f.recalls, 0);
+  assert.equal(deliveries[0].voiceUntil, 1_030_000);
+  f.restart();
+  f.engine.observeIdle(600); f.engine.observeIdle(0);
+  assert.equal(await f.engine.run(), false);
+  assert.equal(deliveries.length, 1);
+});
+
+test('disabled voice, busy state, and an expired PC return do not start an early check-in', async t => {
+  const f = fixture(t);
+  f.engine.observeIdle(400); f.engine.observeIdle(1);
+  assert.equal(await f.engine.run(), false);
+  f.config({ proactiveVoice: true });
+  f.engine.touch();
+  f.engine.observeIdle(400); f.engine.observeIdle(1);
+  f.free(false);
+  assert.equal(await f.engine.run(), false);
+  f.advance(90_000); f.free(true);
+  assert.equal(await f.engine.run(), false);
+  assert.equal(f.calls.length, 0);
+});
 test('validates generated messages and preserves an opening when packing its first reply', () => {
   for (const value of [{ speak: true, message: '' }, { speak: true, message: 'x'.repeat(321) },
     { speak: true, message: 'hi', tool: 'shell' }, { speak: 'true', message: 'hi' }]) assert.throws(() => validate(value));

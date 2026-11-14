@@ -71,6 +71,19 @@ test('an in-flight generation cannot repopulate cleared interests or bypass the 
   f.config({ gamingMode: true }); assert.deepEqual(f.service.context(), []);
 });
 
+test('shared context inspires interests and changes invalidate an in-flight choice', async t => {
+  const f = fixture(t);
+  let context = { project: 'Orbit game', preferences: ['I like rhythm games'] }, complete;
+  const run = f.service.refresh({ ...f.deps, sharedContext: () => context, infer: request => {
+    assert.deepEqual(JSON.parse(request.messages.at(-1).content).sharedContext, context);
+    return new Promise(resolve => { complete = resolve; });
+  } });
+  context = null;
+  complete(JSON.stringify(idea));
+  assert.equal(await run, false);
+  assert.deepEqual(f.service.list(), []);
+});
+
 test('at most three active interests fit bounded context; continuation cannot switch domains', async t => {
   const f = fixture(t);
   for (const domain of ['worldbuilding', 'game-design', 'visual-art']) { assert.equal(await f.generate({ ...idea, domain }), true); f.advance(); }
@@ -176,10 +189,10 @@ test('pausing or clearing a pursuit invalidates in-flight work and preserves the
 test('eligible background opportunities publish concrete progress once and respect silence', async t => {
   const f = fixture(t), delivered = [];
   let state, presentations = 0;
-  f.config({ privacy: { contextEvents: false, memoryEnabled: false } });
+  f.config({ proactiveVoice: true, privacy: { contextEvents: false, memoryEnabled: false } });
   const engine = new ProactiveConversation({ interests: f.service, now: f.now, settings: f.settings, random: () => 0,
     journal: { conversationState: value => value === undefined ? state : (state = value), allowed: () => false },
-    models: async () => ['test'], model: 'test', notify: text => delivered.push(text),
+    models: async () => ['test'], model: 'test', notify: (text, options) => delivered.push({ text, ...options }),
     infer: async request => {
       if (request.schema.properties.domain) return JSON.stringify(idea);
       if (request.schema.properties.draft) {
@@ -198,6 +211,7 @@ test('eligible background opportunities publish concrete progress once and respe
   f.advance(5 * 60_000); assert.equal(await engine.run(), false);
   f.advance(5 * 60_000); assert.equal(await engine.run(), true);
   assert.equal(delivered.length, 1);
+  assert.equal(delivered[0].voiceUntil, f.now() + 30_000);
   f.restart(); engine.interests = f.service;
   f.advance(5 * 60_000); assert.equal(await engine.run(), false);
   f.advance(); assert.equal(await engine.run(), false);

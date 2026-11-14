@@ -16,6 +16,7 @@ const DEFAULTS = {
   routinesEnabled: true,
   interestsEnabled: true,
   proactiveEnabled: true,
+  proactiveVoice: false,
   dailyReviewEnabled: true,
   dailyReviewNotify: false,
   autonomyScreen: true,

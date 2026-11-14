@@ -1,9 +1,21 @@
 # Compact voice conversation
 
 2026-11-09. Text chat is silent even when spoken replies are enabled. Dictating
-into the text composer remains a reviewed text draft. Background check-ins and
-agent suggestions no longer start TTS. Sound's explicit voice preview is still
-available for auditioning the voice.
+into the text composer remains a reviewed text draft. Sound's explicit voice
+preview is available for auditioning the voice.
+
+Enable **Sound → Speak timely check-ins** to hear an optional welcome after
+returning to the PC or a remark about a new draft Capri made. Voice replies must
+also be enabled. Capri can stay quiet. Windows idle time is sampled locally and
+the return trigger respects PC event awareness and a thirty-minute cooldown.
+Other check-ins and agent suggestions continue to appear as text.
+
+Capri starts warming the local voice while she decides what to say. A spoken
+check-in must begin within thirty seconds and while its card is current. The
+text is available as soon as the remark arrives.
+Closing the card, muting Capri, starting a voice conversation, or entering
+fullscreen ends pending playback. The return signal describes recent Windows
+input without inferring where you were.
 
 Both the voice menu and "Hey Capri" enter the same compact voice session. It
 shows only a 30-pixel microphone above Capri. The icon follows her head, appears

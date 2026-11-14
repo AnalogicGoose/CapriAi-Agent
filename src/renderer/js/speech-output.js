@@ -20,6 +20,7 @@ export class SpeechPlayer {
   get enabled() { return Boolean(this.config?.ttsEnabled && !this.config.muted); }
   configure(cfg) { this.config = cfg; this.stop(); }
   stop(notify = true) {
+    clearTimeout(this.proactiveTimer); this.proactive = null;
     this.epoch++; this.pending = null; this.response = null; this.nextTime = 0; this.responseSuppressed = true;
     cancelAnimationFrame(this.raf);
     for (const source of this.sources) { source.onended = null; try { source.stop(); } catch {} source.disconnect(); }
@@ -33,6 +34,10 @@ export class SpeechPlayer {
     return epoch === this.epoch ? ctx : null;
   }
   schedule(ctx, buffer) {
+    if (this.proactive && !this.playing) {
+      if (!this.proactive.canStart()) { this.stop(); return; }
+      clearTimeout(this.proactiveTimer);
+    }
     if (!this.playing) { this.playing = true; this.onPlayback(true); }
     if (!this.analyser) {
       this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 256;
@@ -70,6 +75,20 @@ export class SpeechPlayer {
     if (!this.sources.size && !this.pending && (!this.response || (this.response.done && !this.response.busy && !this.response.queue.length))) this.stop(false);
   }
   async speak(text) { this.stop(); if (this.enabled) await this.play(text); }
+  speakProactive(text, deadline, available) {
+    if (!this.enabled || this.config.proactiveVoice !== true || this.pending || this.playing || this.response) return false;
+    const canStart = () => this.enabled && this.config.proactiveVoice === true && Date.now() < deadline && available();
+    const line = speechText(text);
+    if (!Number.isSafeInteger(deadline) || !canStart() || !line) return false;
+    this.stop();
+    this.proactive = { canStart };
+    this.proactiveTimer = setTimeout(() => {
+      if (this.proactive && !this.playing) this.stop();
+    }, deadline - Date.now());
+    void this.play(line);
+    return true;
+  }
+  stopProactive() { if (this.proactive) this.stop(); }
   async play(text) {
     const epoch = this.epoch, token = { id: `voice-${++this.serial}-${Date.now()}` };
     this.pending = token;
@@ -77,7 +96,7 @@ export class SpeechPlayer {
       const result = await this.host.ttsSpeak({ text, id: token.id });
       if (this.pending !== token || epoch !== this.epoch) return;
       if (!result.ok) {
-        if (result.error !== 'cancelled') this.onError(result.error);
+        if (result.error !== 'cancelled' && !this.proactive) this.onError(result.error);
         this.stop(); return;
       }
       if (result.streamed) await this.chunkChain;
@@ -90,7 +109,7 @@ export class SpeechPlayer {
       }
       if (this.pending === token) { this.pending = null; this.finishIfIdle(); }
     } catch (error) {
-      if (this.pending === token) { this.pending = null; this.onError(error.message); this.finishIfIdle(); }
+      if (this.pending === token) { this.pending = null; if (!this.proactive) this.onError(error.message); this.finishIfIdle(); }
     }
   }
   beginResponse() {

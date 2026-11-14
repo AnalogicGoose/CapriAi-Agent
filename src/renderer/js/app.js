@@ -354,11 +354,15 @@ async function boot() {
     else if (panel.visible && ['alert', 'error', 'report'].includes(panel.current?.kind)) return;
     else panel.say({ kind: 'info', face: 'look', line: text, hold: 10000 });
   });
-  host.onConversation?.(text => {
-    if (wakeListener.session || chat.open || panel.visible || talkMenu.visible || capri.gaming || capri.fullscreen ||
+  host.onConversation?.(message => {
+    const { text, voiceUntil } = typeof message === 'string' ? { text: message } : (message || {});
+    const available = () => !document.hidden && !wakeListener.session && !voiceCall.active && !chat.open &&
+      !talkMenu.visible && !capri.gaming && !capri.fullscreen;
+    if (!available() || panel.visible ||
         typeof text !== 'string' || text.length > 320) return;
     const es = brain.lang === 'es';
-    panel.say({ kind: 'info', face: 'look', line: text, hold: 20000,
+    panel.say({ kind: 'info', face: 'look', line: text, hold: voiceUntil ? 35_000 : 20_000,
+      onLeave: () => voice.spoken.stopProactive(),
       actions: [{ id: 'reply', label: es ? 'Responder' : 'Reply', primary: true },
         { id: 'quiet', label: es ? 'Silenciar charlas' : 'Pause check-ins' }],
       onAction: async id => {
@@ -367,6 +371,10 @@ async function boot() {
         if (id === 'quiet') await host.personalRoute('/companion off');
       },
     });
+    const checkIn = panel.current;
+    if (voiceUntil && checkIn?.line === text) {
+      voice.spoken.speakProactive(text, voiceUntil, () => available() && panel.visible && panel.current === checkIn);
+    }
   });
   new FullscreenPresence({ capri, host, onChange: () => {
     ++pointerRevision;
