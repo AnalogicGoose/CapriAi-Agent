@@ -1,9 +1,9 @@
 {
   "name": "caprigpt",
   "version": "0.4.0",
-  "description": "CapriGPT local-first Ollama desktop companion prototype, based on Capri",
-  "author": "mochiiwuff",
-  "repository": "github:mochiiwuff/capri-desktop",
+  "description": "CapriGPT, a Windows desktop AI companion with expressive voice, persistent interests, and desktop tools.",
+  "author": "CapriGPT contributors",
+  "repository": "github:Chocoyito1/CapriGPT",
   "main": "src/main/main.js",
   "private": true,
   "scripts": {

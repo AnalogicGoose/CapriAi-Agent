@@ -1,5 +1,7 @@
 # Branches and integration
 
+The canonical GitHub repository is [Chocoyito1/CapriGPT](https://github.com/Chocoyito1/CapriGPT). The setup notes below record the earlier fork-based history.
+
 ## Local transition completed (2026-11-07)
 
 The existing process work and current application snapshot were deliberately

@@ -1,6 +1,8 @@
-# CapriGPT — Codex desktop agent (development)
+# CapriGPT
 
-Capri now uses Codex CLI for requested work and tool-free background reasoning
+CapriGPT is an independently maintained Windows desktop AI companion.
+
+Capri uses Codex CLI for requested work and tool-free background reasoning
 for companion conversations and private inquiry. Foreground tasks can use Codex command/file/web tools,
 configured CLI connections, actual screen snapshots and native desktop input.
 Normal social dialogue is generated from her personality and current context.
@@ -43,8 +45,7 @@ Development follows [CONTRIBUTING.md](CONTRIBUTING.md),
 [DEVELOPMENT.md](docs/DEVELOPMENT.md) and [RELEASING.md](docs/RELEASING.md).
 Earlier Qwen/request-routing documents describe the previous architecture.
 
-The inherited upstream README follows; its Claude/Ollama behavior is historical
-and does not describe this fork's current reasoning backend.
+CapriGPT builds on [Capri Desktop](https://github.com/mochiiwuff/capri-desktop) by mochiiwuff and its contributors. The [license](LICENSE) documents the source code license and artwork credits. The original Capri Desktop README is reproduced below as historical documentation. Its install instructions and release links refer to that project.
 
 **English** · [Français](README.fr.md)
 
