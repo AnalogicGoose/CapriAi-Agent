@@ -3,7 +3,7 @@
   "version": "0.4.0",
   "description": "CapriGPT, a Windows desktop AI companion with expressive voice, persistent interests, and desktop tools.",
   "author": "CapriGPT contributors",
-  "repository": "github:Chocoyito1/CapriGPT",
+  "repository": "github:Chocoyito1/CapriAi-Agent",
   "main": "src/main/main.js",
   "private": true,
   "scripts": {

@@ -1,6 +1,6 @@
-# CapriGPT
+# CapriAi Agent
 
-CapriGPT is an independently maintained Windows desktop companion. Capri can talk with you, remember information you choose to save, and help with tasks on your PC. She uses Codex for conversation and requested work, with local microphone transcription and optional local speech.
+CapriAi Agent is an independently maintained Windows desktop companion. Capri can talk with you, remember information you choose to save, and help with tasks on your PC. She uses Codex for conversation and requested work, with local microphone transcription and optional local speech.
 
 [Français](README.fr.md)
 
@@ -18,21 +18,21 @@ CapriGPT is an independently maintained Windows desktop companion. Capri can tal
 Use Windows x64, Git, Node.js 24, and a signed-in Codex CLI.
 
 ```powershell
-git clone https://github.com/Chocoyito1/CapriGPT.git
-cd CapriGPT
+git clone https://github.com/Chocoyito1/CapriAi-Agent.git
+cd CapriAi-Agent
 npm.cmd ci
 npm.cmd start
 ```
 
 Right-click Capri or her tray icon to open the **Control room**. If Capri cannot find the Codex CLI, select its executable under **Connections**. [Development and build instructions](CONTRIBUTING.md)
 
-![CapriGPT’s Control room showing agent status, personal memory, gaming mode, and desktop presence](docs/screenshots/control-room.png)
+![Capri’s Control room showing agent status, personal memory, gaming mode, and desktop presence](docs/screenshots/control-room.png)
 
 Screenshots show the development app with a sample conversation.
 
 ## Credits and rights
 
-CapriGPT builds on [Capri Desktop](https://github.com/mochiiwuff/capri-desktop) by mochiiwuff and its contributors. The original project’s documentation and screenshots are available there.
+CapriAi Agent builds on [Capri Desktop](https://github.com/mochiiwuff/capri-desktop) by mochiiwuff and its contributors. The original project’s documentation and screenshots are available there.
 
 Capri and Project Capricorn, Cyberpunk, and Cyberpunk: Edgerunners belong to CD PROJEKT RED, Studio Trigger, and Netflix. This is an unaffiliated, non-commercial fan project. The character imagery comes from frames of the show, a fan-made cutout, and fan art. The [MIT license](LICENSE) covers the code. Character artwork and screenshots containing it remain subject to the respective rights holders.
 
