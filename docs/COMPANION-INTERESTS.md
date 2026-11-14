@@ -20,14 +20,31 @@ Active interests enter bounded foreground context and rotate into proactive
 conversation. A delivered topic becomes `exploring`, with a mention count and a
 six-hour resurfacing cooldown. A mention is not user participation or completed
 work. Existing availability checks and the 5–15 minute conversation cadence apply.
-There is no new recurring model loop and no autonomous tool/action execution.
+
+## Private creative drafts
+
+An active interest can become a small creative pursuit. At a later eligible
+conversation opportunity, Capri can choose to wait or write a draft in her own
+local journal. A draft contains material you can read, such as a scene, puzzle,
+or game mechanic. She can save one follow-up and use it to make a second draft
+on another day, even after a restart. Unfinished interests are picked by least
+recent update. The drafts and next step are available in `/interests show <id>`.
+
+Draft attempts use the existing tool-free Codex connection and have their own
+persisted limit of one per local day, at least twenty hours apart. Only the
+interest, its previous draft and the proposed next step are supplied. New
+progress can take precedence over ordinary small talk, and Capri can choose
+silence. A draft stays available for review either way. The private workspace is
+part of Capri's SQLite journal. It stores generated text and has no desktop,
+web or user-file actions.
 
 **Control room → PC awareness → Chosen interests** offers review and disable.
 Automatic generation requires private reflection and companion conversations to
-be enabled. Local controls are `/interests list`, `on|off`,
+be enabled. Local controls are `/interests list`, `show <id>`, `on|off`,
 `pause|resume|dismiss|resolve <id>`, and `clear`. Pauses remove a topic from automatic
 context; dismissed/resolved domains cannot be revived by generation. Feedback
-persists until clear. Clear preserves the attempt budget; off stops new interests.
+persists until clear. Clear removes interests and their drafts while preserving
+the attempt budgets. Off suspends work and automatic sharing.
 
 A clear “No thanks”, “Not interested”, or supported equivalent as the first
 response to a just-delivered interest pauses it locally. Bare “no” can answer a

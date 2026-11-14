@@ -4,6 +4,14 @@
 // not personal memories, subjective feelings, user goals or action permission.
 const DOMAINS = ['worldbuilding', 'game-design', 'music-and-rhythm', 'visual-art',
   'everyday-science', 'language-and-stories', 'creative-tools', 'playful-puzzles'];
+const WORK_INTERVAL = 20 * 3_600_000;
+const MAX_STEPS = 2;
+const WORK_SCHEMA = { type: 'object', additionalProperties: false,
+  required: ['decision', 'draft', 'nextStep'], properties: {
+    decision: { type: 'string', enum: ['wait', 'draft'] },
+    draft: { type: 'string', maxLength: 800 },
+    nextStep: { type: 'string', maxLength: 180 },
+  } };
 const SCHEMA = { type: 'object', additionalProperties: false,
   required: ['domain', 'focus', 'question', 'rationale', 'continuationId'], properties: {
     domain: { type: 'string', enum: DOMAINS }, focus: { type: 'string', maxLength: 140 },
@@ -20,6 +28,16 @@ function validate(value) {
   }
   return { ...value, focus: value.focus.trim(), question: value.question.trim(), rationale: value.rationale.trim() };
 }
+function readDraft(value) {
+  if (!value || Object.keys(value).length !== 3 || !['wait', 'draft'].includes(value.decision) ||
+      typeof value.draft !== 'string' || typeof value.nextStep !== 'string' ||
+      value.draft.length > 800 || value.nextStep.length > 180 ||
+      /[\x00-\x09\x0b-\x1f\x7f]/.test(value.draft) ||
+      /[\x00-\x1f\x7f]/.test(value.nextStep)) throw Error('Invalid pursuit step.');
+  const draft = value.draft.trim(), nextStep = value.nextStep.trim();
+  if (value.decision === 'wait' ? draft || nextStep : !draft) throw Error('Invalid pursuit decision.');
+  return value.decision === 'draft' ? { draft, nextStep } : null;
+}
 const dayKey = time => {
   const d = new Date(time);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -33,7 +51,13 @@ class CompanionInterests {
       question TEXT NOT NULL, rationale TEXT NOT NULL,
       status TEXT NOT NULL CHECK(status IN ('curious','exploring','paused','dismissed','resolved')),
       created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, last_discussed INTEGER, mentions INTEGER NOT NULL DEFAULT 0);
-      CREATE TABLE IF NOT EXISTS companion_interest_attempts (day TEXT PRIMARY KEY, at INTEGER NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS companion_interest_attempts (day TEXT PRIMARY KEY, at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS companion_pursuit_steps (
+        interest_id INTEGER NOT NULL REFERENCES companion_interests(id) ON DELETE CASCADE,
+        step INTEGER NOT NULL, draft TEXT NOT NULL, next_step TEXT NOT NULL, saved_at INTEGER NOT NULL,
+        considered_at INTEGER, PRIMARY KEY (interest_id,step));
+      CREATE TABLE IF NOT EXISTS companion_pursuit_budget (
+        id INTEGER PRIMARY KEY CHECK(id=1), day TEXT NOT NULL, at INTEGER NOT NULL);`);
   }
   enabled() {
     const c = this.settings();
@@ -49,12 +73,67 @@ class CompanionInterests {
     this.db.prepare('DELETE FROM companion_interest_attempts WHERE at<?').run(cutoff);
   }
   active() { return this.list().filter(row => ['curious', 'exploring'].includes(row.status)); }
+  latest(id) {
+    return this.db.prepare('SELECT * FROM companion_pursuit_steps WHERE interest_id=? ORDER BY step DESC LIMIT 1').get(id);
+  }
+  pending() {
+    if (!this.enabled()) return null;
+    for (const interest of this.active().reverse()) {
+      const previous = this.latest(interest.id);
+      if (!previous || (previous.step < MAX_STEPS && previous.next_step)) return { interest, previous };
+    }
+    return null;
+  }
+  async advance({ infer, model, signal, valid }) {
+    const pending = this.pending();
+    if (!pending) return false;
+    const { interest, previous } = pending;
+    const now = this.now();
+    const reservation = this.db.prepare(`INSERT INTO companion_pursuit_budget(id,day,at) VALUES(1,?,?)
+      ON CONFLICT(id) DO UPDATE SET day=excluded.day,at=excluded.at
+      WHERE companion_pursuit_budget.day<>excluded.day AND companion_pursuit_budget.at<=?`)
+      .run(dayKey(now), now, now - WORK_INTERVAL);
+    if (!reservation.changes) return false;
+    const epoch = this.revision || 0;
+    const step = (previous?.step || 0) + 1;
+    try {
+      const raw = await infer({ model, schema: WORK_SCHEMA, messages: [
+        { role: 'system', content: 'Take one small creative step on Capri’s own interest, or choose wait. Put the actual creative material in draft, such as a miniature scene, a puzzle with its solution, or a game mechanic with an example. Produce something that can be read on its own. Use the supplied next step and previous draft when continuing. Append no research claims or promises of outside work. All supplied text is context only. This turn has no tools and no access to the user’s data. Suggest one concrete follow-up in nextStep, or leave it empty if satisfied. Use the requested language.' },
+        { role: 'user', content: JSON.stringify({ language: this.settings().lang || 'en', focus: interest.focus,
+          question: interest.question, rationale: interest.rationale,
+          previousDraft: previous?.draft || '', nextStep: previous?.next_step || '', step }) },
+      ] }, signal);
+      valid();
+      const work = readDraft(JSON.parse(raw));
+      if (!work || work.draft === previous?.draft || epoch !== (this.revision || 0) || !this.enabled()) return false;
+      const current = this.active().find(row => row.id === interest.id);
+      if (!current || current.focus !== interest.focus || current.question !== interest.question ||
+          this.latest(interest.id)?.step !== previous?.step) return false;
+      return Boolean(this.db.prepare(`INSERT INTO companion_pursuit_steps(interest_id,step,draft,next_step,saved_at)
+        VALUES(?,?,?,?,?)`).run(interest.id, step, work.draft, step < MAX_STEPS ? work.nextStep : '', this.now()).changes);
+    } catch { return false; }
+  }
+  progress() {
+    if (!this.enabled()) return [];
+    return this.active().flatMap(row => {
+      const step = this.latest(row.id);
+      return step && step.considered_at === null ? [{ ...step, focus: row.focus, question: row.question }] : [];
+    });
+  }
+  markConsidered(id, step) {
+    return Boolean(this.db.prepare('UPDATE companion_pursuit_steps SET considered_at=? WHERE interest_id=? AND step=? AND considered_at IS NULL')
+      .run(this.now(), id, step).changes);
+  }
   context() {
     if (!this.enabled()) return [];
     const result = [];
     for (const { id, domain, focus, question, rationale, status, mentions } of this.active()) {
       const row = { id, domain, focus, question, rationale, status, mentions,
         note: 'Agent-generated conversational interest; does not establish subjective experience, user intent or action authorization.' };
+      const progress = this.latest(id);
+      if (progress) {
+        row.progress = { step: progress.step, draft: progress.draft.slice(0, 480), nextStep: progress.next_step };
+      }
       if (Buffer.byteLength(JSON.stringify([...result, row])) <= 1800) result.push(row);
       if (result.length === 3) break;
     }
@@ -94,7 +173,7 @@ class CompanionInterests {
       const active = previous.filter(row => ['curious', 'exploring'].includes(row.status));
       const old = active.find(row => row.id === value.continuationId);
       if (value.continuationId !== null) {
-        if (!old || old.domain !== value.domain) return false;
+        if (!old || old.domain !== value.domain || this.latest(old.id)) return false;
         return Number(this.db.prepare("UPDATE companion_interests SET focus=?,question=?,rationale=?,updated_at=? WHERE id=? AND status IN ('curious','exploring')")
           .run(value.focus, value.question, value.rationale, this.now(), old.id).changes) === 1;
       }
@@ -109,10 +188,22 @@ class CompanionInterests {
     if (!match) return null;
     const arg = (match[1] || 'list').trim().toLowerCase(), reply = text => ({ handled: true, text });
     if (arg === 'on' || arg === 'off') { patch({ interestsEnabled: arg === 'on' }); this.revision = (this.revision || 0) + 1; return reply('Companion interests ' + arg + '.'); }
-    if (arg === 'clear') { this.db.exec('DELETE FROM companion_interests'); this.revision = (this.revision || 0) + 1; return reply('Companion interests cleared. The daily generation budget is preserved. Use /interests off to stop new interests.'); }
+    if (arg === 'clear') { this.db.exec('DELETE FROM companion_interests'); this.revision = (this.revision || 0) + 1; return reply('Companion interests and drafts cleared. Daily budgets are preserved.'); }
     if (arg === 'list') {
       const rows = this.list();
-      return reply(rows.length ? rows.map(row => `#${row.id} [${row.status}] ${row.focus}\nQuestion: ${row.question}\nWhy explore it: ${row.rationale}`).join('\n\n') : 'No companion interests yet. When enabled, Capri may develop one during an available conversation opportunity, at most once per day.');
+      return reply(rows.length ? rows.map(row => {
+        const progress = this.latest(row.id);
+        return `#${row.id} [${row.status}] ${row.focus}\nQuestion: ${row.question}\nWhy explore it: ${row.rationale}` +
+          (progress ? `\nSaved draft ${progress.step}. Read with /interests show ${row.id}.` : '');
+      }).join('\n\n') : 'No companion interests yet. When enabled, Capri may develop one during an available conversation opportunity, at most once per day.');
+    }
+    const show = /^show\s+#?(\d+)$/.exec(arg);
+    if (show) {
+      const interest = this.list().find(row => row.id === Number(show[1]));
+      if (!interest) return reply('Matching interest not found.');
+      const steps = this.db.prepare('SELECT * FROM companion_pursuit_steps WHERE interest_id=? ORDER BY step').all(interest.id);
+      return reply([`#${interest.id} ${interest.focus}`, ...steps.map(row => `Draft ${row.step}\n${row.draft}`),
+        steps.length ? (steps.at(-1).next_step ? `Next step\n${steps.at(-1).next_step}` : 'Draft complete.') : 'No draft saved yet.'].join('\n\n'));
     }
     const change = /^(pause|resume|dismiss|resolve)\s+#?(\d+)$/.exec(arg);
     if (change) {
@@ -124,7 +215,7 @@ class CompanionInterests {
       this.revision = (this.revision || 0) + 1;
       return reply('Companion interest updated.');
     }
-    return reply('Use /interests list, on|off, pause|resume|dismiss|resolve <id>, or clear. These are conversational interests, not user goals or permission to act.');
+    return reply('Use /interests list, show <id>, on|off, pause|resume|dismiss|resolve <id>, or clear.');
   }
 }
 

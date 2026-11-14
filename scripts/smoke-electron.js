@@ -35,6 +35,8 @@ if (process.argv.includes('--cognitive-only')) {
       cognitiveSchemaSeen = true;
       if (options.outputSchema.properties.domain) return JSON.stringify({ domain: 'worldbuilding', focus: 'Map a weather-shaped city',
         question: 'What if streets moved with the rain?', rationale: 'A small rule could make an interesting fictional place.', continuationId: null });
+      if (options.outputSchema.properties.draft) return JSON.stringify({ decision: 'draft',
+        draft: 'During rain, every alley leads to the bakery.', nextStep: 'Give the bakery a second location.' });
       if (options.outputSchema.properties.hypothesis) return JSON.stringify({
         question: 'Would a second pair of eyes be useful?', hypothesis: 'Possibly ordinary project work.',
         counterpoint: 'App visits do not establish intent.', confidence: 0.3, priority: 0.4, next_step: 'ask_later' });
@@ -407,6 +409,9 @@ app.whenReady().then(async () => {
       await controls.webContents.executeJavaScript('settingsHost.action("interests-open")');
       for (let i=0;i<100 && !await js("document.querySelector('.panel__line').textContent.includes('Map a weather-shaped city')");i++) await pause(50);
       assert.match(await js("document.querySelector('.panel__line').textContent"), /Map a weather-shaped city/);
+      proactiveProbe.state.nextAt = 0;
+      await proactiveProbe.run();
+      assert.match((await route('/interests show 1')).text, /every alley leads to the bakery[\s\S]+second location/);
       await route('/interests dismiss 1');
       assert.deepEqual(interestsProbe.context(), []);
       await controls.webContents.executeJavaScript('settingsHost.patch({interestsEnabled:false})');
