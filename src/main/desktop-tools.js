@@ -4,9 +4,10 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const {spawn}=require('node:child_process');
 const {publicUrl}=require('./web-tools');
-async function launchBrowser(file,url) {
+async function launchBrowser(file,url,spawnProcess=spawn) {
   await new Promise((resolve,reject)=>{
-    const child=spawn(file,[url],{shell:false,windowsHide:true,detached:true,stdio:'ignore'});
+    const args=path.basename(file).toLowerCase()==='firefox.exe'?['-new-tab',url]:[url];
+    const child=spawnProcess(file,args,{shell:false,windowsHide:true,detached:true,stdio:'ignore'});
     child.once('error',reject);child.once('spawn',()=>{child.unref();resolve();});
   });
 }
@@ -58,7 +59,7 @@ function installedShortcuts() {
   return [...rows.reduce((map,row)=>{if(!map.has(normalize(row.label)))map.set(normalize(row.label),row);return map;},new Map()).values()];
 }
 class DesktopTools {
-  constructor({openPath, openExternal, launch=launchBrowser, native, shortcuts=installedShortcuts, executables=standardExecutables, systemRoot=process.env.SystemRoot||'C:\\Windows',now=Date.now,cacheMs=30000}) { Object.assign(this,{openPath,openExternal,launch,native,shortcuts,executables,systemRoot,now,cacheMs}); }
+  constructor({openPath, openExternal, launch=launchBrowser, native, observeWorkspace, shortcuts=installedShortcuts, executables=standardExecutables, preferredBrowser=()=> 'Firefox', systemRoot=process.env.SystemRoot||'C:\\Windows',now=Date.now,cacheMs=30000}) { Object.assign(this,{openPath,openExternal,launch,native,observeWorkspace,shortcuts,executables,preferredBrowser,systemRoot,now,cacheMs}); }
   entries({fresh=false}={}) {
     const at=this.now();
     if(!fresh&&this.cached&&at-this.cached.at<this.cacheMs)return this.cached.rows;
@@ -101,8 +102,9 @@ class DesktopTools {
   }
   async openUrl(value,browser='default',signal) {
     const url=publicUrl(value);signal?.throwIfAborted();
+    if(!browser||browser==='default')browser=this.preferredBrowser();
     let label='your default browser';
-    if(!browser||browser==='default') {
+    if(browser==='system') {
       if(!this.openExternal)throw Error('The default browser launcher is unavailable.');
       await this.openExternal(url);
     } else {
@@ -110,7 +112,7 @@ class DesktopTools {
       const group=APP_ALIASES.find(names=>names.includes(key))||[key];
       const executable=this.executables().find(row=>group.includes(normalize(row.label))
         &&/^(?:firefox|chrome|msedge|brave|opera|vivaldi)\.exe$/i.test(path.basename(row.file)));
-      if(!executable)throw Error(`I couldn’t find a verified browser executable for “${browser}”. Give me another installed browser or choose the default browser.`);
+      if(!executable)throw Error(`I couldn’t find a verified browser executable for “${browser}”. Give me another installed browser or choose the Windows default (system).`);
       label=executable.label;
       signal?.throwIfAborted();await this.launch(executable.file,url);
     }
@@ -143,5 +145,18 @@ class DesktopTools {
     return {type:'app',title:target.label,launchRequested:true,windowObserved:observed,
       note:observed?`${target.label} has a visible desktop window.`:`Windows accepted the request to launch ${target.label}; its window has not been verified.`};
   }
+  async openWorkspace(folder, signal) {
+    signal?.throwIfAborted();
+    if (!folder) throw Error('Choose a project first with /project choose.');
+    const error = await this.openPath(folder);
+    signal?.throwIfAborted();
+    if (error) throw Error(error);
+    const observed = Boolean(await this.observeWorkspace?.(folder, signal));
+    signal?.throwIfAborted();
+    const title = path.basename(folder) || folder;
+    return { type: 'workspace', title, launchRequested: true, windowObserved: observed,
+      note: observed ? `Opened “${title}” in File Explorer and confirmed the folder.`
+        : `Windows accepted the request to open “${title}”. I couldn’t confirm the folder in File Explorer.` };
+  }
 }
-module.exports={DesktopTools,installedShortcuts,standardExecutables,BUILTINS};
+module.exports={DesktopTools,installedShortcuts,standardExecutables,BUILTINS,launchBrowser};

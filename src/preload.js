@@ -50,7 +50,8 @@ contextBridge.exposeInMainWorld('host', {
   copyImage: (rect) => ipcRenderer.invoke('panel:copy', rect),
   chatStatus: () => ipcRenderer.invoke('chat:status'),
   chatSend: (request) => ipcRenderer.invoke('chat:send', request),
-  personalRoute: (text, id, conversation, commandsOnly = false) => ipcRenderer.invoke('personal:route', text, id, conversation, commandsOnly),
+  personalRoute: (text, id, conversation, commandsOnly = false, replyTo, conversationId) =>
+    ipcRenderer.invoke('personal:route', text, id, conversation, commandsOnly, replyTo, conversationId),
   onTaskProgress: on('task:progress'),
   openTaskResult: ref => ipcRenderer.invoke('task:openResult', ref),
   chatStop: (id) => ipcRenderer.send('chat:stop', id),

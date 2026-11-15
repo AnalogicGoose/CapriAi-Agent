@@ -14,7 +14,7 @@ function base() {
   const url = new URL(host.replace('://0.0.0.0', '://127.0.0.1'));
   if (url.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(url.hostname)
       || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
-    throw new Error('CapriGPT requires a loopback Ollama address, e.g. 127.0.0.1:11435');
+    throw new Error('Capri requires a loopback Ollama address, e.g. 127.0.0.1:11435');
   }
   return url.origin;
 }

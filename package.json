@@ -1,9 +1,9 @@
 {
-  "name": "caprigpt",
+  "name": "capri",
   "version": "0.4.0",
-  "description": "CapriGPT, a Windows desktop AI companion with expressive voice, persistent interests, and desktop tools.",
-  "author": "CapriGPT contributors",
-  "repository": "github:Chocoyito1/CapriGPT",
+  "description": "Capri, a Windows desktop AI companion with expressive voice, persistent interests, and desktop tools.",
+  "author": "Capri contributors",
+  "repository": "github:Chocoyito1/CapriAi-Agent",
   "main": "src/main/main.js",
   "private": true,
   "scripts": {
@@ -64,7 +64,7 @@
   },
   "build": {
     "appId": "caprigpt.desktop",
-    "productName": "CapriGPT",
+    "productName": "Capri",
     "files": [
       "src/**",
       "assets/**",
@@ -89,8 +89,8 @@
       "perMachine": false,
       "runAfterFinish": true,
       "createDesktopShortcut": true,
-      "shortcutName": "CapriGPT",
-      "artifactName": "CapriGPT-Setup-${version}.${ext}"
+      "shortcutName": "Capri",
+      "artifactName": "Capri-Setup-${version}.${ext}"
     }
   }
 }

@@ -1,4 +1,4 @@
-# CapriGPT next milestones
+# Capri next milestones
 
 ## 1. Local companion (current)
 

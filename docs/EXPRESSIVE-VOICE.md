@@ -31,6 +31,14 @@ The Windows stdio reader starts only after native-library/CUDA initialization.
 Starting it earlier hung native initialization in the observed worker process.
 The worker exits when its parent pipe closes; no network service is exposed.
 
+## Delivery styles
+
+In spoken chat, Capri can choose neutral, playful, comforting, pleased, or
+curious delivery based on the exchange. Wording and the pauses between phrases
+carry the style. Every phrase plays at its original speed, pitch, and tone using
+the selected voice reference. Open **Control room → Sound → Try her voice** to preview the same
+line in each style. The selector only chooses the preview style.
+
 ## Local setup
 
 Install a dedicated Python environment, CUDA 12.8 PyTorch wheels for RTX 50-series,

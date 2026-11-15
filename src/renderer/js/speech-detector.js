@@ -7,7 +7,7 @@ function load(src) {
     document.head.append(script);
   });
 }
-export async function speechDetector({ stream, onStart, onEnd }) {
+export async function speechDetector({ stream, onStart, onEnd, onFrame }) {
   const assets = new URL('../../../node_modules/@ricky0123/vad-web/dist/', import.meta.url).href;
   const wasm = new URL('../../../node_modules/onnxruntime-web/dist/', import.meta.url).href;
   library ||= (async () => {
@@ -21,5 +21,6 @@ export async function speechDetector({ stream, onStart, onEnd }) {
     positiveSpeechThreshold: 0.5, negativeSpeechThreshold: 0.35,
     minSpeechMs: 128, redemptionMs: 650, preSpeechPadMs: 320,
     onSpeechRealStart: onStart, onSpeechEnd: onEnd,
+    onFrameProcessed: onFrame,
   });
 }

@@ -14,7 +14,7 @@ const clean = (text, max = 1000) => {
 const SETTINGS = ['muted', 'volume', 'scale', 'lang', 'wander', 'possess', 'windowTracking', 'idleAnimations',
   'cursorInteractions', 'personality', 'dailyRoutine', 'surpriseAnimations', 'ttsEnabled'];
 const ACTIONS = ['app', 'url', 'setting', 'command', 'task'];
-const EFFECTS = ['capri_body', 'capri_input', 'capri_settings_change', 'capri_desktop_step'];
+const EFFECTS = ['capri_body', 'capri_input', 'capri_settings_change', 'capri_desktop_step', 'capri_close_app'];
 const READS = ['capri_screen', 'capri_context', 'capri_apps', 'capri_settings_read', 'capri_approval'];
 function steps(value) {
   if (!Array.isArray(value) || !value.length || value.length > 8) throw Error('A routine needs one to eight ordered steps.');
@@ -39,7 +39,15 @@ function steps(value) {
   return result;
 }
 function direct(text) {
-  return key(text).replace(/^(?:hey\s+)?capri[,!:.]?\s*/, '').replace(/^(?:(?:please|can you|could you|would you|por favor|puedes)\s+)+/, '');
+  return key(text).replace(/^(?:hey\s+)?capri(?:[,!:.]\s*|\s+|$)/, '').replace(/^(?:(?:please|can you|could you|would you|por favor|puedes)\s+)+/, '');
+}
+function recoveryTarget(text) {
+  if (typeof text !== 'string' || text.length > 200) return undefined;
+  const polite = /\b(?:can you|could you|would you|puedes)\b/i.test(text);
+  const value = direct(text).replace(polite ? /[.!?]+$/ : /[.!]+$/, '').replace(/\s+(?:please|por favor)$/, '');
+  const match = /^(?:resume|retry|continue|reanuda|reintenta|contin[uú]a)\s+(?:(?:my|the|that|last|failed|la|mi|esa|[úu]ltima)\s+)*(?:routine|rutina)(?:\s+([^?]+))?$/.exec(value);
+  if (match) return (match[1] || '').replace(/^["“](.*)["”]$/, '$1');
+  return undefined;
 }
 function teachingOnly(text) {
   const value = direct(text);
@@ -117,17 +125,17 @@ class ReusableRoutines {
     if (result) this.readable();
     return result;
   }
-  async save(args, { text, check }, observed) {
+  async save(args, { text, check, interpreted = false }, observed) {
     if (!args || Object.keys(args).sort().join(',') !== 'id,name,scope,steps' || !Number.isSafeInteger(args.id) || args.id < 0 || !['global', 'project'].includes(args.scope)) throw Error('Invalid routine save.');
     const name = clean(args.name, 80), definition = steps(args.steps), scope = args.scope === 'global' ? 0 : this.scope();
     if (name.startsWith('/') || /^[0-9#]+$/.test(name) || /[?]/.test(name)) throw Error('Choose a short spoken name, not a command or question.');
     if (args.scope === 'project' && !scope) throw Error('Choose a project before saving a project routine.');
-    if (!teaching(text, name, args.id)) throw Error('Learning a routine requires a direct current teaching request naming the process.');
+    if (!interpreted && !teaching(text, name, args.id)) throw Error('Learning a routine requires a direct current teaching request naming the process.');
     const c = this.settings();
     if (c.routinesEnabled === false || c.gamingMode || !permissions(c.privacy).memoryEnabled) throw Error('Enable Memory and routines, and resume Capri before saving.');
     const old = args.id ? observed.get(args.id) : null;
     if (args.id && (!old || old.scope_id !== scope)) throw Error('Look up this routine in the current project before editing it.');
-    if (old && !key(text).includes(old.name_key) && !new RegExp(`(?:#|routine\\s+|rutina\\s+)${old.id}\\b`).test(key(text))) throw Error('Name the existing routine or its #ID when editing it.');
+    if (old && !interpreted && !key(text).includes(old.name_key) && !new RegExp(`(?:#|routine\\s+|rutina\\s+)${old.id}\\b`).test(key(text))) throw Error('Name the existing routine or its #ID when editing it.');
     const selection = this.scope();
     const verify = () => {
       check(); const cfg = this.settings();
@@ -150,9 +158,9 @@ class ReusableRoutines {
     return { saved: true, id, name, version: this.db.prepare('SELECT version FROM companion_routines WHERE id=?').get(id).version,
       note: 'Saved only. Say the name or run the routine to execute it; this does not schedule it.' };
   }
-  async remove(id, { text, check }, observed) {
+  async remove(id, { text, check, interpreted = false }, observed) {
     const row = observed.get(id);
-    if (!row || !this.rows().some(value => value.id === id) || !teaching(text, row.name, id, true)) throw Error('Look up the routine and explicitly request its deletion.');
+    if (!row || !this.rows().some(value => value.id === id) || !interpreted && !teaching(text, row.name, id, true)) throw Error('Look up the routine and explicitly request its deletion.');
     const scope = this.scope();
     if (permissions(this.settings().privacy).memoryConfirmChanges && !await this.confirm('Forget this routine?', row.name)) return { deleted: false };
     check();
@@ -166,8 +174,43 @@ class ReusableRoutines {
     return { deleted: true, name: row.name };
   }
   begin(text) {
+    const target = recoveryTarget(text);
+    if (target !== undefined) return this.recover(target, text);
     const row = this.invocation(text);
     return row ? new RoutineSession({ store: this, row, request: text }) : null;
+  }
+  start(target, request) {
+    if (!target) return { message: 'Which saved routine should I run?' };
+    const { routine: row } = this.lookup(target);
+    if (!row) return { message: 'I couldn’t find that saved routine in this project.' };
+    return new RoutineSession({ store: this, row, request });
+  }
+  recover(target, request) {
+    if (!this.enabled()) return { message: 'Enable Memory, recall and routines before resuming a routine.' };
+    const scope = this.scope();
+    const rows = this.rows();
+    const id = /^#?(\d+)$/.exec(target);
+    const matches = rows.filter(row => id ? row.id === Number(id[1]) : row.name_key === target);
+    if (matches.length > 1) return { message: 'More than one routine has that name. Use “Resume routine #ID”.' };
+    const named = matches[0];
+    if (target && !named) return { message: 'I couldn’t find that saved routine in this project.' };
+    const latest = named
+      ? this.db.prepare('SELECT * FROM companion_routine_runs WHERE scope_id=? AND routine_id=? ORDER BY id DESC LIMIT 1').get(scope, named.id)
+      : this.db.prepare('SELECT * FROM companion_routine_runs WHERE scope_id=? ORDER BY id DESC LIMIT 1').get(scope);
+    const saved = rows.find(row => row.id === latest?.routine_id);
+    if (!saved) return { message: 'There’s no recent routine run to resume in this project. You can start a saved routine by name.' };
+    if (latest.status === 'completed') return { message: `“${saved.name}” already finished. Say “Run ${saved.name}” to start a new run.` };
+    if (latest.status === 'running') return { message: `“${saved.name}” is already running.` };
+    if (latest.version !== saved.version) return { message: `“${saved.name}” changed since that run. Say “Run ${saved.name}” to use the updated steps.` };
+    const row = { ...saved, steps: JSON.parse(saved.steps) };
+    const index = latest.finished_steps;
+    const results = JSON.parse(latest.results).slice(0, index);
+    if (!Number.isInteger(index) || index < 0 || index >= row.steps.length || results.length !== index ||
+        results.some((result, i) => result.step !== i + 1 || result.action !== row.steps[i].action ||
+          result.result !== stepResult[row.steps[i].action])) {
+      return { message: `I couldn’t verify where “${saved.name}” stopped. Review its run history with /routines runs.` };
+    }
+    return new RoutineSession({ store: this, row, request, recovery: { index, results } });
   }
   async route(text, patch) {
     const match = /^\/routines(?:\s+(.*))?$/i.exec(text.trim());
@@ -186,16 +229,21 @@ class ReusableRoutines {
       const result = await this.remove(row.id, { text: `Delete routine #${row.id}`, check() {} }, new Map([[row.id, row]]));
       return reply(result.deleted ? 'Routine and its run history deleted. Project files were not changed.' : 'Deletion cancelled.');
     }
-    return reply('Use /routines list; show <name or #ID>; runs; export; delete <id>; on|off. Teach a named process in normal chat, then say its name or run <name>.');
+    return reply('Use /routines list; show <name or #ID>; runs; export; delete <id>; on|off. Say “Run <name>” to start over or “Resume routine <name>” to continue from its first unfinished step.');
   }
 }
 
+const stepResult = { command: 'command-exited-zero', setting: 'setting-changed', task: 'actions-observed-outcome-unverified',
+  app: 'launch-request-accepted', url: 'launch-request-accepted' };
+
 class RoutineSession {
-  constructor({ store, row, request }) {
-    Object.assign(this, { store, row, request }); this.scope = store.scope(); this.index = 0; this.active = false; this.proofs = []; this.results = []; this.status = 'running';
+  constructor({ store, row, request, recovery }) {
+    Object.assign(this, { store, row, request }); this.scope = store.scope();
+    this.index = recovery?.index ?? 0; this.active = false; this.proofs = [];
+    this.results = recovery?.results ?? []; this.status = 'running'; this.resumed = Boolean(recovery);
     this.workspace = store.goals.projects.workspace();
-    this.id = Number(store.db.prepare("INSERT INTO companion_routine_runs(routine_id,scope_id,version,status,started_at) VALUES(?,?,?,'running',?)")
-      .run(row.id, this.scope, row.version, store.now()).lastInsertRowid);
+    this.id = Number(store.db.prepare("INSERT INTO companion_routine_runs(routine_id,scope_id,version,status,finished_steps,results,started_at) VALUES(?,?,?,'running',?,?,?)")
+      .run(row.id, this.scope, row.version, this.index, JSON.stringify(this.results), store.now()).lastInsertRowid);
   }
   validate() {
     this.store.readable(); this.store.goals.prune();
@@ -206,6 +254,7 @@ class RoutineSession {
     if (this.store.db.prepare('SELECT status FROM companion_routine_runs WHERE id=?').get(this.id)?.status !== 'running') throw Error('The saved routine run was stopped or deleted.');
   }
   descriptor() { return { id: this.row.id, name: this.row.name, version: this.row.version, steps: this.row.steps,
+    first_step: this.index + 1, resumed: this.resumed,
     note: 'The current user invoked this exact named definition. Perform only these steps with existing foreground tools. This is not blanket permission or a schedule.' }; }
   step() { return this.active ? this.row.steps[this.index] : null; }
   effectiveText() {
@@ -234,11 +283,16 @@ class RoutineSession {
     if (!this.active || ![...EFFECTS, 'capri_screen', 'capri_context'].includes(name)) return;
     const failed = result?.completed === false || result?.changed === false || result?.ok === false;
     if (failed) {
-      this.reason = typeof result.text === 'string' ? result.text.slice(0, 200) : 'The tool did not complete this step.';
-      this.results.push({ step: this.index + 1, action: this.step().action, result: 'tool-failed' }); this.stop('failed'); return;
+      this.failStep(result.text || result.reason); return;
     }
     const success = name === 'capri_desktop_step' ? result?.completed === true : name === 'capri_settings_change' ? result?.changed === true : Boolean(result);
     if (success) this.proofs.push({ kind: 'local-tool', tool: name, success: true });
+  }
+  failStep(reason) {
+    if (this.status !== 'running' || !this.active) return;
+    this.reason = typeof reason === 'string' ? reason.slice(0, 200) : 'The tool did not complete this step.';
+    this.results.push({ step: this.index + 1, action: this.step().action, result: 'tool-failed' });
+    this.stop('failed');
   }
   observeNative(item, workspace) {
     if (this.status !== 'running') return 'Routine stopped; no further steps may run.';
@@ -249,6 +303,7 @@ class RoutineSession {
       if (!Number.isInteger(item.exitCode) || !['completed', 'failed'].includes(item.status)) return null;
       if (item.exitCode !== 0) {
         this.results.push({ step: this.index + 1, action: step.action, result: 'command-exited-nonzero', exitCode: item.exitCode });
+        this.reason = `The command exited ${item.exitCode}.`;
         this.stop('failed'); return `Routine “${this.row.name}” stopped at step ${this.index + 1}: command exited ${item.exitCode}.`;
       }
       if (step.action === 'command') {
@@ -285,8 +340,7 @@ class RoutineSession {
     const step = this.step();
     const needed = { app: 'capri_desktop_step', url: 'capri_desktop_step', setting: 'capri_settings_change', command: 'native-command' }[step.action];
     if (!this.proofs.some(proof => needed ? proof.tool === needed || proof.kind === needed : proof.success)) throw Error('No matching successful execution receipt for this step. Perform and check it first.');
-    this.results.push({ step: this.index + 1, action: step.action, result: step.action === 'command' ? 'command-exited-zero'
-      : step.action === 'setting' ? 'setting-changed' : step.action === 'task' ? 'actions-observed-outcome-unverified' : 'launch-request-accepted' });
+    this.results.push({ step: this.index + 1, action: step.action, result: stepResult[step.action] });
     this.index++; this.active = false;
     if (this.index === this.row.steps.length) { this.status = 'completed'; this.store.db.prepare('UPDATE companion_routines SET last_used_at=? WHERE id=?').run(this.store.now(), this.row.id); }
     this.persist(); return this.receipt();

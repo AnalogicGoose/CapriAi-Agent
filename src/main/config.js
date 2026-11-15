@@ -16,6 +16,8 @@ const DEFAULTS = {
   routinesEnabled: true,
   interestsEnabled: true,
   proactiveEnabled: true,
+  proactiveVoice: false,
+  checkInReplies: true,
   dailyReviewEnabled: true,
   dailyReviewNotify: false,
   autonomyScreen: true,
@@ -27,14 +29,18 @@ const DEFAULTS = {
   dailyRoutine: true,
   surpriseAnimations: true,
   desktopActions: true,
+  preferredBrowser: 'Firefox',
+  crunchyrollProfile: 'Gabriel',
   windowTracking: true, // decorative geometry only; restore Capri's window sitting
   agentEnabled: true,
   privacy: {}, // normalized by pc-context; PC awareness defaults on
+  rememberRecentChat: false,
   scale: 0.6,        // sprite scale, 0.6 ≈ 250px tall
   muted: false,
   volume: 0.7,
   wakeWordEnabled: true,
   ttsEnabled: false,
+  speakTypedReplies: true,
   ttsEngine: 'windows',
   ttsPython: '',
   ttsReference: '',

@@ -199,13 +199,16 @@ class CognitiveFoundation {
       .all(100).filter(row => row.source_kind === 'app' || this.evidenceFor(row, { review: true })).slice(0, Math.min(100, Math.max(1, limit)));
   }
 
-  conversationCandidates() {
+  conversationCandidates(heldId) {
     if (!this.allowed() || this.projectSource?.quietFeedback()) return [];
-    if (this.db.prepare('SELECT at FROM curiosity_asks WHERE at>? LIMIT 1').get(this.now() - 6 * 3600000)) return [];
+    const onCooldown = this.db.prepare('SELECT at FROM curiosity_asks WHERE at>? LIMIT 1').get(this.now() - 6 * 3600000);
+    if (onCooldown && !heldId) return [];
     return this.list(100).filter(row => row.source_kind !== 'app' && row.status === 'open' && row.askable &&
-      row.next_step === 'ask_later' && row.reviewed_revision === row.evidence_revision && row.asked_revision < row.evidence_revision &&
-      !this.db.prepare('SELECT subject FROM curiosity_topic_asks WHERE subject=? AND at>?').get(row.subject, this.now() - 24 * 3600000) &&
-      (row.last_asked_at === null || this.now() - row.last_asked_at >= 24 * 3600000) && this.evidenceFor(row)).slice(0, 10);
+      row.next_step === 'ask_later' && row.reviewed_revision === row.evidence_revision &&
+      ((row.id === heldId && row.asked_revision === row.evidence_revision) ||
+        (!onCooldown && row.asked_revision < row.evidence_revision &&
+          !this.db.prepare('SELECT subject FROM curiosity_topic_asks WHERE subject=? AND at>?').get(row.subject, this.now() - 24 * 3600000) &&
+          (row.last_asked_at === null || this.now() - row.last_asked_at >= 24 * 3600000))) && this.evidenceFor(row)).slice(0, 10);
   }
   reserveQuestion(id, revision) {
     const row = this.conversationCandidates().find(row => row.id === id && row.evidence_revision === revision);

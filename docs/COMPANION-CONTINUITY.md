@@ -36,6 +36,15 @@ the updates share a timestamp. Capri must use current goal/decision records rath
 than presenting an outdated handoff as current progress. Resume points are saved
 only on request; ordinary chat and task output are not automatically persisted.
 
+Say **“Resume my saved task”** or **“Let’s pick up where we left off”** to
+continue from the current handoff. A clear next action helps, for example
+**“Save where we left off: Layout review is paused. Next: Open my workspace.”**
+Without a handoff, Capri looks for an active goal with a saved next step.
+You can target one directly with **“Resume task #3”** or **“Resume task Review
+the layout.”** If multiple tasks match or the handoff is stale, Capri asks you
+which current step to use. Normal desktop and command permissions apply when
+carrying it out.
+
 ## Review and controls
 
 - `/continuity status` reviews saved context for the current scope.

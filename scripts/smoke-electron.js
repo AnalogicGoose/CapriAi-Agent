@@ -9,9 +9,87 @@ const { once } = require('node:events');
 process.env.CAPRI_PORT = '47824';
 const scratch = process.env.CAPRIGPT_SMOKE_ROOT || path.resolve(__dirname, '../.caprigpt-local/smoke');
 fs.mkdirSync(scratch, { recursive: true });
-process.env.CAPRIGPT_TEST_PROFILE = fs.mkdtempSync(path.join(scratch, 'caprigpt-smoke-'));
+const personalContextSmoke = process.argv.includes('--personal-context-only');
+process.env.CAPRIGPT_TEST_PROFILE = personalContextSmoke && process.env.CAPRI_MEMORY_SMOKE_PROFILE
+  ? fs.realpathSync(process.env.CAPRI_MEMORY_SMOKE_PROFILE) : fs.mkdtempSync(path.join(scratch, 'caprigpt-smoke-'));
 process.env.CAPRIGPT_CONNECTION_FILE = path.join(process.env.CAPRIGPT_TEST_PROFILE, 'integration.json');
+const memoryPrompts = [];
+if (personalContextSmoke) {
+  require('../src/main/ollama-runtime').executable = () => null;
+  require('../src/main/ollama').models = async () => [];
+  const { CodexBrain } = require('../src/main/codex-brain');
+  CodexBrain.prototype.createClient = function () {
+    return {
+      async start() {},
+      close() {},
+      respond(_id, result) { this.toolResult = result; },
+      async request(method, params) {
+        if (method === 'account/read') return { account: { type: 'chatgpt' } };
+        if (method === 'model/list') return { data: [{ id: 'sample', isDefault: true }] };
+        if (method === 'config/read') return { config: {} };
+        if (method === 'thread/start') return { thread: { id: 'sample-thread' } };
+        assert.equal(method, 'turn/start');
+        memoryPrompts.push(params.input[0].text);
+        const ids = { threadId: 'sample-thread', turnId: 'sample-turn' };
+        this.onNotification('turn/started', { ...ids, turn: { id: ids.turnId } });
+        const prompt = memoryPrompts.at(-1);
+        if (prompt.endsWith('I like Black Clover. I have a Steam Deck.')) {
+          assert.match(prompt, /"automaticMemory":[^\n]+I like Black Clover/);
+          await this.onRequest({ id: 1, method: 'item/tool/call', params: {
+            ...ids, callId: 'redundant-memory-update', tool: 'capri_memory_change',
+            arguments: { changes: [{ kind: 'add', id: 0, text: 'The user likes Black Clover.' }] },
+          } });
+          const receipt = JSON.parse(this.toolResult.contentItems[0].text);
+          assert.equal(receipt.changed, false);
+          assert.ok(receipt.confirmedFacts.includes('I like Black Clover'));
+        }
+        if (prompt.endsWith('Table tennis, mostly.')) {
+          assert.match(prompt, /What sport do you play most often\?/);
+          assert.match(prompt, /"personalMemory":[^\n]+I spend time on Table tennis/);
+          await this.onRequest({ id: 1, method: 'item/tool/call', params: {
+            ...ids, callId: 'save-stated-activity', tool: 'capri_memory_learn',
+            arguments: { facts: [{ kind: 'activity', detail: 'Table tennis' }] },
+          } });
+          assert.match(this.toolResult.contentItems[0].text, /"saved":0/);
+        }
+        const reply = prompt.endsWith('Ask me about sports.') ? 'What sport do you play most often?' : 'Sample reply.';
+        this.onNotification('item/completed', { ...ids, item: { type: 'agentMessage', text: reply } });
+        this.onNotification('turn/completed', { ...ids, turn: { id: ids.turnId, status: 'completed' } });
+        return { turn: { id: ids.turnId } };
+      },
+    };
+  };
+}
 let cognitiveProbe, proactiveProbe, reflectionProbe, actionsProbe, interestsProbe, groundedProbe, cognitiveSchemaSeen = false, foregroundContext, foregroundWorkspace;
+const initiativeSmoke = process.argv.includes('--initiative-only');
+const dependableActionsSmoke = process.argv.includes('--dependable-actions-only');
+const dependableCalls = [];
+if (dependableActionsSmoke) {
+  require('../src/main/ollama-runtime').executable = () => null;
+  const { DesktopTools } = require('../src/main/desktop-tools');
+  const openWorkspace = DesktopTools.prototype.openWorkspace;
+  DesktopTools.prototype.openWorkspace = function (folder, signal) {
+    this.openPath = async value => { dependableCalls.push(['open workspace', value]); return ''; };
+    this.observeWorkspace = async value => { dependableCalls.push(['verify workspace', value]); return true; };
+    return openWorkspace.call(this, folder, signal);
+  };
+  const { MusicPlayback } = require('../src/main/music-playback');
+  const play = MusicPlayback.prototype.play;
+  MusicPlayback.prototype.play = function (request, signal) {
+    this.read = async () => 'var ytInitialData = {"contents":{"twoColumnSearchResultsRenderer":{"primaryContents":{"sectionListRenderer":{"contents":[{"itemSectionRenderer":{"contents":[{"videoRenderer":{"videoId":"abcdefghijk","title":{"simpleText":"One More Time"},"ownerText":{"simpleText":"Daft Punk"},"ownerBadges":[{"metadataBadgeRenderer":{"style":"BADGE_STYLE_TYPE_VERIFIED_ARTIST"}}]}}]}}]}}}}}';
+    this.desktop.openUrl = async url => { dependableCalls.push(['open song', url]); return { browser: 'Firefox' }; };
+    this.observe = async ({ title, artist }) => { dependableCalls.push(['verify song', title, artist]); return true; };
+    return play.call(this, request, signal);
+  };
+}
+if (initiativeSmoke) {
+  require('../src/main/ollama-runtime').executable = () => null;
+  const module = require('../src/main/proactive-conversation');
+  const Original = module.ProactiveConversation;
+  module.ProactiveConversation = class extends Original {
+    constructor(options) { super(options); proactiveProbe = this; }
+  };
+}
 if (process.argv.includes('--cognitive-only')) {
   require('../src/main/native-windows').context = () => ({ foreground: { app: 'Code', title: 'Synthetic project' } });
   require('../src/main/native-windows').foregroundBounds = () => null;
@@ -33,11 +111,32 @@ if (process.argv.includes('--cognitive-only')) {
       assert.deepEqual(this.tools.specs(), []);
       assert.equal(options.recordHistory, false); assert.ok(options.outputSchema);
       cognitiveSchemaSeen = true;
+      if (options.outputSchema.properties.reply) {
+        const { request, currentDraft, nextStep } = JSON.parse(JSON.parse(text).at(-1).content);
+        if (request.startsWith('Continue the draft')) {
+          assert.match(currentDraft, /lighthouse rotates/);
+          assert.match(nextStep, /storm/);
+          return JSON.stringify({ reply: 'Should the light hold through the storm?',
+            draft: 'During a storm, a second lamp lights up above the harbor.' });
+        }
+        return JSON.stringify({ reply: 'What do you think?',
+          draft: request.includes('lighthouse') ? 'The lighthouse rotates toward the lost boats at dusk.'
+            : 'At dusk, the streets shift to guide people home.' });
+      }
       if (options.outputSchema.properties.domain) return JSON.stringify({ domain: 'worldbuilding', focus: 'Map a weather-shaped city',
         question: 'What if streets moved with the rain?', rationale: 'A small rule could make an interesting fictional place.', continuationId: null });
+      if (options.outputSchema.properties.draft) return JSON.stringify({ decision: 'draft',
+        draft: 'During rain, every alley leads to the bakery.', nextStep: 'Give the bakery a second location.' });
       if (options.outputSchema.properties.hypothesis) return JSON.stringify({
         question: 'Would a second pair of eyes be useful?', hypothesis: 'Possibly ordinary project work.',
         counterpoint: 'App visits do not establish intent.', confidence: 0.3, priority: 0.4, next_step: 'ask_later' });
+      const { selected } = JSON.parse(JSON.parse(text).at(-1).content);
+      if (selected.source === 'return') {
+        return JSON.stringify({ speak: true, message: 'Welcome back. Good to see you again.' });
+      }
+      if (selected.savedDraft) {
+        return JSON.stringify({ speak: true, message: 'I sketched a bakery that every alley leads to in the rain.' });
+      }
       return JSON.stringify({ speak: true, message: 'What kind of game would you like to build?' });
     }
     foregroundContext = this.context();
@@ -132,13 +231,17 @@ const taskEffects={apps:[],opened:[],played:[]};
 const speechSessions=[];
 let speechService;
 const compactVoice={requests:[],spoken:[],transcripts:[]};
-if(process.argv.includes('--voice-flow-only') || process.argv.includes('--chat-sounds-only')) {
+const checkInReplySmoke=process.argv.includes('--cognitive-only') && process.argv.includes('--check-in-reply');
+const compactVoiceSmoke=process.argv.includes('--voice-flow-only') || process.argv.includes('--chat-sounds-only');
+if(compactVoiceSmoke || checkInReplySmoke) {
   app.commandLine.appendSwitch('use-fake-device-for-media-stream');
   app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
   require('../src/main/ollama-runtime').executable=()=>null;
   require('../src/main/ollama').models=async()=>[];
   const module=require('../src/main/speech'),Original=module.SpeechInput;
   module.SpeechInput=class extends Original {constructor(options){super({...options,engine:{device:'synthetic',start:async()=>{},stop(){},transcribe:async()=>compactVoice.transcripts.shift()||''}});speechService=this;}};
+}
+if(compactVoiceSmoke) {
   const {CodexBrain}=require('../src/main/codex-brain');
   CodexBrain.prototype.chat=async function(text,delta,progress,options={}){
     if(options.outputSchema)return JSON.stringify({intent:'chat',message:'',goals:[],steps:[]});
@@ -181,6 +284,7 @@ if(process.argv.includes('--tasks-only')) {
   WebTools.prototype.search=async()=>({type:'news',items:[{title:'A current AI headline',published:'2026-10-28T00:00:00Z',url:'https://news.google.com/rss/articles/test'}]});
   WebTools.prototype.youtube=async()=>({type:'youtube',items:[{title:'A verified newest upload',channel:'Rubius Z',videoId:'abcdefghijk',url:'https://www.youtube.com/watch?v=abcdefghijk'}]});
   require('../src/main/desktop-tools').DesktopTools.prototype.open=async name=>{taskEffects.apps.push(name);return {type:'app',note:'File Explorer has a visible desktop window.'};};
+  require('../src/main/desktop-tools').DesktopTools.prototype.openUrl=async(url,browser)=>{taskEffects.opened.push(url);return {type:'website',launchRequested:true,note:`Sent ${url} to ${browser}.`};};
   require('../src/main/agent-browser').createAgentBrowser=()=>({
     open:async url=>{taskEffects.opened.push(url);return {opened:true,url};},
     play:async item=>{taskEffects.played.push(item.videoId);return {...item,playing:true};},stop(){},
@@ -204,9 +308,124 @@ app.whenReady().then(async () => {
     const js = (source) => win.webContents.executeJavaScript(source);
     for (let i = 0; i < 120 && !await js("document.documentElement.dataset.caprigptReady === 'true'"); i++) await pause(500);
     assert.equal(await js("document.documentElement.dataset.caprigptReady"), 'true');
+    if (dependableActionsSmoke) {
+      const route = text => js(`host.personalRoute(${JSON.stringify(text)}, Date.now(), [], false, null, 'dependable-actions-smoke')`);
+      const folder = fs.realpathSync(process.env.CAPRIGPT_TEST_PROFILE);
+      assert.equal((await route(`/project open ${folder}`)).handled, true);
+      const workspace = await route('Open my workspace.');
+      assert.equal(workspace.completed, true, workspace.text);
+      const music = await route('Play One More Time by Daft Punk.');
+      assert.equal(music.completed, true, music.text);
+      assert.match(music.text, /^Playing/);
+      assert.deepEqual(dependableCalls, [
+        ['open workspace', folder], ['verify workspace', folder],
+        ['open song', 'https://music.youtube.com/watch?v=abcdefghijk&autoplay=1'], ['verify song', 'One More Time', 'Daft Punk'],
+      ]);
+      console.log('PASS: normal typed and voice request routing uses one direct action and one verification for a song and a workspace.');
+      clearTimeout(limit); app.exit(0); return;
+    }
+    if (initiativeSmoke) {
+      await js('host.setConfig({autonomyEnabled:true,proactiveEnabled:true,proactiveVoice:false,interestsEnabled:false,privacy:{contextEvents:false,memoryEnabled:false}})');
+      const route = text => js(`host.personalRoute(${JSON.stringify(text)}, Date.now(), [], false, null, 'quiet-trial-smoke')`);
+      const engine = proactiveProbe, trial = engine.trial;
+      let now = Date.now(), notifications = 0;
+      engine.now = trial.now = () => now;
+      engine.random = () => 0;
+      engine.canRun = () => true;
+      engine.models = async () => [engine.model];
+      engine.infer = async () => JSON.stringify({ speak: true, message: 'Would you design a miniature windmill?' });
+      engine.notify = () => { notifications++; return true; };
+      assert.match((await route('Start a quiet trial.')).text, /started for 24 hours/i);
+      now += 5 * 60_000;
+      assert.equal(await engine.run(), false);
+      const report = await route('Show me the quiet trial.');
+      assert.match(report.text, /1 proposed[\s\S]+1 model calls[\s\S]+miniature windmill/);
+      assert.equal(notifications, 0);
+      assert.match((await route(`/companion trial rate ${trial.decisions()[0].id} bad-timing`)).text, /Feedback saved/);
+      assert.equal(trial.extraDelay(), 5 * 60_000);
+      now = trial.status().endsAt;
+      assert.equal(await engine.run(), false);
+      assert.match((await route('Show me the quiet trial.')).text, /Ready for review/);
+      assert.equal(notifications, 0);
+      assert.match((await route('Resume check-ins.')).text, /normal settings/);
+      now += 10 * 60_000;
+      assert.equal(await engine.run(), true);
+      assert.equal(notifications, 1);
+      assert.match((await route('Why did you bring that up?')).text, /conversation starter/);
+      console.log('PASS: quiet proposal, review, feedback, explicit live resume and check-in explanation through the app.');
+      clearTimeout(limit); app.exit(0); return;
+    }
+    if (personalContextSmoke) {
+      const route = text => js(`host.personalRoute(${JSON.stringify(text)}, Date.now(), [], false, null, 'test-conversation')`);
+      const send = async (text, mode = 'voice') => {
+        assert.equal((await route(text)).handled, false);
+        const result = await js(`host.chatSend({id: Date.now(), mode: ${JSON.stringify(mode)},
+          messages: [{role: 'user', content: ${JSON.stringify(text)}}]})`);
+        assert.equal(result.ok, true, result.error);
+        return memoryPrompts.at(-1);
+      };
+      if (process.argv.includes('--seed-memory')) {
+        await js('host.setConfig({rememberRecentChat:true,privacy:{memoryEnabled:true,memoryLearn:true,memoryRecall:true},proactiveEnabled:false})');
+        await send('I like Black Clover. I have a Steam Deck.');
+        await send('Ask me about sports.');
+        await send('Table tennis, mostly.');
+        await send('I play on Xbox. I own an Xbox. I like anime.');
+        const correction = await send('I used to play on Xbox, but now I mostly play on PC.');
+        assert.match(correction, /"automaticMemory":[^\n]+I mostly play on PC/);
+        assert.doesNotMatch((await route('/memory list')).text, /I play on Xbox/);
+        assert.match((await route("I'm taking a break from anime.")).text, /leave/);
+        await send('Let’s talk about Asta and Yuno.');
+        await send("I'm caught up through episode 15 of Black Clover.");
+        await send('We were comparing Asta and Yuno.');
+        await send('No spoilers past episode 15.');
+        assert.match((await route('Show my topic recaps.')).text, /Black Clover[\s\S]+Asta and Yuno[\s\S]+Through episode 15/);
+        const { DatabaseSync } = require('node:sqlite');
+        const recent = new DatabaseSync(path.join(process.env.CAPRIGPT_TEST_PROFILE, 'recent-conversation.sqlite'));
+        recent.prepare("UPDATE exchanges SET at=? WHERE user LIKE '%episode 15%' OR user='We were comparing Asta and Yuno.'")
+          .run(Date.now() - 8 * 86_400_000);
+        recent.close();
+        assert.match((await route('/memory list')).text, /Steam Deck/);
+        assert.match((await route('/memory list')).text, /I spend time on Table tennis/);
+        console.log('PASS: the app saved sample voice turns and stated personal facts.');
+      } else {
+        const prompt = await send('What were we talking about?', 'text');
+        assert.match(prompt, /Let’s talk about Asta and Yuno/);
+        assert.match(prompt, /Prior conversation[\s\S]+I like Black Clover/);
+        assert.match(prompt, /"personalMemory":[^\n]+I have a Steam Deck/);
+        const resumed = await send('Can we continue our Black Clover discussion?', 'text');
+        const [context, history] = resumed.split('\n\nPrior conversation');
+        const recap = JSON.parse(context.split('\n')[1]).topicRecaps[0];
+        assert.equal(recap.point, 'We were comparing Asta and Yuno');
+        assert.equal(recap.spoilerLimit, 'Through episode 15');
+        assert.doesNotMatch(history, /We were comparing Asta and Yuno|spoilers past episode 15/);
+        const corrected = await send("For Black Clover, I'm actually on episode 12.", 'text');
+        assert.equal(JSON.parse(corrected.split('\n')[1]).topicRecaps[0].progress, 'Before episode 12');
+        assert.match((await route('Forget the recap for Black Clover.')).text, /removed the saved recap/i);
+        const afterForget = await send('Black Clover discussion?', 'text');
+        assert.equal(JSON.parse(afterForget.split('\n')[1]).topicRecaps, undefined);
+        const activeProfile = JSON.parse(prompt.split('\n')[1]).personalMemory;
+        assert.ok(activeProfile.facts.some(row => row.text === 'I mostly play on PC'));
+        assert.ok(activeProfile.facts.some(row => row.text === 'I own an Xbox'));
+        assert.ok(!activeProfile.facts.some(row => row.text === 'I play on Xbox' || row.text === 'I like anime'));
+        assert.ok(activeProfile.quietTopics.includes('anime'));
+        assert.match((await route("I'm back into anime.")).text, /again/);
+        assert.match((await route('/memory list')).text, /I like anime/);
+        assert.match((await route('Talk less about Black Clover.')).text, /leave/);
+        const quiet = await send('Can you recommend something new?');
+        assert.doesNotMatch(quiet.split('\n\nPrior conversation')[0], /"text":"I like Black Clover"/);
+        assert.match((await route('/memory topics')).text, /Black Clover/);
+        assert.match((await route('Bring up Black Clover again.')).text, /again/);
+        assert.match((await route('Forget Black Clover.')).text, /cleared/);
+        const fresh = await send('What do you remember about me?');
+        assert.doesNotMatch(fresh, /Black Clover/);
+        assert.match(fresh, /I spend time on Table tennis/);
+        console.log('PASS: a new app process recalls chat and personal facts and respects quiet and forget requests.');
+      }
+      clearTimeout(limit); app.exit(0); return;
+    }
     if(process.argv.includes('--voice-flow-only') || process.argv.includes('--chat-sounds-only')) {
       const until=async(check,label)=>{for(let i=0;i<200;i++){if(await check())return;await pause(50);}throw Error('Timed out: '+label);};
-      await js("host.setConfig({ttsEnabled:true,ttsEngine:'windows',muted:false,volume:0,wakeWordEnabled:true,lang:'en'})");
+      await js("host.setConfig({ttsEnabled:true,speakTypedReplies:false,ttsEngine:'windows',muted:false,volume:0,wakeWordEnabled:true,lang:'en'})");
       await js(`(async()=>{
         const {Voice}=await import('./js/voice.js');
         const original=Voice.prototype.play;
@@ -217,8 +436,8 @@ app.whenReady().then(async () => {
       await until(()=>js("document.querySelector('#panel').classList.contains('is-chat')"),'typed chat');
       await js("document.querySelector('.panel__input').value='Hello';document.querySelector('.panel__chat').requestSubmit()");
       await until(()=>js("document.querySelector('.panel__line').textContent.includes('I am here')"),'typed reply');
-      assert.equal(compactVoice.spoken.length,0,'Typed chat does not synthesize speech');
-      assert.ok(await js('window.chatBlips > 0'),'Typed replies retain text blips with spoken replies enabled');
+      assert.equal(compactVoice.spoken.length,0,'Typed chat respects its speech switch');
+      assert.ok(await js('window.chatBlips > 0'),'Silent typed replies retain text blips');
       if(process.argv.includes('--chat-sounds-only')) {
         await js(`(async()=>{
           const {Voice}=await import('./js/voice.js');const voice=new Voice();
@@ -233,13 +452,20 @@ app.whenReady().then(async () => {
           if(replies.length!==1||blips.length)throw Error('Voice must stream speech without chat blips');
         })()`);
         await js('host.setConfig({wakeWordEnabled:false,ttsEnabled:false})');
-        clearTimeout(limit);console.log('PASS: real app text chat blips with TTS enabled; no typed synthesis; voice delta has speech without blips; mute suppresses audio');app.exit(0);return;
+        clearTimeout(limit);console.log('PASS: real app text chat blips with typed speech off; voice delta has speech without blips; mute suppresses audio');app.exit(0);return;
       }
+      await js("host.setConfig({speakTypedReplies:true})");
+      const blipsBeforeTypedSpeech=await js('window.chatBlips');
+      await js("document.querySelector('.panel__input').value='Hello again';document.querySelector('.panel__chat').requestSubmit()");
+      await until(()=>compactVoice.spoken.length>0,'spoken typed reply');
+      assert.match(compactVoice.spoken.at(-1), /I am here/);
+      assert.equal(await js('window.chatBlips'),blipsBeforeTypedSpeech,'Spoken typed replies do not add text blips');
+      const beforeWake=compactVoice.spoken.length;
       const blipsBeforeVoice=await js('window.chatBlips');
       await until(()=>speechService.current?.mode==='wake','wake listener');
       compactVoice.transcripts.push('Hey Capri, hello again.');speechService.enqueue(speechService.current,Buffer.alloc(4000));
       await until(()=>js("!document.getElementById('voice-indicator').hidden"),'compact microphone');
-      await until(()=>compactVoice.spoken.length>0,'spoken wake reply');
+      await until(()=>compactVoice.spoken.length>beforeWake,'spoken wake reply');
       assert.equal(speechService.current.mode,'conversation');
       assert.equal(await js("getComputedStyle(document.getElementById('panel')).visibility"),'hidden');
       assert.equal(await js("document.getElementById('talk-menu').hidden"),true);
@@ -252,7 +478,7 @@ app.whenReady().then(async () => {
       assert.equal(await js("document.body.classList.contains('voice-session')"),true);
       await js("document.getElementById('voice-indicator').click()");
       await js("host.setConfig({wakeWordEnabled:false,ttsEnabled:false})");await pause(700);
-      clearTimeout(limit);console.log('PASS: real app typed chat blips with TTS enabled, no typed speech, wake voice-only reply without blips, continuous mic, hidden chat, manual compact voice and end control');app.exit(0);return;
+      clearTimeout(limit);console.log('PASS: typed speech toggle, no blips over spoken replies, wake voice-only reply, continuous mic, hidden chat, and manual voice controls');app.exit(0);return;
     }
     if (process.argv.includes('--cognitive-only')) {
       require('../src/main/config').save({ gamingMode: false, proactiveEnabled: true, cognitiveEnabled: true,
@@ -407,14 +633,149 @@ app.whenReady().then(async () => {
       await controls.webContents.executeJavaScript('settingsHost.action("interests-open")');
       for (let i=0;i<100 && !await js("document.querySelector('.panel__line').textContent.includes('Map a weather-shaped city')");i++) await pause(50);
       assert.match(await js("document.querySelector('.panel__line').textContent"), /Map a weather-shaped city/);
+      await js("document.querySelector('.panel__close').click()");
+      await pause(500);
+      if (checkInReplySmoke) {
+        win.webContents.setAudioMuted(true);
+        await controls.webContents.executeJavaScript('settingsHost.patch({proactiveVoice:true,checkInReplies:true,ttsEnabled:true,ttsEngine:"windows",muted:false})');
+        await js(`(async () => {
+          const { VoiceCall } = await import('./js/voice-call.js');
+          const { SpeechPlayer } = await import('./js/speech-output.js');
+          const schedule = SpeechPlayer.prototype.schedule;
+          SpeechPlayer.prototype.schedule = function (ctx, buffer) {
+            schedule.call(this, ctx, buffer);
+            window.lastVoiceRate = this.source?.playbackRate.value;
+          };
+          const playback = VoiceCall.prototype.playback;
+          window.checkInPlaybackCount = 0;
+          window.voicePlaybackCount = 0;
+          VoiceCall.prototype.playback = function (active) {
+            playback.call(this, active);
+            if (active) window.voicePlaybackCount++;
+            if (active && this.checkIn) { window.activeCheckIn = this; window.checkInPlaybackCount++; }
+          };
+        })()`);
+      }
+      proactiveProbe.state.nextAt = 0;
+      assert.equal(await proactiveProbe.run(), true);
+      if (checkInReplySmoke) {
+        for (let i=0;i<160 && !await js('window.checkInPlaybackCount');i++) await pause(50);
+        assert.equal(speechService.current?.checkIn, true, 'A prompt must open the check-in microphone');
+        assert.equal(await js('Boolean(window.activeCheckIn?.speaker.source)'), true);
+        assert.equal(await js("document.querySelector('#panel').classList.contains('is-chat')"), false);
+        const voiceReply = async text => {
+          await js('window.activeCheckIn.speechStart()');
+          if (await js('Boolean(window.activeCheckIn.echoProbe)')) {
+            for (let i=0;i<40 && !await js('Number.isFinite(window.activeCheckIn.echoProbe?.quietAt)');i++) await pause(10);
+            await pause(175);
+            await js(`(() => {
+              const call = window.activeCheckIn;
+              for (let i=0;i<3;i++) call.speechFrame({isSpeech: 0.99});
+            })()`);
+          }
+          assert.equal(await js('Boolean(window.activeCheckIn.speaker.source)'), false, 'Confirmed speech should stop the audio');
+          for (let i=0;i<40 && speechService.current?.inputBlocked;i++) await pause(10);
+          assert.equal(speechService.current?.inputBlocked, false);
+          compactVoice.transcripts.push(text);
+          speechService.enqueue(speechService.current, Buffer.alloc(4000));
+        };
+        const waitForSpeech = async count => {
+          for (let i=0;i<180 && !await js(`window.voicePlaybackCount >= ${count}`);i++) await pause(50);
+          assert.ok(await js(`window.voicePlaybackCount >= ${count}`), 'The reply should be spoken aloud');
+        };
+        if (process.argv.includes('--co-create-voice')) {
+          await voiceReply('Let’s build that together.');
+          await waitForSpeech(2);
+          assert.equal(speechService.current?.checkIn, false, 'Explicit collaboration should keep the voice session open');
+          assert.equal(await js("document.body.classList.contains('voice-session')"), true);
+          await pause(750);
+          await voiceReply('Make it a lighthouse.');
+          await waitForSpeech(3);
+          assert.equal(interestsProbe.jointDraft(1), undefined);
+          await pause(750);
+          await voiceReply('Save this draft, and next time let’s add a storm.');
+          await waitForSpeech(4);
+          assert.ok(Math.abs(await js('window.lastVoiceRate') - 0.96) < 0.001, 'Saving progress uses the pleased delivery');
+          assert.match(interestsProbe.jointDraft(1)?.draft, /lighthouse rotates/);
+          assert.match(interestsProbe.jointDraft(1)?.next_step, /storm/);
+          const firstSession = speechService.current.id;
+          await js("document.getElementById('voice-indicator').click()");
+          for (let i=0;i<50 && speechService.current;i++) await pause(20);
+          assert.equal(speechService.current, null);
+          await js("document.querySelector('[data-talk=voice]').click()");
+          for (let i=0;i<100 && !await js("window.activeCheckIn.phase === 'listening'");i++) await pause(50);
+          assert.notEqual(speechService.current?.id, firstSession);
+          await voiceReply('Where did we leave off?');
+          await waitForSpeech(5);
+          await pause(750);
+          await voiceReply('Let’s keep working on our draft.');
+          await waitForSpeech(6);
+          assert.ok(Math.abs(await js('window.lastVoiceRate') - 1.06) < 0.001, 'Continuing uses the curious delivery');
+          assert.match(interestsProbe.jointDraft(1)?.draft, /lighthouse rotates/, 'Continuing should not overwrite the saved draft');
+          console.log('PASS: live voice collaboration saved a revision and next step, then recalled and continued it in a new voice session.');
+        } else {
+          await voiceReply('Not now.');
+          await waitForSpeech(2);
+        }
+        await js("document.getElementById('voice-indicator').click()");
+        for (let i=0;i<50 && speechService.current;i++) await pause(20);
+        assert.equal(speechService.current, null);
+      } else {
+        for (let i=0;i<100 && !await js("document.querySelector('[data-id=reply]') !== null");i++) await pause(50);
+        await js("document.querySelector('[data-id=reply]').click()");
+        for (let i=0;i<100 && !await js("document.querySelector('#panel').classList.contains('is-chat')");i++) await pause(50);
+        await js("document.querySelector('.panel__input').value='Not now.';document.querySelector('.panel__chat').requestSubmit()");
+        for (let i=0;i<100 && !await js("document.querySelector('.panel__line').textContent.includes('set that idea aside')");i++) await pause(50);
+        assert.match(await js("document.querySelector('.panel__line').textContent"), /set that idea aside for a day/);
+      }
+      if (!process.argv.includes('--co-create-voice')) assert.equal(interestsProbe.feedback(1)?.choice, 'later');
+      assert.match((await route('/interests show 1')).text, /every alley leads to the bakery[\s\S]+second location/);
       await route('/interests dismiss 1');
       assert.deepEqual(interestsProbe.context(), []);
       await controls.webContents.executeJavaScript('settingsHost.patch({interestsEnabled:false})');
       assert.equal(interestsProbe.enabled(), false);
+      await controls.webContents.executeJavaScript('settingsHost.patch({proactiveVoice:true,checkInReplies:false,ttsEnabled:true,ttsEngine:"windows",muted:false})');
+      win.webContents.setAudioMuted(true);
+      const {SpeechOutput} = require('../src/main/tts');
+      const speak = SpeechOutput.prototype.speak;
+      let checkInAudio;
+      SpeechOutput.prototype.speak = async function (request) {
+        checkInAudio = 'synthesis requested';
+        const result = await speak.call(this, request);
+        checkInAudio = result.ok ? 'synthesized' : result.error;
+        return result;
+      };
+      await js(`(async () => {
+        const { SpeechPlayer } = await import('./js/speech-output.js');
+        const schedule = SpeechPlayer.prototype.schedule;
+        const speakProactive = SpeechPlayer.prototype.speakProactive;
+        window.spokenCheckInFrames = 0;
+        SpeechPlayer.prototype.speakProactive = function (text, deadline, available) {
+          const started = speakProactive.call(this, text, deadline, available);
+          window.spokenCheckInStart = { enabled: this.enabled, optIn: this.config.proactiveVoice, available: available(), started };
+          return started;
+        };
+        SpeechPlayer.prototype.schedule = function (...args) {
+          schedule.apply(this, args);
+          if (this.proactive && this.playing) window.spokenCheckInFrames++;
+        };
+        document.querySelector('.panel__close').click();
+      })()`);
+      await pause(500);
+      proactiveProbe.observeIdle(300); proactiveProbe.observeIdle(1);
+      assert.equal(await proactiveProbe.run(), false, 'Recent quiet feedback suppresses even a return to the PC');
+      proactiveProbe.state.deferredUntil = 0;
+      assert.equal(await proactiveProbe.run(), true);
+      for (let i=0;i<130 && !await js('window.spokenCheckInFrames');i++) await pause(100);
+      assert.match(await js("document.querySelector('.panel__line').textContent"), /Welcome back/);
+      assert.ok(await js('window.spokenCheckInFrames > 0'),
+        'The current local Windows voice should schedule real check-in audio: ' +
+        JSON.stringify({ audio: checkInAudio, start: await js('window.spokenCheckInStart') }));
       await route('/companion off');
       assert.equal(JSON.parse((await route('/companion status')).text).enabled, false);
       assert.equal(await proactiveProbe.run(), false);
-      console.log('PASS: tool-free interest generation, persistent foreground interest context, review/dismiss/disable controls, reflection lock gate, proactive replies, goals/recall, project picker races, continuity updates, daily recap tools/settings/review button, grounded project inquiries, evidence lookup, feedback, routine teaching/name invocation/tool receipts/review controls and scoped context. Isolated profile, inference mocked.');
+      if (checkInReplySmoke) console.log('PASS: wake-free interruption of a real spoken draft, anchored feedback, spoken acknowledgement and microphone teardown. Fake microphone and scripted local recognition.');
+      console.log('PASS: persistent creative drafts, proactive replies and a return-to-PC check-in through real Windows speech; reflection, goals, projects, continuity, reviews and routines. Isolated profile, Codex inference mocked, audio muted at the output.');
       clearTimeout(limit); app.exit(0); return;
     }
     if (process.argv.includes('--tts-only')) {
@@ -780,23 +1141,18 @@ app.whenReady().then(async () => {
       }
       assert.match(await js("document.querySelector('.panel__line').textContent"),/Current featured Steam discounts/);
       assert.ok(await js("document.querySelectorAll('.panel__actions [data-id^=source-]').length > 0"));
-      // A planner may already have opened a source. Remove only this isolated
-      // test's browser windows so a broken source-button handler cannot pass.
-      for(const page of BrowserWindow.getAllWindows().filter(w=>w!==win))page.destroy();
-      await pause(100);
+      const {shell}=require('electron');const originalOpen=shell.openExternal;const sourceUrls=[];
+      shell.openExternal=async url=>{sourceUrls.push(url);return originalOpen(url);};
       const bounds=await js("(()=>{const r=document.querySelector('.panel__actions [data-id^=source-]').getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()");
       win.webContents.sendInputEvent({type:'mouseMove',...bounds});
       win.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...bounds});
       win.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...bounds});
-      let source;
-      for(let i=0;i<100;i++) {
-        source=BrowserWindow.getAllWindows().find(w=>w!==win&&w.webContents.getURL().includes('store.steampowered.com'));
-        if(source&&!source.webContents.isLoadingMainFrame())break;await pause(200);
-      }
-      assert.ok(source,'A source button must open the observed Steam page in the real browser');
-      assert.equal(await source.webContents.executeJavaScript('typeof window.host'),'undefined');
+      for(let i=0;i<100&&!sourceUrls.length;i++)await pause(100);
+      shell.openExternal=originalOpen;
+      assert.ok(sourceUrls.some(url=>url.startsWith('https://store.steampowered.com/')),'Source button must dispatch its observed URL to the system browser');
+      assert.equal(BrowserWindow.getAllWindows().some(w=>w!==win&&w.webContents.getURL().includes('store.steampowered.com')),false);
       const capture=path.resolve(__dirname,'..','captures','task-steam-live.png');fs.mkdirSync(path.dirname(capture),{recursive:true});fs.writeFileSync(capture,(await win.webContents.capturePage()).toPNG());
-      console.log('PASS: real chat UI → Qwen planner → live Steam data → source button via trusted mouse events → real Steam page, with no privileged preload in remote page');
+      console.log('PASS: real chat UI → Qwen planner → live Steam data → source button via trusted mouse events → system-browser dispatch, without an embedded page');
       clearTimeout(limit);app.exit(0);return;
     }
     if(process.argv.includes('--tasks-only')) {
@@ -834,17 +1190,16 @@ app.whenReady().then(async () => {
       await js('host.setConfig({agentEnabled:false})');
       const native=require('../src/main/native-windows');const {shell}=require('electron');
       const before=new Set(native.desktopApps().filter(a=>a.name==='explorer').flatMap(a=>a.handles));
-      const desktop=new(require('../src/main/desktop-tools').DesktopTools)({openPath:file=>shell.openPath(file),native});
+      const desktop=new(require('../src/main/desktop-tools').DesktopTools)({openPath:file=>shell.openPath(file),openExternal:url=>shell.openExternal(url),native});
       const opened=await desktop.open('File Explorer');assert.equal(opened.launchRequested,true);assert.equal(opened.windowObserved,true,opened.note);
       console.log('PASS: real File Explorer launch and native window verification');
       const {WebTools}=require('../src/main/web-tools');const found=await new WebTools().youtube('rubius');
-      const browser=require('../src/main/agent-browser').createAgentBrowser();
+      const browser=require('../src/main/agent-browser').createAgentBrowser({openUrl:(...args)=>desktop.openUrl(...args)});
       const result=await browser.play(found.items[0],AbortSignal.timeout(65000));
       assert.equal(result.opened,true);assert.equal(typeof result.playing,'boolean');
-      const remote=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('youtube.com/watch'));
-      assert.ok(remote);assert.equal(remote.webContents.getLastWebPreferences().nodeIntegration,false);
-      const capture=path.resolve(__dirname,'..','captures','youtube-playback.png');fs.mkdirSync(path.dirname(capture),{recursive:true});fs.writeFileSync(capture,(await remote.webContents.capturePage()).toPNG());
-      console.log(result.playing?'PASS: real latest Rubius upload playback verified by advancing video time':'OBSERVED: video page opened; playback blocked or not verified. '+result.note);
+      assert.equal(result.launchRequested,true);assert.equal(result.playing,false);
+      assert.equal(BrowserWindow.getAllWindows().some(w=>w.webContents.getURL().includes('youtube.com/watch')),false);
+      console.log('PASS: latest upload dispatched to the system browser, with playback explicitly unverified. '+result.note);
       browser.stop();
       const created=native.desktopApps().filter(a=>a.name==='explorer').flatMap(a=>a.handles).filter(handle=>!before.has(handle));native.requestClose(created);
       clearTimeout(limit);app.exit(0);return;
@@ -905,6 +1260,14 @@ app.whenReady().then(async () => {
       assert.equal((await js('host.getConfig()')).volume,0.35);
       await assert.rejects(run('settingsHost.patch({agentEnabled:false})'), /Unknown/);
       await assert.rejects(run('settingsHost.action("shell", "bad")'), /Unknown/);
+      await run("document.querySelector('[data-page=memory]').click()");
+      const chatSwitch = "document.querySelector('[data-action-switch=remember-chat]')";
+      assert.equal(await run(`${chatSwitch}.checked`), false, 'Recent chat is opt-in');
+      for (const enabled of [true, false]) {
+        await run(`${chatSwitch}.click()`);
+        for (let i = 0; i < 40 && await run("document.body.hasAttribute('aria-busy')"); i++) await pause(25);
+        assert.equal((await js('host.getConfig()')).rememberRecentChat, enabled);
+      }
       const captureDir = path.resolve(__dirname,'..','captures');fs.mkdirSync(captureDir,{recursive:true});
       for (const page of ['home','appearance','sound','memory','awareness','connections','updates']) {
         await run(`document.querySelector('[data-page=${page}]').click(); document.fonts.ready`);

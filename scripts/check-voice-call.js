@@ -28,14 +28,18 @@ app.whenReady().then(async()=>{
       const destination=ctx.createMediaStreamDestination();
       const speech=await ctx.decodeAudioData(Uint8Array.from(atob(${JSON.stringify(sample)}),c=>c.charCodeAt(0)).buffer);
       const events=[];let resetAt=null,started,positiveAt=null,firstFrame=null,frames=0;
-      const speaker={stop(){this.source=null;this.pending=null;this.response=null;},beginResponse(){},updateResponse(){}};
-      const host={onSpeechState(){},onChatDelta(){},speechConversation:async()=>({ok:true}),speechReset(){resetAt??=performance.now();events.push('interrupt');},speechCancel(){},wakeEndSession(){},chatStop(){}};
+      const speaker={stop(){this.source=null;this.pending=null;this.response=null;},beginResponse(){},updateResponse(){},
+        async holdForInput(){return true;},releaseInputHold(){}};
+      const host={onSpeechState(){},onChatDelta(){},speechConversation:async()=>({ok:true}),speechReset({listening}){
+        if(listening!==false){resetAt??=performance.now();events.push('interrupt');}
+      },speechCancel(){},wakeEndSession(){},chatStop(){}};
       const capture={stream:destination.stream,cancel(){}};
       const indicator=document.getElementById('voice-indicator');
       const call=new VoiceCall({host,speaker,indicator});
       await call.start({id:'native-voice-call',capture,text:'',complete:true});
       if(!call.active)throw Error('Voice call failed to initialize');
-      call.detector.options.onFrameProcessed=(probabilities)=>{frames++;firstFrame??=performance.now();if(probabilities.isSpeech>.5)positiveAt??=performance.now();};
+      const processFrame = call.detector.options.onFrameProcessed;
+      call.detector.options.onFrameProcessed=(probabilities)=>{frames++;firstFrame??=performance.now();if(probabilities.isSpeech>.5)positiveAt??=performance.now();processFrame(probabilities);};
       // A real reply begins after listening/recognition; prime the first inference
       // before measuring interruption of that reply.
       for(let i=0;i<150&&frames<5;i++)await new Promise(r=>setTimeout(r,20));
@@ -43,6 +47,7 @@ app.whenReady().then(async()=>{
       call.place({x:300,y:230},{w:600,h:450});
       const rect=indicator.getBoundingClientRect(),panelVisible=getComputedStyle(document.querySelector('.panel')).visibility;
       speaker.source={};
+      call.playback(true);
       const buffer=ctx.createBuffer(1,16000+speech.length,16000),data=buffer.getChannelData(0);
       for(let i=8000;i<8160;i++)data[i]=Math.random()-.5;
       data.set(speech.getChannelData(0),16000);
