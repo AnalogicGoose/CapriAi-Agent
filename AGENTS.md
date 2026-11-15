@@ -13,7 +13,7 @@
   broad observation permission for automatic approval of destructive actions.
 
 - After changing Capri's setup, location, or launch behavior, check the user's
-  `CapriGPT.lnk` desktop shortcut and update it if needed so it launches the
+  `Capri.lnk` desktop shortcut and update it if needed so it launches the
   current checkout directly without an npm command or a terminal window.
 - Use the Windows Desktop special-folder path rather than assuming its location.
   Point the shortcut at this checkout's Electron executable, pass the absolute
