@@ -1,0 +1,229 @@
+/* Guide layer: marks and cards drawn over the desktop, one window per display.
+   Same cel rules as the overlay: flat fills, hard edges, cut corners, violet misregistered copy, green for the target.
+   Card metrics match guide-scene.js: padding 24 total, title 28, line 18, item gap 6, table row 24, width from the scene. */
+
+.guide-shapes,
+.guide-marks,
+.guide-cards {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.guide-shapes {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.guide-marks > *,
+.guide-shapes > * {
+  animation: guide-in 170ms var(--ease-out) both;
+}
+
+/* ---------- marks ---------- */
+
+.guide-spot {
+  fill: var(--ink);
+  fill-opacity: 0.55;
+}
+
+.guide-ring {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 3;
+  stroke-linejoin: miter;
+}
+
+.guide-arrow {
+  stroke: var(--green);
+  stroke-width: 3;
+  stroke-linecap: butt;
+}
+
+.guide-arrowhead {
+  fill: var(--green);
+  stroke: none;
+}
+
+.guide-ring.is-shade,
+.guide-arrow.is-shade {
+  stroke: var(--violet);
+}
+
+.guide-arrowhead.is-shade {
+  fill: var(--violet);
+}
+
+.guide-pill {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--violet);
+  border-radius: 999px;
+  background: var(--ink-2);
+  color: var(--paper);
+  box-shadow: 2px 2px 0 var(--violet);
+  font: 600 11px var(--font-display);
+  white-space: nowrap;
+}
+.guide-pill::before { content: ''; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+.guide-pill span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.guide-badge {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  background: var(--green);
+  color: var(--ink);
+  box-shadow: 2px 2px 0 var(--violet);
+  font: 700 13px/1 var(--font-display);
+}
+
+.guide-underline {
+  position: absolute;
+  height: 3px;
+  background: var(--green);
+  box-shadow: 2px 2px 0 var(--violet);
+}
+
+/* ---------- cards ---------- */
+
+.guide-card {
+  position: absolute;
+  display: flex;
+  color: var(--paper);
+  filter: drop-shadow(5px 5px 0 var(--violet));
+  animation: guide-card-in 170ms steps(3, jump-end) both;
+}
+
+.guide-card__plate {
+  flex: 1;
+  padding: 12px 16px;
+  background: var(--ink);
+  clip-path: polygon(
+    0 var(--cut), var(--cut) 0,
+    100% 0, 100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%, 0 100%
+  );
+}
+
+.guide-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  margin: 0;
+  padding-bottom: 8px;
+  overflow: hidden;
+  font: 700 14px/20px var(--font-display);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.guide-card__title::before {
+  content: '';
+  flex: none;
+  width: 10px;
+  height: 10px;
+  background: var(--green);
+  clip-path: polygon(0 0, 100% 0, 100% 60%, 60% 100%, 0 100%);
+}
+.guide-card[data-kind='note'] .guide-card__title::before { background: var(--violet); }
+
+.guide-note {
+  margin: 0;
+  font: 600 13px/18px var(--font-display);
+  overflow-wrap: anywhere;
+}
+
+.guide-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.guide-steps li {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  font: 600 13px/18px var(--font-display);
+}
+.guide-steps__n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  background: var(--green);
+  color: var(--ink);
+  font: 700 11px/1 var(--font-mono);
+}
+.guide-steps__text { min-width: 0; overflow-wrap: anywhere; }
+
+.guide-table {
+  display: grid;
+  font: 400 11px var(--font-mono);
+}
+.guide-table__head,
+.guide-table__cell {
+  height: 24px;
+  padding: 0 6px 0 0;
+  overflow: hidden;
+  line-height: 23px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--ink-2);
+}
+.guide-table__head {
+  color: var(--green);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom-color: var(--violet);
+}
+
+.guide-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.guide-card__button {
+  height: 26px;
+  padding: 0 14px;
+  border: 1px solid var(--paper-2);
+  border-radius: 0;
+  background: transparent;
+  color: var(--paper);
+  font: 700 12px var(--font-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.guide-card__button:first-child {
+  border-color: var(--green);
+  background: var(--green);
+  color: var(--ink);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.guide-card__button:hover { border-color: var(--paper); background: var(--paper); color: var(--ink); }
+.guide-card__button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+@keyframes guide-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes guide-card-in {
+  0% { clip-path: inset(49% 50% 49% 50%); }
+  40% { clip-path: inset(49% -20px 49% -20px); }
+  100% { clip-path: inset(-20px -20px -20px -20px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-marks > *,
+  .guide-shapes > *,
+  .guide-card { animation: none; }
+}

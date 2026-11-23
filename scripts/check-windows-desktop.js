@@ -6,6 +6,10 @@ const assert = require('node:assert/strict');
 const { desktopHighlight } = require('../src/main/desktop-highlight');
 const { runWindowsOcr } = require('../src/main/windows-accessibility');
 const native = require('../src/main/native-windows');
+const fs = require('node:fs');
+const path = require('node:path');
+const { createGuideLayer } = require('../src/main/guide-layer');
+const { layoutScene } = require('../src/main/guide-scene');
 
 class VisibleWindow extends BrowserWindow { setContentProtection() {} } // protection would hide the marker from capture
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -79,11 +83,78 @@ async function checkDisplay(display) {
   } finally { win.destroy(); }
 }
 
+// Guide layer: render one of each mark and card kind through the real layer and save captures/guide-layer.png.
+// Content protection hides the window from screen capture, so capture the window's own page instead.
+async function checkGuideLayer() {
+  const display = screen.getPrimaryDisplay(), d = display.bounds;
+  const made = [];
+  class RecordingWindow extends BrowserWindow { constructor(options) { super(options); made.push(this); } }
+  const layer = createGuideLayer({ BrowserWindow: RecordingWindow, screen });
+  const at = (x, y, width, height) => screen.dipToScreenRect(null, { x: d.x + x, y: d.y + y, width, height });
+  const marks = [
+    { id: 'ring', kind: 'ring', bounds: at(120, 140, 160, 40), text: 'Save changes' },
+    { id: 'number', kind: 'number', bounds: at(120, 300, 60, 36), text: '2' },
+    { id: 'arrow', kind: 'arrow', bounds: at(420, 300, 120, 36), toBounds: at(240, 470, 80, 30), text: 'Then this one' },
+    { id: 'off', kind: 'arrow', bounds: at(600, 250, 80, 30), toBounds: at(700, -400, 40, 40) },
+    { id: 'label', kind: 'label', bounds: at(560, 140, 120, 32), text: 'File menu' },
+    { id: 'spot', kind: 'spotlight', bounds: at(400, 430, 220, 80) },
+    { id: 'under', kind: 'underline', bounds: at(120, 520, 180, 20) },
+  ];
+  const cards = [
+    { kind: 'note', title: 'Where the export lives', text: 'Reports are saved in the Exports folder. Open it from the File menu, then pick the newest one.' },
+    { kind: 'steps', title: 'Step 2 of 4', items: ['Click Save changes', 'Pick a folder', 'Confirm the name'], buttons: [{ id: 'next', label: 'Next' }, { id: 'stop', label: 'Stop' }] },
+    { kind: 'table', title: 'Shortcuts', columns: ['Action', 'Keys', 'Where'], rows: [['Save', 'Ctrl+S', 'Editor'], ['Find', 'Ctrl+F', 'Anywhere'], ['Export', 'Ctrl+E', 'File menu']] },
+  ];
+  const scene = layoutScene({ marks, cards, window: at(60, 60, 700, 520) },
+    { displays: screen.getAllDisplays(), screenToDip: rect => screen.screenToDipRect(null, rect) });
+  try {
+    await layer.render(scene);
+    const win = made.find(w => !w.isDestroyed());
+    assert.ok(win, 'guide layer: no window created');
+    assert.equal(made.length, 1, 'guide layer: one window expected for one display with content');
+    // Test-only backdrop so the capture reads like a desktop (the layer itself is transparent).
+    await win.webContents.executeJavaScript(`(() => {
+      const back = document.createElement('div');
+      back.style.cssText = 'position:fixed;inset:0;z-index:-1;background:#d9d9de';
+      const app = document.createElement('div');
+      app.style.cssText = 'position:absolute;left:60px;top:60px;width:700px;height:520px;background:#fff;border:1px solid #999';
+      back.append(app);
+      for (const [x, y, w, h] of [[120,140,160,40],[120,300,60,36],[420,300,120,36],[240,470,80,30],[600,250,80,30],[560,140,120,32],[400,430,220,80],[120,520,180,20]]) {
+        const box = document.createElement('div');
+        box.style.cssText = 'position:absolute;background:#c8c8d0;left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px';
+        back.append(box);
+      }
+      document.body.prepend(back);
+    })()`);
+    await sleep(800);
+    const counts = await win.webContents.executeJavaScript(`({
+      rings: document.querySelectorAll('.guide-ring:not(.is-shade)').length,
+      arrows: document.querySelectorAll('.guide-arrowhead:not(.is-shade)').length,
+      pills: document.querySelectorAll('.guide-pill').length,
+      badges: document.querySelectorAll('.guide-badge').length,
+      spots: document.querySelectorAll('.guide-spot').length,
+      underlines: document.querySelectorAll('.guide-underline').length,
+      cards: [...document.querySelectorAll('.guide-card')].map(c => c.dataset.kind).join(','),
+      buttons: document.querySelectorAll('.guide-card__button').length,
+    })`);
+    assert.deepEqual(counts, { rings: 1, arrows: 2, pills: 3, badges: 1, spots: 1, underlines: 1, cards: 'note,steps,table', buttons: 2 }, 'guide layer: rendered marks');
+    const image = await win.webContents.capturePage();
+    assert.ok(!image.isEmpty(), 'guide layer: empty capture');
+    const out = path.join(__dirname, '..', 'captures', 'guide-layer.png');
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, image.toPNG());
+    console.log(`ok guide layer: ${JSON.stringify(counts)} -> ${out}`);
+  } finally { layer.clear(); }
+}
+
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {});
 app.whenReady().then(async () => {
   let code = 0;
-  try { for (const display of screen.getAllDisplays()) await checkDisplay(display); }
+  try {
+    await checkGuideLayer();
+    if (!process.argv.includes('--guide-only')) for (const display of screen.getAllDisplays()) await checkDisplay(display);
+  }
   catch (error) { console.error(error.message); code = 1; }
   app.exit(code);
 });
