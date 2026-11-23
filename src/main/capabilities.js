@@ -80,4 +80,14 @@ function inject(messages, cfg, taskContext=null) {
   else result.unshift({ role: 'system', content: text });
   return result;
 }
-module.exports = { REVISION, AGENT_MODEL, registry, inject };
+// Compact view for model prompts: which skills are on and their user commands. The full
+// registry is ~20 KB of help text, larger than the whole chat context budget.
+function summary(cfg = {}) {
+  const full = registry(cfg), skills = {};
+  for (const [name, skill] of Object.entries(full.skills)) {
+    const available = skill.available !== false;
+    skills[name] = available && skill.commands && skill.commands.startsWith('/') ? skill.commands : available;
+  }
+  return { revision: full.revision, identity: full.identity, personality: full.personality, runtime: full.runtime, skills };
+}
+module.exports = { REVISION, AGENT_MODEL, registry, summary, inject };
