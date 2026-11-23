@@ -245,8 +245,8 @@ const personal = new PersonalAssistant({
   },
 });
 
-async function captureDisplay(displayId) {
-  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1600, height: 1000 }, fetchWindowIcons: false });
+async function captureDisplay(displayId, thumbnailSize = { width: 1600, height: 1000 }) {
+  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize, fetchWindowIcons: false });
   const source = sources.find(row => row.display_id === String(displayId));
   if (!source || source.thumbnail.isEmpty()) throw Error('Windows did not provide a screen image.');
   return source.thumbnail;
@@ -285,7 +285,8 @@ const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
   captureWindow: async ({ x, y, width, height }) => {
     const display = screen.getDisplayMatching(screen.screenToDipRect(null, { x, y, width, height }));
     const area = screen.dipToScreenRect(null, display.bounds);
-    const image = await captureDisplay(display.id);
+    // OCR needs native pixels; the 1600x1000 default blurs small text on larger displays.
+    const image = await captureDisplay(display.id, { width: Math.min(8192, area.width), height: Math.min(8192, area.height) });
     const size = image.getSize();
     const scaleX = area.width / size.width, scaleY = area.height / size.height;
     const left = Math.max(0, Math.ceil((x - area.x) / scaleX)), top = Math.max(0, Math.ceil((y - area.y) / scaleY));

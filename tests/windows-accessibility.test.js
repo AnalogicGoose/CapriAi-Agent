@@ -1,7 +1,11 @@
 'use strict';
 const test = require('node:test');
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const assert = require('node:assert/strict');
-const { WindowsAccessibility } = require('../src/main/windows-accessibility');
+const { WindowsAccessibility, runWindowsOcr } = require('../src/main/windows-accessibility');
 const { CodexTools } = require('../src/main/codex-tools');
 const { desktopHighlight, markerLayout } = require('../src/main/desktop-highlight');
 
@@ -106,4 +110,24 @@ test('the marker and caption fit secondary-monitor edges and the caption stays o
   assert.equal(markerLayout(display, display, 'Full window').caption, null);
   assert.equal(markerLayout({ x: -700, y: 50, width: 40, height: 20 }, display, '').caption, null);
   assert.throws(() => markerLayout({ x: 1, y: 20, width: 40, height: 20 }, display, 'Outside'), /outside/);
+});
+
+// Real Windows OCR: renders text with GDI+. Opt-in (CAPRI_REAL_OCR=1) because it depends on the machine's fonts, DPI and installed OCR language.
+test('Windows OCR finds words next to punctuation and small text, with scaled bounds', { skip: process.platform !== 'win32' || process.env.CAPRI_REAL_OCR !== '1' }, async t => {
+  const file = path.join(os.tmpdir(), `capri-ocr-${process.pid}.png`);
+  const script = `Add-Type -AssemblyName System.Drawing; $b=New-Object Drawing.Bitmap 600,120; $g=[Drawing.Graphics]::FromImage($b); $g.Clear([Drawing.Color]::White); ` +
+    `$f=New-Object Drawing.Font 'Segoe UI',8; $g.DrawString('Save changes   Cancel: Scale',$f,[Drawing.Brushes]::Black,20,30); $b.Save('${file}',[Drawing.Imaging.ImageFormat]::Png)`;
+  try {
+    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true });
+    const image = fs.readFileSync(file).toString('base64');
+    let result;
+    try { result = await runWindowsOcr({ image, query: 'Cancel' }); }
+    catch (error) { if (/language/i.test(error.message)) return t.skip('No Windows OCR language installed.'); throw error; }
+    assert.equal(result.matches.length, 1);
+    assert.equal(result.matches[0].name, 'Cancel');
+    const { x, y, width, height } = result.matches[0].bounds;
+    assert.ok(x > 80 && x < 140 && y > 20 && y < 50 && width > 20 && width < 60 && height > 4 && height < 20, JSON.stringify(result.matches[0].bounds));
+    assert.deepEqual((await runWindowsOcr({ image, query: 'Save changes' })).matches.map(m => m.name), ['Save changes']);
+    assert.deepEqual((await runWindowsOcr({ image, query: 'absent word' })).matches, []);
+  } finally { fs.rmSync(file, { force: true }); }
 });
