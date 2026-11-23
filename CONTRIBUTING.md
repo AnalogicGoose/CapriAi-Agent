@@ -1,4 +1,4 @@
-# Developing CapriGPT
+# Developing Capri
 
 Read [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the branch model and
 [docs/RELEASING.md](docs/RELEASING.md) before preparing a version.

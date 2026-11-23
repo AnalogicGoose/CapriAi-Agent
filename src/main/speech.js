@@ -2,6 +2,7 @@
 const {WhisperEngine}=require('./whisper-engine');
 const {SpeechSegmenter}=require('./speech-segmenter');
 const {wakePhrase}=require('./wake-phrase');
+const CHECK_IN_LIMIT_MS=40_000;
 class SpeechInput {
   constructor({allowed,notify,engine,runtimeDir,wakeAllowed=()=>false}){
     Object.assign(this,{allowed,notify,wakeAllowed});this.engine=engine||new WhisperEngine({runtimeDir});this.current=null;
@@ -11,8 +12,11 @@ class SpeechInput {
     const mode=request.mode==='wake'?'wake':request.mode==='conversation'?'conversation':'dictation';
     if(!(mode==='wake'?this.wakeAllowed():this.allowed()))return {ok:false,error:'speech-paused'};
     if(this.current)return {ok:false,error:'speech-busy'};
-    const slot={id:request.id,mode,phase:'starting',queue:[],running:false,total:0,revision:0,recent:[],abort:new AbortController()};
+    const checkIn=mode==='conversation'&&request.checkIn===true;
+    const slot={id:request.id,mode,checkIn,inputBlocked:checkIn,
+      phase:'starting',queue:[],running:false,total:0,revision:0,recent:[],abort:new AbortController()};
     this.current=slot;slot.segmenter=new SpeechSegmenter((pcm,meta)=>this.enqueue(slot,pcm,meta),{maxSamples:mode==='wake'?5*16000:20*16000});
+    if(slot.checkIn)slot.timeout=setTimeout(()=>{if(this.current===slot)this.cancel();},CHECK_IN_LIMIT_MS);
     this.engine.start(progress=>this.emit(slot,{type:'setup',percent:progress.percent})).then(()=>{
       if(this.current!==slot)return;
       if(!this.permitted(slot)){this.cancel();return;}
@@ -35,10 +39,11 @@ class SpeechInput {
     if(!pcm.length||pcm.length>32000||pcm.length%2)return;
     if(slot.mode==='dictation'){slot.total+=pcm.length/2;if(slot.total>90*16000){this.stop(id);return;}}
     if(slot.mode==='conversation'){slot.recent.push(Buffer.from(pcm));while(slot.recent.reduce((n,b)=>n+b.length,0)>16000&&slot.recent.length>1)slot.recent.shift();}
+    if(slot.inputBlocked)return;
     const rms=slot.segmenter.add(Buffer.from(pcm));this.emit(slot,{type:'level',level:Math.min(100,Math.round(rms*500))});
   }
   enqueue(slot,pcm,meta={complete:true}){
-    if(this.current!==slot)return;
+    if(this.current!==slot||slot.inputBlocked)return;
     if(slot.queue.length>=3){this.emit(slot,{type:'error',text:'speech-too-fast'});this.cancel();return;}
     slot.queue.push({pcm,...meta,revision:slot.revision});this.drain(slot);
   }
@@ -68,11 +73,20 @@ class SpeechInput {
     if(!slot||slot.id!==id||!slot.wakeActivated||!this.permitted(slot))return {ok:false,error:'speech-unavailable'};
     slot.mode='conversation';slot.total=0;clearTimeout(slot.timeout);return {ok:true};
   }
-  resetUtterance(id){
+  promoteCheckIn(id){
+    const slot=this.current;
+    if(!slot?.checkIn||slot.id!==id||!this.permitted(slot))return;
+    clearTimeout(slot.timeout);slot.checkIn=false;
+    this.emit(slot,{type:'check-in-promoted'});
+  }
+  resetUtterance(id,listening=true,preRollMs=500){
     const slot=this.current;if(!slot||slot.id!==id||slot.mode!=='conversation')return;
-    slot.revision++;slot.queue=[];
+    slot.revision++;slot.queue=[];slot.inputBlocked=!listening;
     slot.segmenter=new SpeechSegmenter((pcm,meta)=>this.enqueue(slot,pcm,meta));
-    for(const pcm of slot.recent)slot.segmenter.add(pcm);
+    if(listening&&preRollMs>0){
+      const pcm=Buffer.concat(slot.recent);
+      if(pcm.length)slot.segmenter.add(pcm.subarray(Math.max(0,pcm.length-Math.min(500,preRollMs)*32)));
+    }
   }
   stop(id){
     const slot=this.current;if(!slot||slot.id!==id)return {ok:true};

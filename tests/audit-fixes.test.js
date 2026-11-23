@@ -141,6 +141,7 @@ function applySettings(patch) {
   vm.runInNewContext(code + '\nupdateConfig(patch);', { patch, Object,
     settingsRequests: service('settings'), tts: service('tts'), speech: service('speech'), agent: service('agent'),
     memoryRequests: service('memory'), requests: service('tasks'), brain: service('codex'), decisionBrain: service('decisions'),
+    interestCollaboration: service('collaboration'),
     permissions: p => p, config: { load: () => state, save: p => Object.assign(state, p) },
     pcContext: { eventSnapshot() {} }, overlay: null, memoryStore: null, goalStore: null, rendererConfig: () => state,
     fitOverlay() {}, watchWindows() {}, rebuildTray() {},
@@ -150,7 +151,8 @@ function applySettings(patch) {
 test('cosmetic settings preserve Codex turns and memory reviews; policy changes revoke affected work', () => {
   for (const patch of [{ scale: 0.8 }, { visible: true }, { idleAnimations: false }, { displayId: 7 }]) assert.deepEqual(applySettings(patch), []);
   assert.deepEqual(applySettings({ volume: 0.3 }), ['tts']);
-  assert.deepEqual(applySettings({ visible: false }), ['speech', 'tts']);
+  assert.deepEqual(applySettings({ visible: false }), ['speech', 'tts', 'collaboration']);
+  assert.ok(applySettings({ interestsEnabled: false }).includes('collaboration'));
   for (const patch of [{ privacy: { memoryRecall: false } }, { gamingMode: true }, { codexModel: 'new-model' }]) {
     const calls = applySettings(patch);
     for (const name of ['agent', 'tasks', 'memory', 'codex', 'codex:reset', 'decisions']) assert.ok(calls.includes(name), name);

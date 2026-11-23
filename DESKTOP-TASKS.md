@@ -9,14 +9,17 @@ Ask in ordinary chat. You do not need slash commands:
 - “Firefox.” also works as an installed-app launch shortcut, including after
   Capri asks which browser/app to open.
 - “Capri, play the newest Rubius video on YouTube.”
+- “Play music.” uses YouTube Music; a named song/playlist is handled there.
+- “Watch anime” / “let's watch anime” opens Crunchyroll. Select Gabriel only if
+  the profile picker appears; a direct signed-in landing needs no profile action.
 - “Look for the latest news about AI models.”
 - “Find the best discounts on Steam.”
 - “Open the first one.” after a search
 
 `/do <task>` also invokes the planner. Ordinary requests use the same local intent
 interpreter, rather than needing a particular verb or phrase. Close chat to stop in-flight work. `/cancel` and
-`/agent cancel` also cancel tasks. Gaming mode cancels tasks and pauses the media
-in Capri Browser. Apps/pages already opened remain open after cancellation.
+`/agent cancel` also cancel tasks. Gaming mode cancels pending tasks. External browser tabs and media remain under
+your control after cancellation.
 
 ## What executes
 
@@ -48,18 +51,18 @@ Reasoning stays local. Requested searches and website visits use the Internet:
   newest-first Videos tab. Support both current and older video renderer data.
   “Rubius” means **Rubius Z / @elrubius**; “Rubius OMG” means **@elrubiusOMG**.
   Other creators require their exact @handle. The most recent upload on the
-  Videos tab is separate from Shorts and live streams. Playback is attempted in
-  Capri Browser, then verified by checking that video time advances and the
-  player is not showing an ad. Consent, sign-in or playback blocks are reported;
-  the agent does not bypass them or pretend that playback succeeded.
+  Videos tab is separate from Shorts and live streams. The video URL is sent to your preferred browser with an autoplay
+  request, using its normal profile and existing sign-in. Playback is not
+  verified; browser autoplay settings may require pressing Play.
 - **News:** Google News RSS headlines from the last seven days, sorted by
   publication time, with source buttons. Headlines are not independently verified
   reporting or article summaries. Older/undated results are excluded.
 - **Web search:** public Bing RSS results, with source buttons.
 - **Websites in a browser:** named sites are searched first, then an observed
   result is sent to the requested verified Firefox/Chrome/Edge/Brave executable
-  or the default browser. Explicit public HTTPS URLs can open directly.
-  There are no site-specific launch rules. Receipt text distinguishes sending
+  or Capri's preferred browser (Firefox by default). Explicit public HTTPS URLs
+  can open directly. Saved music/anime destinations use the bounded `open_media`
+  tool without a web search. Receipt text distinguishes sending
   the URL from verifying page loading, sign-in or playback.
 - **Steam:** live featured specials directly from Steam’s public store endpoint,
   ordered by percentage discount. Prices/currency come from the Guatemala store
@@ -68,15 +71,16 @@ Reasoning stays local. Requested searches and website visits use the Internet:
 
 No screen snapshots, PC context or personal memory are sent to search providers.
 Public fetches have fixed provider hosts, redirect checks, size limits and timeouts.
-Research results may open in Capri Browser as part of a requested lookup. Source
-buttons open only observed URLs through opaque references that expire after ten
+All pages use your external browser; Capri has no separate browsing session.
+Capri prefers Firefox independently of Windows' browser default. Choose a browser
+in Updates & app → Browser & media, or use `system` explicitly for the Windows
+default. Firefox URL requests use `-new-tab` to reuse an open window
+(or start Firefox if closed), without private mode or a separate profile. Source
+buttons use Capri's preferred browser and open only observed URLs through opaque references that expire after ten
 minutes. Follow-ups can refer to the most recent result set during that period.
 
-Capri Browser is a visible, separate Chromium window. Its public pages have no
-preload or app API, no Node access, and no access to the overlay’s profile. The
-browser session is non-persistent; browser permission requests, popups and
-downloads are denied. Navigation is limited to public HTTPS URLs. This is
-purposeful browsing, not automation of your signed-in Firefox/Chrome profile.
+Capri validates public HTTPS URLs before dispatch. Browser tabs use your own
+browser settings and sign-in; Capri does not copy cookies or automate login.
 
 ## Reporting and personality
 
@@ -84,7 +88,7 @@ Progress appears in the existing chat panel. Results are generated from tool
 observations, with clickable source buttons. Session-only execution receipts let
 ordinary follow-up conversation refer to what she actually did. Memory commands
 remain outside chat history and retain their separate save confirmations.
-Capability registry revision **3** advertises these tools and their actual limits.
+Capability registry revision **22** advertises these tools and their actual limits.
 
 This does not add unrestricted desktop clicking/typing, file modification, login,
 shopping checkout or messaging. Windows accessibility control and broader
@@ -98,6 +102,7 @@ npm run test:tasks
 npm run test:tasks-live
 npm run test:playback-live
 npm run test:tasks-ui-live
+npx electron scripts/check-external-browser.js
 ```
 
 Unit tests cover planning limits, unrequested playback, bad references, URL/feed
@@ -105,7 +110,8 @@ validation, cancellation, launch paths, truthful results and follow-ups.
 `test:tasks` exercises real preload/main/chat routing with mocked effects.
 `test:tasks-live` exercises real Qwen planning and live data for all three example
 requests, with browser effects stubbed. `test:playback-live` launches real File
-Explorer and verifies real newest-upload playback. `test:tasks-ui-live` exercises
+Explorer and dispatches a real newest upload to the preferred browser, without
+claiming playback. `test:tasks-ui-live` exercises
 the whole chat → Qwen → live Steam → clicked source → real browser path. Live
 tests depend on the public sites; source changes and blocks are surfaced.
 

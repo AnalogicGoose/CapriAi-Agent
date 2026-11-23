@@ -127,6 +127,54 @@ test('a failed action stops later steps and cancellation preserves a stopped run
   assert.deepEqual(f.opened, ['Chrome']);
 });
 
+test('routine recovery survives restart, retries only the unfinished step and preserves completed receipts', async t => {
+  const f = fixture(t);
+  const saved = await f.save('Study setup', [app('Chrome'), app('Notepad'), setting('muted', true)], 'global');
+  f.setOpen(async name => {
+    f.opened.push(name);
+    if (name === 'Notepad') throw Error('App unavailable');
+    return { type: 'app', windowObserved: true };
+  });
+  f.tools.beginTurn('Study setup');
+  await f.step('next'); await f.launch('Chrome'); await f.step('complete');
+  await f.step('next'); await f.launch('Notepad');
+  assert.equal(f.tools.finishRoutine().finished_steps, 1);
+  f.restart();
+  f.goals.projects.select(f.b);
+  assert.match(f.tools.beginTurn('Retry routine Study setup').message, /no recent routine run/i);
+  f.goals.projects.select(f.a);
+  const resumed = f.tools.beginTurn(`Could you resume routine #${saved.id}?`);
+  assert.equal(resumed.first_step, 2);
+  assert.equal(resumed.resumed, true);
+  assert.equal((await f.step('next')).step, 2);
+  await assert.rejects(f.launch('Chrome'), /does not match/);
+  f.setOpen(async name => { f.opened.push(name); return { type: 'app', windowObserved: true }; });
+  await f.launch('Notepad'); await f.step('complete'); await f.step('next');
+  await f.tools.run('capri_settings_change', { patch: '{"muted":true}' }, f.ctx('Retry routine Study setup'));
+  const receipt = await f.step('complete');
+  assert.equal(receipt.status, 'completed');
+  assert.deepEqual(receipt.results.map(row => row.step), [1, 2, 3]);
+  assert.deepEqual(f.opened, ['Chrome', 'Notepad', 'Notepad']);
+  f.tools.endTurn();
+  assert.match(f.tools.beginTurn('Retry that routine').message, /already finished/);
+  assert.equal(f.tools.beginTurn('Run Study setup').first_step, 1);
+});
+
+test('routine recovery rejects edits and can continue an interrupted attempt from its saved progress', async t => {
+  const f = fixture(t);
+  await f.save('Study setup', [app('Chrome'), app('Notepad')]);
+  f.tools.beginTurn('Study setup');
+  await f.step('next'); await f.launch('Chrome'); await f.step('complete');
+  f.restart();
+  assert.equal(f.tools.beginTurn('Resume the last routine').first_step, 2);
+  f.tools.endTurn();
+  assert.equal(f.tools.beginTurn('Resume the last routine').first_step, 2);
+  f.tools.endTurn();
+  f.goals.db.exec('UPDATE companion_routines SET version=version+1');
+  assert.match(f.tools.beginTurn('Resume routine Study setup').message, /changed since that run/);
+  assert.deepEqual(f.opened, ['Chrome']);
+});
+
 test('edits, project switches and permission revocation stop an active invocation', async t => {
   const f = fixture(t); await f.save('Study setup', [app('Chrome')]);
   for (const change of [() => f.goals.db.exec('UPDATE companion_routines SET version=version+1'), () => f.goals.projects.select(f.b),
@@ -197,6 +245,7 @@ test('real Codex protocol receives named invocation, executes tracked tools and 
       prompt = params.input[0].text; this.onNotification('turn/started', { threadId: 'thread', turn: { id: 'turn' } });
       setImmediate(async () => { try {
         for (const [i, call] of plan.entries()) {
+          if (call[0] === 'disconnect') { this.onFailure(Error('Connection lost')); return; }
           if (call[0] === 'native') this.onNotification('item/completed', { threadId: 'thread', turnId: 'turn', item: call[1] });
           else await this.onRequest({ id: i + 1, method: 'item/tool/call', params: { threadId: 'thread', turnId: 'turn', callId: 'call-' + i, tool: call[0], arguments: call[1] } });
         }
@@ -209,11 +258,12 @@ test('real Codex protocol receives named invocation, executes tracked tools and 
   plan = [['capri_routine_step', { action: 'next', detail: '' }], ['capri_desktop_step', { tool: 'open_app', query: 'Chrome', index: 0, browser: '' }], ['capri_routine_step', { action: 'complete', detail: '' }]];
   assert.equal(await brain.chat('Study setup'), 'Everything completed.'); assert.match(prompt, /namedRoutineInvocation/); assert.match(instructions, /exact step/); assert.deepEqual(f.opened, ['Chrome']);
   plan = []; assert.match(await brain.chat('Run Study setup'), /stopped after 0\/1 steps/);
+  plan = [['disconnect']]; assert.match(await brain.chat('Resume routine Study setup'), /connection lost[\s\S]+continue at step 1/i);
   await f.save('Check Capri', [command('npm test')]);
   const nativeBrain = new CodexBrain({ settings: f.settings, cwd: f.a, workspace: () => f.a, systemTools: () => true, tools: f.tools, locate: () => 'mock', clientFactory: factory });
   plan = [['capri_routine_step', { action: 'next', detail: '' }], ['native', { id: 'check', type: 'commandExecution', command: 'npm test', cwd: f.a, status: 'failed', exitCode: 1 }],
     ['capri_desktop_step', { tool: 'open_app', query: 'Notepad', index: 0, browser: '' }]];
-  await assert.rejects(nativeBrain.chat('Check Capri'), /exited 1/);
+  assert.match(await nativeBrain.chat('Check Capri'), /exited 1[\s\S]+Resume routine Check Capri/);
   assert.deepEqual(f.opened, ['Chrome']);
   assert.equal(f.goals.db.prepare('SELECT status FROM companion_routine_runs ORDER BY id DESC LIMIT 1').get().status, 'failed');
   plan = [];
@@ -227,6 +277,14 @@ test('real Codex protocol receives named invocation, executes tracked tools and 
     ['capri_desktop_step', { tool: 'open_app', query: 'App' + i, index: 0, browser: '' }], ['capri_routine_step', { action: 'complete', detail: '' }]]).flat();
   assert.equal(await brain.chat('Long setup'), 'Everything completed.');
   assert.equal(f.opened.length, 9, 'An app-only routine can use its bounded routine budget without enabling native system tools');
+  const text = 'Time for our Study setup.';
+  plan = [['capri_saved_work', { action: 'run-routine', target: 'Study setup', requestEvidence: text }],
+    ['capri_routine_step', { action: 'next', detail: '' }],
+    ['capri_desktop_step', { tool: 'open_app', query: 'Chrome', index: 0, browser: '', requestEvidence: text }],
+    ['capri_routine_step', { action: 'complete', detail: '' }]];
+  assert.equal(await brain.chat(text, undefined, undefined, { voice: true }), 'Everything completed.');
+  assert.equal(f.opened.at(-1), 'Chrome');
+  assert.equal(f.opened.length, 10);
 });
 
 test('teaching-only turns disable native execution and cannot accidentally launch apps before saving', async t => {

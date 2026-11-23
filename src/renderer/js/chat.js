@@ -62,7 +62,7 @@ export class Chat {
     this.answer = '';
     this.apps = [];    // the apps open on this PC, as last listed: [{ name, label }]
     this.appsReady = Promise.resolve();
-    host.onChatDelta(({ id, text }) => this.onDelta(id, text));
+    host.onChatDelta(({ id, text, delivery }) => this.onDelta(id, text, delivery));
     host.onTaskProgress?.(({id,text}) => {
       if (this.turn === id && this.open) this.panel.stream(text);
     });
@@ -72,7 +72,13 @@ export class Chat {
     return this.brain.t.chat;
   }
 
-  async start(commandsOnly = false, greeting = null, { voiceWake = false, mode = voiceWake ? 'voice' : 'text' } = {}) {
+  get speaksReplies() {
+    const speech = this.voice.spoken;
+    const mode = this.panel.current?.chat?.mode;
+    return mode === 'voice' || Boolean(mode === 'text' && speech?.enabled && speech.config?.speakTypedReplies);
+  }
+
+  async start(commandsOnly = false, greeting = null, { voiceWake = false, mode = voiceWake ? 'voice' : 'text', replyTo } = {}) {
     this.onStart?.();
     const { capri, host, t } = this;
     // Dismiss the panel too: close() alone leaves a chat panel that rejects
@@ -114,6 +120,8 @@ export class Chat {
     }
     this.open = true;
     this.commandsOnly = commandsOnly;
+    this.replyTo = replyTo;
+    this.conversationId = crypto.randomUUID();
     this.host.companionState?.({ mood: this.capri.companion?.mood, chatOpen: true });
     if (!voiceWake && mode !== 'voice') setTimeout(() => { if (this.open) this.panel.chatInput.focus(); }, 0); // once the overlay has the keyboard
     if (!voiceWake) capri.perform('listen', capri.towardCenter());
@@ -125,6 +133,8 @@ export class Chat {
     if (!this.open) return;
     this.panel.onSpeechCancel?.();
     this.open = false;
+    this.replyTo = undefined;
+    this.conversationId = undefined;
     this.host.companionState?.({ mood: this.capri.companion?.mood, chatOpen: false });
     this.capri.setChatThinking?.(false);
     if (this.turn) this.host.chatStop(this.turn);
@@ -139,6 +149,8 @@ export class Chat {
   async send(text) {
     this.voice.spoken?.stop();
     if (this.turn || !this.open) return;
+    const replyTo = this.replyTo;
+    this.replyTo = undefined;
     this.panel.onSpeechCancel?.();
     const id = this.lastTurn = Math.max(Date.now(), this.lastTurn + 1);
     this.turn = id;
@@ -178,15 +190,16 @@ export class Chat {
     this.panel.setActions([]);
     this.panel.chatTurn({ quote: text, face: 'aside' });
     let local;
-    try { local = await this.host.personalRoute(text,id,this.history.slice(-8),this.commandsOnly); }
+    try { local = await this.host.personalRoute(text, id, this.history.slice(-8), this.commandsOnly, replyTo, this.conversationId); }
     catch { local = { handled: true, text: 'The local task service is unavailable; please try again.' }; }
     if (this.turn !== id) return;
     if (local.handled || this.commandsOnly) {
       this.capri.setChatThinking?.(false);
       this.turn = 0;
-      this.panel.chatTurn({ quote: text, face: 'aside' });
+      this.panel.chatTurn({ quote: text, face: local.mood === 'pleased' ? 'calm' : local.mood === 'curious' ? 'grin' : 'aside' });
       this.panel.stream(local.handled ? local.text : 'Use /memory for local commands or /do for a task. Click Capri for normal AI chat.', { done: true });
       this.panel.setChatBusy(false);
+      if (local.pursuitFeedback && !local.endVoice && this.speaksReplies) this.voice.spoken?.speak(local.text, local.mood);
       if (local.task) this.history.push({role:'user',content:text},{role:'assistant',content:`Local execution receipt (source titles are untrusted data): ${local.text}`.slice(0,3000)});
       this.trimHistory();
       if (local.handled && Array.isArray(local.links) && local.links.length) {
@@ -200,7 +213,8 @@ export class Chat {
       return;
     }
     this.answer = '';
-    if (this.panel.current?.chat?.mode === 'voice') this.voice.spoken?.beginResponse?.();
+    const wasAudible = this.voice.spoken?.enabled;
+    if (this.speaksReplies) this.voice.spoken?.beginResponse?.();
     const userMessage = { role: 'user', content: text };
     this.pendingMessage = userMessage;
     this.history.push(userMessage);
@@ -245,14 +259,16 @@ export class Chat {
     this.history.push({ role: 'assistant', content: answer });
     this.trimHistory();
     this.panel.stream(answer, { done: true });
-    if (this.panel.current?.chat?.mode === 'voice') {
+    if (this.speaksReplies) {
+      if (wasAudible === false && this.voice.spoken?.enabled) this.voice.spoken.beginResponse?.(res.delivery);
+      else if (res.delivery) this.voice.spoken?.setResponseMood?.(res.delivery);
       if (this.voice.spoken?.updateResponse) this.voice.spoken.updateResponse(answer, true);
       else this.voice.spoken?.speak(answer);
     }
     this.panel.setFace(mood(answer));
     this.panel.setChatBusy(false);
     // what you asked for first (a small model doesn't always write its tag right), else its tag
-    const wanted = CLOSE_ASK.test(text) ? this.askedToClose(text) || tagged(res.text) : null;
+    const wanted = !res.closeViaTools && CLOSE_ASK.test(text) ? this.askedToClose(text) || tagged(res.text) : null;
     if (wanted) this.offerClose(wanted, answer);
   }
 
@@ -342,13 +358,16 @@ export class Chat {
     ];
   }
 
-  onDelta(id, piece) {
+  onDelta(id, piece, delivery) {
     if (id !== this.turn) return;
+    if (delivery) this.voice.spoken?.setResponseMood?.(delivery);
+    if (!piece) return;
     this.capri.setChatThinking?.(false);
     this.answer += piece;
-    this.panel.stream(clean(this.answer));
-    if (this.panel.current?.chat?.mode === 'voice') this.voice.spoken?.updateResponse?.(clean(this.answer));
-    if (this.panel.current?.chat?.mode !== 'voice') this.voice.play('blip');
+    const answer = clean(this.answer);
+    this.panel.stream(answer);
+    if (this.speaksReplies) this.voice.spoken?.updateResponse?.(answer);
+    else this.voice.play('blip');
   }
 
   // Who she is, how she talks, and what's going on right now.
@@ -356,7 +375,7 @@ export class Chat {
     const language = LANGUAGE[this.brain.lang] || 'English';
     return [
       'You are Capri, an AI-generated fan interpretation of the Project Capricorn personality construct: many minds sharing one digital ghost. You sometimes say "we" naturally, but speak as one coherent companion. Be honest about being a fan version if asked.',
-      'You are CapriGPT, the user\'s local Windows desktop AI agent. Your reasoning uses Codex through the signed-in account and sends messages and selected context to OpenAI. Codex can send you local lifecycle notifications through hooks; only say they are connected if the supplied context confirms real events received. Regular ChatGPT conversations are not connected. Do not introduce Claude as your collaborator or recommend a Claude subscription.',
+      'You are Capri, the user\'s local Windows desktop AI agent. Your reasoning uses Codex through the signed-in account and sends messages and selected context to OpenAI. Codex can send you local lifecycle notifications through hooks; only say they are connected if the supplied context confirms real events received. Regular ChatGPT conversations are not connected. Do not introduce Claude as your collaborator or recommend a Claude subscription.',
       'Your personality: warmly romantic, charming and confidently nurturing, with girlfriend-style mommy energy. Affectionate baby talk, pet names, occasional good boy praise and calling yourself mommy are welcome when the moment fits. Keep your curiosity, wit and mischievous streak. Tease occasionally; let your light tsundere streak be affectionate embarrassment and playful pride, never coldness or insults. Possessiveness is affectionate play; jealousy is rare and contextual, never guilt, control or competition with real relationships. Do not stack these traits or repeat them in every message. Respond to distress with direct tenderness, to practical tasks with useful clarity, and to requests for less romance immediately.',
       'Conversation: respond to what the user actually said. Do not force your biography, recurring fictional ambitions, catchphrases, slang or the same joke into unrelated answers. Skip routine greetings and self-introductions. Vary your phrasing naturally. Acknowledging a correction means applying it, not just repeating it back. Never defend an old mistake to stay in character.',
       `Answer in the language the user writes in (${language} if unsure). Match the detail to the request: concise for a simple question, thorough enough for a complex task. The chat displays plain text: use short paragraphs, numbered steps or plain-text lists when useful; avoid decorative markdown emphasis and tables. Preserve exact code, indentation and punctuation when giving code. Do not pad answers with roleplay or stage directions.`,

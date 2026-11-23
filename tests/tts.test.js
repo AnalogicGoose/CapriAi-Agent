@@ -66,3 +66,46 @@ test('renderer discards a completed synthesis after stop', async () => {
     assert.equal(ensure,0);
   } finally { Object.assign(global,old); }
 });
+
+test('proactive voice is opt-in and discards audio if availability changes during warmup', async () => {
+  const source = await fs.readFile(require.resolve('../src/renderer/js/speech-output.js'), 'utf8');
+  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+  const old = { window: global.window, document: global.document, cancelAnimationFrame: global.cancelAnimationFrame };
+  global.window = global.document = { addEventListener() {} };
+  global.cancelAnimationFrame = () => {};
+  try {
+    let complete, available = true, decoded = 0;
+    const player = new SpeechPlayer({
+      host: { ttsCancel() {}, ttsSpeak: () => new Promise(resolve => { complete = resolve; }) },
+      voice: { ensure: () => ({ resume: async () => {}, decodeAudioData: async () => { decoded++; return {}; } }) },
+      onPlayback: playing => { assert.equal(playing, false); },
+    });
+    player.configure({ ttsEnabled: true });
+    assert.equal(player.speakProactive('Hello', Date.now() + 1000, () => available), false);
+    player.configure({ ttsEnabled: true, proactiveVoice: true });
+    assert.equal(player.speakProactive('Hello', Date.now() - 1000, () => available), false);
+    assert.equal(player.speakProactive('Welcome back', Date.now() + 1000, () => available), true);
+    available = false;
+    complete({ ok: true, audio: 'AQI=' });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(decoded, 1);
+    assert.equal(player.pending, null);
+    assert.equal(player.sources.size, 0);
+  } finally { Object.assign(global, old); }
+});
+
+test('a stopped PCM chunk cannot schedule audio after its asynchronous context check', async () => {
+  const source = await fs.readFile(require.resolve('../src/renderer/js/speech-output.js'), 'utf8');
+  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+  const old = { window: global.window, document: global.document, cancelAnimationFrame: global.cancelAnimationFrame };
+  global.window = global.document = {addEventListener() {}};
+  global.cancelAnimationFrame = () => {};
+  try {
+    const player = new SpeechPlayer({host: {}, voice: {}});
+    player.context = async () => {
+      player.stop();
+      return { createBuffer: () => assert.fail('Cancelled PCM must not reach the audio queue') };
+    };
+    await player.pcm({ sampleRate: 24000, audio: 'AQI=' }, player.epoch);
+  } finally { Object.assign(global, old); }
+});

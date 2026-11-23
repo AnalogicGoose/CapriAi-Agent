@@ -21,6 +21,15 @@ test('screen image coordinates map to the observed monitor, then the frame is co
   assert.equal(result.inputSent, true); assert.deepEqual(f.calls[0].point, { x: -500, y: 200 });
   await assert.rejects(f.service.act(action, f.context), /fresh screen/); assert.equal(f.calls.length, 1);
 });
+test('a screenshot rectangle can be highlighted without input and rejects a different window', async () => {
+  const f = fixture(), { snapshotId } = await f.service.snapshot();
+  const args = { snapshotId, x: 250, y: 100, width: 10, height: 10 };
+  const highlight = async bounds => assert.deepEqual(bounds, { x: -500, y: 200, width: 19, height: 19 });
+  assert.deepEqual(await f.service.point(args, { ...f.context, highlight }), { shown: true });
+  assert.equal(f.calls.length, 0);
+  f.focus(8);
+  await assert.rejects(f.service.point(args, { ...f.context, highlight }), /fresh snapshot/);
+});
 test('stale, wrong-monitor, out-of-bounds, changed-focus and revoked inputs cannot execute', async () => {
   for (const change of ['stale', 'focus', 'geometry', 'pause', 'disabled', 'bounds']) {
     const f = fixture(), frame = await f.service.snapshot();

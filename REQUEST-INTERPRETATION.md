@@ -1,5 +1,22 @@
 # Request interpretation and grounded execution
 
+## Conversational actions
+
+In voice and text chat, Codex resolves the current request and recent references
+into a registered tool call. For an effect, the call includes the user’s current
+words as evidence alongside the structured operation and target. The tool bridge
+checks that evidence against the actual message. Each tool still validates its
+arguments, permissions, target and outcome. Confirmations for consequential
+actions such as closing an app still use the native review.
+
+For example, **“You can talk again”** can unmute Capri, **“I need Firefox in front
+of me”** can open Firefox, and **“Let’s get back to the task we parked”** can resume
+a scoped saved task. **“Yes, that one”** can accept a specific proposal from the
+conversation. An ambiguous reference calls for a question. Local shortcuts and
+slash commands still go straight to their existing handlers.
+
+## Local task interpreter
+
 The previous conversational route tried app-name matching before using the
 model. It extracted `netflix in firefox` as an installed app and asked for an
 unrelated app choice. Expanding a verb list would leave that ordering problem.
@@ -54,7 +71,7 @@ addresses cannot be dispatched as direct URLs.
 
 Native browser dispatch uses an installed executable found in verified standard
 installation locations, with the public HTTPS URL as a separate argument and
-`shell: false`. The default browser uses Electron's URL opener. It does not
+`shell: false`. Capri's default is its saved preferred browser (Firefox); `system` uses Electron's Windows URL opener. Firefox launches request `-new-tab` in the normal profile. It does not
 change the browser default, automate login, buy anything, control arbitrary
 desktop elements or verify a streaming player. A custom/portable installation
 outside discovered locations can require another browser or a future discovery

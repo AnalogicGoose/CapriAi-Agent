@@ -3,6 +3,7 @@ const {test}=require('node:test');const assert=require('node:assert/strict');
 const {ActionAgent,validatePlan,authorizePlan,actionIntent,launchTarget}=require('../src/main/action-agent');
 const {WebTools,publicUrl,readPublic,rssItems,latestFromChannel}=require('../src/main/web-tools');
 const {DesktopTools}=require('../src/main/desktop-tools');
+const { MusicPlayback, musicRequest } = require('../src/main/music-playback');
 const step=(tool,query='',index=0)=>({tool,query,index});
 function fixture(steps,extra={}) {
   const cfg={agentEnabled:true,desktopActions:true};const calls=[];let at=1000;
@@ -10,10 +11,64 @@ function fixture(steps,extra={}) {
   const found={type:'youtube',items:[item]};
   const runner=new ActionAgent({settings:()=>cfg,now:()=>at,models:async()=>['qwen3.5:9b'],infer:async()=>JSON.stringify({message:'',steps}),
     web:{youtube:async q=>{calls.push(['youtube',q]);return found;},search:async q=>({type:'news',items:[{title:'A real headline',published:'2026-10-28T00:00:00Z',url:'https://news.google.com/rss/articles/123'}]}),steam:async()=>({type:'steam',items:[{title:'A game',price:5,currency:'USD',discount:75,url:'https://store.steampowered.com/app/10/'}]})},
-    desktop:{open:async q=>{calls.push(['app',q]);return {type:'app',note:'Windows accepted the launch request.'};}},
+    desktop:{open:async q=>{calls.push(['app',q]);return {type:'app',note:'Windows accepted the launch request.'};},
+      openUrl:async(url,browser)=>{calls.push(['open',url,browser]);return {type:'website',launchRequested:true,note:`Sent ${url} to ${browser}.`};}},
     browser:{play:async v=>{calls.push(['play',v.videoId]);return {...v,playing:true};},open:async url=>{calls.push(['open',url]);return {opened:true,url};},stop(){}},...extra});
   return {runner,cfg,calls,time:ms=>{at+=ms;}};
 }
+test('a named song bypasses planning, opens one direct link, and requires playback evidence', async () => {
+  const wraps = row => ({ videoRenderer: {
+    videoId: row.id,
+    title: { simpleText: row.title },
+    ownerText: { simpleText: row.artist },
+    ownerBadges: [{ metadataBadgeRenderer: { style: 'BADGE_STYLE_TYPE_VERIFIED_ARTIST' } }],
+    detailedMetadataSnippets: [{ snippetText: { simpleText: row.description || '' } }],
+  } });
+  const html = 'var ytInitialData = ' + JSON.stringify({
+    contents: { twoColumnSearchResultsRenderer: { primaryContents: { sectionListRenderer: { contents: [
+      { itemSectionRenderer: { contents: [
+        wraps({ id: 'abcdefghijk', title: 'Daft Punk - One More Time (Official Video)', artist: 'Daft Punk' }),
+        wraps({ id: 'abcdefghijZ', title: 'One More Time', artist: 'Daft Punk', description: 'Provided to YouTube by Daft Life' }),
+        wraps({ id: 'abcdefghijX', title: 'One More Time', artist: 'A different artist' }),
+      ] } },
+    ] } } } },
+  });
+  const requests = [];
+  const desktop = { openUrl: async (url, browser) => { requests.push({ url, browser }); return { browser: 'Firefox' }; } };
+  let checked = { title: '', artist: '' }, playing = false;
+  const music = new MusicPlayback({ desktop, read: async () => html, observe: async track => { checked = track; return playing; } });
+  const { runner } = fixture([], { music, desktop, infer: () => assert.fail('Direct play should skip planning') });
+  const partial = await runner.routeDirect('Play One More Time by Daft Punk', 1);
+  assert.equal(partial.completed, false);
+  assert.match(partial.text, /couldn’t confirm playback/);
+  assert.deepEqual(checked, { title: 'One More Time', artist: 'Daft Punk', browser: 'Firefox', videoId: 'abcdefghijZ' });
+  assert.deepEqual(requests, [{ url: 'https://music.youtube.com/watch?v=abcdefghijZ&autoplay=1', browser: 'default' }]);
+  playing = true;
+  const verified = await runner.routeDirect('Play One More Time by Daft Punk in Firefox', 2);
+  assert.equal(verified.completed, true);
+  assert.match(verified.text, /^Playing/);
+  assert.equal(requests.at(-1).browser, 'Firefox');
+  assert.match((await runner.routeDirect('Play the song One More Time', 3)).text, /Which artist/);
+  assert.equal(requests.length, 2, 'An ambiguous track must not launch');
+  assert.equal(musicRequest('Play Minecraft'), null);
+  assert.equal(musicRequest('Play One More Time on Spotify'), null);
+  assert.equal(musicRequest('Do not play One More Time by Daft Punk', true), null);
+  assert.equal(musicRequest('Play Don’t Stop Me Now by Queen').title, 'Don’t Stop Me Now');
+});
+
+test('opening the selected workspace verifies the exact folder and reports an unobserved launch as partial', async () => {
+  const folder = 'C:\\Projects\\Example', calls = [];
+  let visible = false;
+  const desktop = new DesktopTools({
+    openPath: async value => { calls.push(['open', value]); return ''; },
+    observeWorkspace: async value => { calls.push(['observe', value]); return visible; },
+  });
+  const { runner } = fixture([], { desktop, workspace: () => folder, infer: () => assert.fail('Workspace should skip planning') });
+  assert.equal((await runner.routeDirect('Open the project folder')).completed, false);
+  visible = true;
+  assert.equal((await runner.routeDirect('Could you open my workspace?')).completed, true);
+  assert.deepEqual(calls, [['open', folder], ['observe', folder], ['open', folder], ['observe', folder]]);
+});
 test('ordinary action requests route locally while questions and hypothetical examples stay in chat',()=>{
   for(const q of ['capri play the newest rubius video in youtube','look for the latest news of ai models','capri look for the best discounts in steam','what are the latest AI model news?','check Steam discounts','open File Explorer','abre calculadora','open Spotify'])assert.equal(actionIntent(q),true,q);
   for(const q of ['hello Capri','can she open File Explorer?','for example play a YouTube video','how do I open Explorer?','remember I prefer Steam'])assert.equal(actionIntent(q),false,q);
@@ -85,8 +140,8 @@ test('search/news/Steam results are factual tool output and follow-up opening us
   const f=fixture([step('steam_deals')]);
   const result=await f.runner.route('find best Steam discounts');assert.match(result.text,/75% · 5.00 USD/);assert.match(result.text,/not a ranking/);
   f.runner.infer=async()=>JSON.stringify({message:'',steps:[step('open_result')]});
-  assert.match((await f.runner.route('open the first one')).text,/Opened/);
-  assert.deepEqual(f.calls,[['open','https://store.steampowered.com/app/10/']]);
+  assert.match((await f.runner.route('open the first one')).text,/Sent/);
+  assert.deepEqual(f.calls,[['open','https://store.steampowered.com/app/10/','default']]);
 });
 test('URL and fetch guards reject local addresses, credentials, protocols, cross-provider redirects and oversized bodies',async()=>{
   for(const url of ['file:///C:/secret','http://example.com','https://127.0.0.1/','https://[::1]/','https://a.local/','https://user:pass@example.com','https://example.com:8443/'])assert.throws(()=>publicUrl(url));

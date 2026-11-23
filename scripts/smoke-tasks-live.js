@@ -7,7 +7,7 @@ const ollama=require('../src/main/ollama');
   const started=await require('../src/main/ollama-runtime').start();assert.equal(started.ok,true,started.error);
   const runner=new ActionAgent({settings:()=>({agentEnabled:true,desktopActions:true}),models:ollama.models,
     infer:(request,signal)=>ollama.chat(request,()=>{},signal),web:new WebTools(),
-    desktop:{open:async()=>{throw Error('Desktop launches belong to the Electron live test.');}},
+    desktop:{open:async()=>{throw Error('Desktop launches belong to the Electron live test.');},openUrl:async url=>({type:'website',launchRequested:true,note:`Sent ${url} to the default browser (stubbed).`})},
     browser:{play:async item=>({...item,playing:false,note:'Playback deliberately disabled in this data/planner test.'}),stop(){},open:async url=>({opened:true,url})},
     progress:event=>console.log('PROGRESS:',event.text),
   });

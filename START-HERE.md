@@ -1,20 +1,20 @@
 > **Settings update:** The native tray menu has been replaced by Capri’s custom control room. Right-click Capri or her tray icon. Memory and PC awareness have separate sections; appearance includes size and screen; sound has its own section; versions/restarts live in Updates & app. Legacy Claude integration and chat handoff have been removed.
 
-# CapriGPT: Windows local prototype
+# Capri: Windows local prototype
 
 This is a local development branch of [mochiiwuff/capri-desktop](https://github.com/mochiiwuff/capri-desktop), based on upstream commit `79a016c` (0.3.1). The hosted fork is [Chocoyito1/capri-desktop](https://github.com/Chocoyito1/capri-desktop), with the prototype on branch `codex/caprigpt-local`. No changes have been pushed to the original upstream repository.
 
 ## Start on this laptop
 
 Git, Node.js, Ollama, app dependencies, and the `llama3.2:3b` model are installed.
-CapriGPT v0.4.0 starts a separate local Ollama server on `127.0.0.1:11435`, using
+Capri v0.4.0 starts a separate local Ollama server on `127.0.0.1:11435`, using
 the installed Ollama executable and the same downloaded models. On Windows the
 server has a hidden console that GPU-discovery workers can inherit, preventing
 the terminal flashes seen when those workers started without a parent console.
 Capri does not restart or modify your usual Ollama server on port 11434. An
 already running Capri server is reused. Gaming mode blocks server startup, and
 the model stays unloaded until a chat message needs it. Double-click the desktop
-shortcut or `Start-CapriGPT.cmd`, or open PowerShell in this folder and run:
+shortcut or `Start-Capri.cmd`, or open PowerShell in this folder and run:
 
 ```powershell
 npm.cmd start
@@ -105,7 +105,7 @@ dialogs and model calls, so it needs no running Ollama. On Windows it also check
 the native PC APIs without launching terminal helpers or closing real apps. The
 broader desktop smoke test starts the actual Electron renderer, asks who Capri
 works with, checks a streamed local reply, and exercises gaming pause, unload and
-resume. Run that broader test with another CapriGPT instance closed and the
+resume. Run that broader test with another Capri instance closed and the
 default model installed. Test captures are in `captures/` and ignored by Git.
 
 `test:release` types the exact screenshot phrase “whats openned in my pc capri?”
@@ -128,8 +128,8 @@ The hosted fork is [Chocoyito1/capri-desktop](https://github.com/Chocoyito1/capr
 To obtain this prototype on another PC:
 
 ```powershell
-git clone --branch codex/caprigpt-local https://github.com/Chocoyito1/capri-desktop.git CapriGPT
-cd CapriGPT
+git clone --branch codex/caprigpt-local https://github.com/Chocoyito1/capri-desktop.git Capri
+cd Capri
 npm.cmd ci
 ollama pull llama3.2:3b
 npm.cmd start

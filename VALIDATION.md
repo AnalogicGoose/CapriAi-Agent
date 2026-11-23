@@ -1,5 +1,102 @@
 # Local validation
 
+## Chat spelling suggestions (2026-11-09)
+
+Second follow-up supersedes the fixture-only spelling limits below: reproduced
+on Electron 44.9.3 that a native Windows context event contains misspelledWord
+and dictionarySuggestions but spellcheckEnabled=false. Removed that redundant
+flag guard. Reworked check-chat-spelling.js to use a brief isolated sandboxed
+window, native typing (which triggers asynchronous Windows checking), and native
+right-click input. It now requires actual hello suggestions for helo, confirms
+they reach the menu, invokes the real replacement and verifies native undo.
+All pass, including the false-flag regression and earlier right-click handling.
+Only popup display is intercepted. The synchronous webFrame probe used earlier
+did not reflect these asynchronous Windows results; no missing dictionary is
+inferred from that old probe. Running Capri needs a normal restart for the fix.
+
+Follow-up: the renderer's global contextmenu handler cancelled the composer's
+native menu. It now allows events from .panel__input while retaining background
+menu suppression. The isolated check includes that production handler, asserts
+DOM cancellation behavior, and sends actual Electron right-button input to the
+textarea. The resulting native context-menu event reaches the installed menu
+and constructs its items successfully. Popup/replacement remain intercepted;
+the fresh-profile dictionary limitation below still applies.
+
+Enabled spellcheck in the chat textarea and overlay. Right-clicking an underlined
+word offers Electron's suggestions, Add to dictionary, and standard editing
+commands. Only an explicit suggestion choice invokes replaceMisspelling; drafts
+are not automatically corrected or submitted. Uses the system locale dictionary.
+
+Windows / Node 24.15.0 / Electron 44.9.3: all 352 Node tests pass; Windows x64
+directory packaging with --publish never and git diff --check pass. The isolated
+scripts/check-chat-spelling.js check verifies the actual textarea flag, native
+menu construction, exact correction command on click, unchanged draft, missing
+suggestions and non-editable guard. Popup/replacement are intercepted because a
+synthetic context event cannot establish Chromium's native spelling range.
+Its fresh profile could not initialize the English dictionary, so this check
+uses fixture suggestions; live underlines, dictionary download and native
+right-click replacement/undo remain unverified. Electron may download a language
+dictionary before local checking is available. No running Capri was restarted;
+a normal restart is needed to load the feature. Existing unrelated edits remain.
+
+## Firefox and personal media defaults (2026-11-09)
+
+This supersedes the earlier Windows-default choice below. Capri now prefers
+Firefox independently of Windows' default browser; all normal page/video/source
+dispatch uses its regular profile and `-new-tab`. An explicit browser overrides
+the preference; `system` explicitly invokes the Windows default. Missing Firefox
+fails honestly rather than silently launching Chrome. Preferred browser and
+Crunchyroll profile are editable in Updates & app → Browser & media.
+
+Persistent Codex instructions map music requests to YouTube Music, and watch
+anime / let's watch anime to Crunchyroll. The bounded `open_media` operation
+opens those trusted service URLs. Foreground instructions then require fresh
+screen-based interaction to play requested music or choose Gabriel when a
+Crunchyroll picker is visible. A direct signed-in Crunchyroll landing requires
+no profile switching. Launch receipts leave playback/profile selection unverified;
+the preferences never authorize background actions.
+
+All 352 Node tests pass on Windows, including Firefox preference versus system
+dispatch, explicit overrides, media destinations, invalid/negative requests,
+pause behavior, browser preservation and settings validation. The isolated
+`electron scripts/check-external-browser.js` check passes through the actual
+Codex tool bridge with Firefox dispatch intercepted, including Crunchyroll's
+Gabriel profile metadata and unverified-selection receipt. Windows x64 directory
+packaging with `--publish never` passes. Live signed-in music playback and profile
+selection remain unverified; this is implementation and dispatch evidence.
+
+An initial old test fixture opened two Firefox test tabs before it was updated
+to intercept launches. Subsequent checks intercept browser dispatch. The desktop
+shortcut still targets this checkout's Electron executable with the absolute
+project argument, working directory and Capri icon. No running Capri instance
+was restarted; restart normally to load these preferences.
+
+## External default browser (2026-11-09)
+
+Removed the separate Electron browsing session. Website results, source buttons
+and YouTube playback requests now dispatch through the Windows default browser,
+using its normal profile. Explicit Firefox URL launches pass `-new-tab`, without
+a private window or custom profile. Cancellation no longer attempts to pause
+external media. Dispatch receipts explicitly leave loading, sign-in and playback
+unverified. The user chose to follow Windows' default (currently Chrome), rather
+than override it with Firefox.
+
+Windows 10.0.26200 x64 / Node 24.15.0 / Electron 44.9.3: all 347 unit tests pass,
+including dispatch, invalid/cancelled requests, launch errors and Firefox argument
+coverage. `electron scripts/check-external-browser.js` passes through the actual
+Codex tool bridge and ActionAgent for video, result opening, source references and
+YouTube Music URLs, asserting no embedded window and no false playback claim.
+That check intercepts external dispatch and does not control a signed-in site.
+Windows x64 directory packaging with `--publish never` passes.
+
+The older `--tasks-only` UI smoke fails on its first app assertion: it still mocks
+Ollama/personalRoute behavior superseded by Codex chat routing. It did not validate
+this change's chat UI. Computer Use blocked Firefox inspection because browser
+URL policy enforcement is unsupported for that Windows browser; live tab reuse,
+autoplay and the user's Premium session remain unverified. The existing desktop
+shortcut target, absolute project argument, working directory and icon already
+match this checkout. No running Capri instance was restarted.
+
 Validated on this Windows laptop during the CapriGPT build session:
 
 - Upstream `79a016c` (0.3.1) cloned, dependencies installed, original Electron app launched and its local health endpoint responded.

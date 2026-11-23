@@ -6,10 +6,99 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { MemoryStore, candidate } = require('../src/main/memory');
+const { statements, topicRequest } = require('../src/main/personal-context');
 const { permissions, ContextService, contextFields, isAppQuery } = require('../src/main/pc-context');
 const { PersonalAssistant } = require('../src/main/personal-assistant');
+const { RecentConversation } = require('../src/main/recent-conversation');
 const RESTRICTED = { allApps: false, contextPower: false, contextForeground: false,
   contextTitles: false, contextProcesses: false, contextPerformance: false, contextEvents: false };
+
+test('topic progress, discussion and explicit spoiler limits survive chat expiry and restart', t => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-topic-recaps-'));
+  const file = path.join(folder, 'memory.sqlite');
+  let now = Date.UTC(2026, 10, 7);
+  const open = () => new MemoryStore(file, { now: () => new Date(now), retentionDays: () => 30 });
+  let store = open();
+  const recent = new RecentConversation(':memory:', () => now);
+  t.after(() => { recent.close(); store.close(); fs.rmSync(folder, { recursive: true, force: true }); });
+  const first = "I'm caught up through episode 15 of Black Clover.";
+  store.recaps.capture(first, []);
+  recent.append(first, 'Okay.');
+  store.recaps.capture('We were comparing Asta and Yuno.', recent.read());
+  store.recaps.capture('No spoilers past episode 15.', recent.read());
+  now += 8 * 86_400_000;
+  assert.deepEqual(recent.read(), []);
+  store.close();
+  store = open();
+  assert.deepEqual(store.recaps.context('Continue our Black Clover discussion'), [{
+    topic: 'Black Clover', point: 'We were comparing Asta and Yuno', progress: 'Through episode 15', spoilerLimit: 'Through episode 15',
+  }]);
+  assert.deepEqual(store.recaps.context('Continue our One Piece discussion'), []);
+  store.recaps.capture("For Black Clover, I'm actually on episode 12.", []);
+  assert.equal(store.recaps.get('Black Clover').progress, 'Before episode 12');
+  assert.equal(store.recaps.get('Black Clover').spoiler_limit, 'Through episode 15');
+  assert.ok(store.recaps.forget('Black Clover'));
+  assert.deepEqual(store.recaps.context('Black Clover'), []);
+});
+
+test('recap learning uses the user’s point and never invents a title from an assistant reply', t => {
+  const store = new MemoryStore(':memory:');
+  t.after(() => store.close());
+  const point = "The next thing I wanted to discuss was pacing.";
+  assert.equal(store.recaps.learn('Black Clover', point, point, [{ role: 'assistant', content: 'Black Clover' }]), null);
+  assert.equal(store.recaps.learn('Black Clover', 'The ending', point, [{ role: 'user', content: 'Black Clover' }]), null);
+  assert.equal(store.recaps.learn('Black Clover', point, point, [{ role: 'user', content: 'Black Clover' }]).point, point);
+  assert.equal(store.recaps.capture('Unrelated question', [{ role: 'user', content: 'Black Clover' }]), null);
+});
+
+test('automatic memory keeps stated preferences, activities and belongings and recalls them by relevance', () => {
+  const store = new MemoryStore(':memory:');
+  try {
+    store.learn("Hey Capri, I like Black Clover, and I practice table tennis. I've got a Steam Deck.");
+    store.learn('I LIKE BLACK CLOVER.');
+    store.learn('Me gusta la música y tengo una guitarra.');
+    assert.equal(store.list().length, 5);
+    assert.deepEqual(store.personalContext('Any ideas for my Steam Deck?').facts[0].text, "I've got a Steam Deck");
+    assert.equal(store.matchingTopic('black clover').length, 1);
+    store.setQuiet('Black Clover', true);
+    assert.equal(store.personalContext('Recommend something new').facts.some(row => /clover/i.test(row.text)), false);
+    assert.equal(store.personalContext('What about Black Clover?').facts.some(row => /clover/i.test(row.text)), true);
+    store.setQuiet('black clover', false);
+    assert.deepEqual(store.quietTopics(), []);
+  } finally { store.close(); }
+});
+
+test('automatic memory ignores questions, fictional examples, transient plans and credentials', () => {
+  for (const text of ['I have a Steam Deck?', 'Imagine I own a spaceship', 'I have to get dinner',
+    'I like that!', 'I have a question', "I've got to get dinner", 'I watch anime tonight',
+    'I have a password of p4ssw0rd', 'I like this. Do not remember that.']) {
+    assert.deepEqual(statements(text), [], text);
+  }
+  assert.deepEqual(topicRequest('Capri, could you talk less about Black Clover?'), { action: 'less', topic: 'Black Clover' });
+  assert.deepEqual(topicRequest('Please talk less about Black Clover.'), { action: 'less', topic: 'Black Clover' });
+  assert.deepEqual(topicRequest('You can bring up Black Clover again.'), { action: 'more', topic: 'Black Clover' });
+  assert.deepEqual(topicRequest('Forget it.'), null);
+  assert.deepEqual(topicRequest("I'm taking a break from anime for now."), { action: 'less', topic: 'anime' });
+  assert.deepEqual(topicRequest("I'm back into anime."), { action: 'more', topic: 'anime' });
+});
+
+test('clear corrections replace matching old facts and preserve unrelated facts and the profile flag', t => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-memory-update-'));
+  const file = path.join(folder, 'memory.sqlite');
+  let store = new MemoryStore(file);
+  t.after(() => { store.close(); fs.rmSync(folder, { recursive: true, force: true }); });
+  const old = store.remember('I usually play on Xbox', 'explicit', { profile: true });
+  store.learn('I own an Xbox. I like co-op games.');
+  assert.deepEqual(store.learn('If I used to play on Xbox but now I mostly play on PC.').facts, []);
+  assert.equal(store.get(old.id).text, 'I usually play on Xbox');
+  assert.deepEqual(store.learn('I used to play on Xbox, but now I mostly play on PC.').facts, ['I mostly play on PC']);
+  store.close();
+  store = new MemoryStore(file);
+  assert.equal(store.get(old.id).text, 'I mostly play on PC');
+  assert.equal(store.get(old.id).profile, 1);
+  assert.deepEqual(store.search('Xbox').map(row => row.text), ['I own an Xbox']);
+  assert.ok(store.list().some(row => row.text === 'I like co-op games'));
+});
 
 function fixture(t, privacy = {}) {
   const cfg = { privacy: { ...RESTRICTED, memoryEnabled: true, memoryConfirmChanges: true, ...privacy } };

@@ -67,6 +67,30 @@ test('project switches isolate handoffs, decisions and goals, and reject stale t
   assert.equal((await f.lookup()).checkpoint.text, 'Alpha next step');
 });
 
+test('a saved task resolves after restart without guessing between goals or using a stale handoff', async t => {
+  const f = fixture(t); f.goals.projects.select(f.a);
+  f.goals.route('/goals add Review renderer'); f.goals.route('/goals next 1 Open my workspace');
+  f.goals.route('/goals add Verify animations'); f.goals.route('/goals next 2 Inspect seated motion');
+  await f.run('save-checkpoint', 0, 'Review paused. Next: Open my workspace', 'Save where we left off');
+  f.restart();
+  const handoff = f.continuity.resume("Let's pick up where we left off");
+  assert.equal(handoff.source, 'resume-point');
+  assert.equal(handoff.next_step, 'Open my workspace');
+  assert.equal(handoff.workspace, fs.realpathSync(f.a));
+  f.goals.route('/goals next 1 Check the overlay layout');
+  assert.match(f.continuity.resume('Resume my saved task').message, /Which saved task/);
+  assert.equal(f.continuity.resume('Could you resume task #1?').next_step, 'Check the overlay layout');
+  assert.equal(f.continuity.resume('Resume task Verify animations').id, 2);
+  assert.equal(f.continuity.resume('How do I resume task #1?'), null);
+  f.goals.route('/goals done 1');
+  assert.match(f.continuity.resume('Resume task #1').message, /marked done/);
+  assert.match(f.continuity.resume('Resume my saved task').message, /needs review/);
+  f.goals.projects.select(f.b);
+  assert.match(f.continuity.resume('Resume task #2').message, /couldn’t find/);
+  f.setCfg({ privacy: { memoryEnabled: true, memoryRecall: false } });
+  assert.match(f.continuity.resume('Resume my saved task').message, /Enable Memory/);
+});
+
 test('vague completion never chooses between several goals, even after filtered lookup', async t => {
   const f = fixture(t);
   f.goals.route('/goals add First task'); f.goals.route('/goals add Second task');
@@ -226,4 +250,30 @@ test('foreground Codex protocol carries real local save/lookup receipts and rest
   assert.match(lastInput, /user-marked-done/);
   assert.doesNotMatch(lastInput, /Prior conversation/);
   assert.equal(JSON.parse(responses.at(-1).result.contentItems[0].text).goals[0].status, 'done');
+
+  f.goals.route('/goals add Open the project');
+  f.goals.route('/goals next 2 Open my workspace');
+  f.restart(); brain = makeBrain();
+  const desktops = [];
+  f.tools.actions = {
+    async run(text, _id, _app, options) {
+      desktops.push({ text, step: options.plan.steps[0] });
+      return { completed: true, text: 'Project folder observed open.' };
+    },
+  };
+  plan = [{ tool: 'capri_desktop_step', args: { tool: 'open_workspace', query: '', index: 0, browser: '' } }];
+  await brain.chat('Resume my saved task', undefined, undefined, { voice: true });
+  assert.deepEqual(desktops, [{ text: 'Open my workspace', step: { tool: 'open_workspace', query: '', index: 0 } }]);
+  assert.match(lastInput, /"savedTaskInvocation":\{.*"next_step":"Open my workspace"/);
+  const spoken = 'I’d like to pick up the project again.';
+  plan = [{ tool: 'capri_saved_work', args: { action: 'resume-task', target: '#2', requestEvidence: spoken } },
+    { tool: 'capri_desktop_step', args: { tool: 'open_workspace', query: '', index: 0, browser: '', requestEvidence: spoken } }];
+  await brain.chat(spoken, undefined, undefined, { voice: true });
+  assert.equal(responses.at(-2).result.success, true);
+  assert.equal(responses.at(-1).result.success, true);
+  assert.equal(desktops.at(-1).text, 'Open my workspace');
+  assert.equal(desktops.length, 2);
+  f.goals.route('/goals add Check the tests'); f.goals.route('/goals next 3 Run tests');
+  assert.match(await brain.chat('Resume my saved task'), /Which saved task/);
+  assert.equal(desktops.length, 2);
 });

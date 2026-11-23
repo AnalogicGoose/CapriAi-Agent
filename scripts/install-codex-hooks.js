@@ -31,7 +31,7 @@ function configure(remove = false) {
       if (!Array.isArray(group.hooks)) throw Error(`Invalid ${event} handler; nothing changed`);
       return { ...group, hooks: group.hooks.filter((handler) => !own(handler)) };
     }).filter((group) => group.hooks.length);
-    if (!remove) data.hooks[event].push({ hooks: [{ type: 'command', command, async: event !== 'SessionEnd', timeout: 2, statusMessage: 'Notify CapriGPT locally' }] });
+    if (!remove) data.hooks[event].push({ hooks: [{ type: 'command', command, async: event !== 'SessionEnd', timeout: 2, statusMessage: 'Notify Capri locally' }] });
     if (!data.hooks[event].length) delete data.hooks[event];
   }
   const content = JSON.stringify(data, null, 2) + '\n';

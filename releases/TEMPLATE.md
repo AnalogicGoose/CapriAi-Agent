@@ -1,4 +1,4 @@
-# CapriGPT vVERSION
+# Capri vVERSION
 
 Stability: alpha
 Platform: Windows x64

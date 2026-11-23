@@ -6,12 +6,13 @@ const { randomBytes } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const {
   app, BrowserWindow, Tray, ipcMain, screen, protocol, net, shell, globalShortcut, nativeImage,
-  clipboard, ClipboardItem, dialog, powerMonitor, desktopCapturer,
+  clipboard, ClipboardItem, dialog, powerMonitor, desktopCapturer, Menu,
 } = require('electron');
 
 const config = require('./config');
 const { LANGS } = require('./labels');
 const { createSettingsWindow } = require('./settings-window');
+const { installChatSpelling } = require('./chat-spelling');
 const { overlayPatch } = require('./settings-policy');
 const { SettingsAgent } = require('./settings-agent');
 const { createBridge } = require('./bridge');
@@ -22,11 +23,15 @@ const { SpeechOutput } = require('./tts');
 const { CodexBrain } = require('./codex-brain');
 const { CodexTools } = require('./codex-tools');
 const { ScreenAccess } = require('./screen-access');
+const { WindowsAccessibility } = require('./windows-accessibility');
+const { desktopHighlight } = require('./desktop-highlight');
 const { CognitiveFoundation } = require('./cognitive-foundation');
 const { GroundedCuriosity } = require('./grounded-curiosity');
 const { ReflectionEngine } = require('./cognitive-reflection');
-const { ProactiveConversation } = require('./proactive-conversation');
+const { ProactiveConversation, BUSY_PAUSE } = require('./proactive-conversation');
+const { InitiativeTrial } = require('./initiative-trial');
 const { CompanionInterests } = require('./companion-interests');
+const { InterestCollaboration } = require('./interest-collaboration');
 const { CompanionGoals } = require('./companion-goals');
 const { personalityContext } = require('./personality');
 const { CodexEvents } = require('./codex-events');
@@ -35,6 +40,8 @@ const codexEvents = new CodexEvents();
 let integrationToken;
 const apps = require('./apps');
 const { MemoryStore } = require('./memory');
+const { RecentConversation } = require('./recent-conversation');
+const { statements, topicKey, mentionsTopic, topicRequest } = require('./personal-context');
 const { ContextService, permissions } = require('./pc-context');
 const { PersonalAssistant } = require('./personal-assistant');
 const { MemoryAgent } = require('./memory-agent');
@@ -43,12 +50,15 @@ const { ForegroundPriority } = require('./foreground-priority');
 const { ActionAgent } = require('./action-agent');
 const { WebTools } = require('./web-tools');
 const { DesktopTools } = require('./desktop-tools');
+const { MusicPlayback } = require('./music-playback');
+const { observePlayback, observeWorkspace } = require('./windows-action-observer');
 const { RequestInterpreter } = require('./request-interpreter');
 const { createAgentBrowser } = require('./agent-browser');
 const { WorldState } = require('./world-state');
 const capabilities = require('./capabilities');
-let memoryStore, goalStore, autonomy, reflection, curiosity, interests;
+let memoryStore, recentChatStore, goalStore, autonomy, reflection, curiosity, interests;
 let sessionAvailable = true;
+let checkInDeadline = 0;
 let projectRouting = false;
 let projectFeedbackAnchor = null;
 // A spoken wake address temporarily permits requested foreground work, not background actions.
@@ -62,6 +72,88 @@ const memory = () => {
   });
   return memoryStore;
 };
+function recentConversation(create = false) {
+  if (!recentChatStore) {
+    const file = path.join(app.getPath('userData'), 'recent-conversation.sqlite');
+    if (create || fs.existsSync(file)) recentChatStore = new RecentConversation(file);
+  }
+  return recentChatStore;
+}
+function quietTopics() {
+  const p = permissions(config.load().privacy);
+  return p.memoryEnabled && p.memoryRecall ? memory().quietTopics() : [];
+}
+function canBringUp(text) {
+  return !quietTopics().some(({ key }) => mentionsTopic(text, key));
+}
+
+async function routeTopicPreference(text) {
+  const p = permissions(config.load().privacy);
+  const list = /^\/memory\s+topics$/i.test(text.trim());
+  const reply = text => ({ handled: true, text });
+  if (/^(?:\/memory\s+recaps|(?:show|list) (?:me )?my (?:saved )?topic recaps)[.!]?$/i.test(text.trim())) {
+    const recaps = memory().recaps.list();
+    return reply(recaps.length ? recaps.map(row =>
+      [row.topic, row.point, row.progress && `Progress: ${row.progress}`, row.spoiler_limit && `Spoiler limit: ${row.spoiler_limit}`]
+        .filter(Boolean).join('\n')).join('\n\n') : 'No topic recaps saved.');
+  }
+  const forgetRecap = /^forget (?:(?:the|our) )?(?:recap (?:for|about|on|of) (.{2,100})|(.{2,100}) recap)[.!]?$/i
+    .exec(text.trim().replace(/[.!]+$/, ''));
+  if (forgetRecap) {
+    if (brain.busy) return reply('Finish the current reply before changing what I remember.');
+    const topic = forgetRecap[1] || forgetRecap[2];
+    const recaps = memory().recaps;
+    if (!recaps.get(topic)) return reply(`I don’t have a saved recap for “${topic}”.`);
+    if (p.memoryConfirmChanges && !await confirmMemory('Forget this recap?', `Remove the saved topic recap for “${topic}”.`)) {
+      return reply('I’ve kept it.');
+    }
+    recaps.forget(topic);
+    return reply(`I’ve removed the saved recap for “${topic}”.`);
+  }
+  if (list) {
+    const topics = memory().quietTopics();
+    return reply(topics.length ? topics.map(row => row.topic).join('\n') : 'There are no topics set aside.');
+  }
+  const request = topicRequest(text);
+  if (!request || config.load().gamingMode) return null;
+  let { topic } = request;
+  if (/^(?:that|this|that topic|this topic|ese tema|este tema)$/i.test(topic)) {
+    const last = (brain.history.length ? brain.history : recentConversation()?.read() || [])
+      .findLast(row => row.role === 'user');
+    const details = last ? statements(last.content) : [];
+    if (request.action !== 'forget' || details.length !== 1) return reply(
+      request.action === 'forget' ? 'Which detail do you want me to forget?' : 'Which topic should I bring up less?');
+    topic = details[0];
+  }
+  const key = topicKey(topic.replace(/^that\s+/i, ''));
+  if (request.action !== 'forget') {
+    if (!p.memoryEnabled) return reply('Turn on Personal memory in the Control room to save topic preferences.');
+    const quiet = request.action === 'less';
+    const changed = memory().setQuiet(topic, quiet);
+    return reply(quiet ? `I’ll leave “${topic}” for you to bring up.`
+      : changed ? `I can bring up “${topic}” again.` : `“${topic}” was already available to bring up.`);
+  }
+  if (/^(?:memory\s+)?#?\d+$/i.test(topic) || /^(?:everything|all|all my memories)$/i.test(topic)) return null;
+  if (brain.busy) return reply('Finish the current reply before changing what I remember.');
+  const store = memory();
+  const rows = store.matchingTopic(key);
+  // Compound and explicitly curated entries need the existing memory editor.
+  if (rows.some(row => row.source !== 'conversation-stated' ||
+      (topicKey(row.text) !== key && /\b(?:and|or|y|o)\b|[,;]/i.test(row.text)))) return null;
+  const history = config.load().rememberRecentChat === true ? recentConversation() : undefined;
+  const inHistory = [...brain.history, ...(history?.read() || [])].some(row => mentionsTopic(row.content, key));
+  const hasRecap = Boolean(store.recaps.get(topic));
+  if (!rows.length && !inHistory && !hasRecap) return null;
+  if (p.memoryConfirmChanges && !await confirmMemory('Forget this topic?', `Remove saved memories and recent chat exchanges about “${topic}”.`)) {
+    return reply('I’ve kept it.');
+  }
+  const removedChats = history?.forgetTopic(key) || 0;
+  if (rows.length) store.applyChanges(rows.map(row => ({ kind: 'forget', id: row.id })), rows);
+  const removedRecap = hasRecap && store.recaps.forget(topic);
+  brain.reset({ keepRecent: true });
+  if (rows.length || removedChats || inHistory || removedRecap) return reply(`I’ve cleared what I was keeping about “${topic}”.`);
+  return null;
+}
 const pcContext = new ContextService({ settings: () => config.load() });
 const goals = () => {
   if (!goalStore) goalStore = new CompanionGoals({
@@ -76,6 +168,17 @@ const goals = () => {
 };
 const world = new WorldState({ context: pcContext });
 const closeApp = require('./action-confirmation').createCloseHandler({ config, apps, dialog });
+const { deliveryStyle } = require('./voice-delivery');
+async function closeRequestedApp({ name, force }, check) {
+  if (!config.load().desktopActions || config.load().gamingMode) throw Error('Desktop actions are paused.');
+  const key = value => String(value || '').trim().toLowerCase().replace(/\.exe$/, '');
+  const target = key(name);
+  const matches = (await apps.list()).filter(row => [row.name, row.process, row.label].some(value => key(value) === target));
+  check();
+  if (matches.length !== 1) return { completed: false, reason: matches.length ? 'More than one running app matches.' : 'No closeable running app matches that name.' };
+  const result = await closeApp(null, { name: matches[0].process, force }, check);
+  return { ...result, completed: !result.error && result.running === false, app: matches[0].label || matches[0].name };
+}
 const foreground = new ForegroundPriority(() => ({
   get busy() { return agent.busy || Boolean(autonomy?.busy) || Boolean(reflection?.busy); },
   get reason() { return agent.busy ? agent.reason : 'autonomous'; },
@@ -107,10 +210,12 @@ const agent = new Agent({ model: 'codex',
   audit: (kind, status) => { try { memory().audit(kind, status); } catch { console.error('[capri] Agent journal unavailable.'); } },
   notify: text => overlay?.webContents.send('agent:suggestion', text),
 });
-const agentBrowser = createAgentBrowser();
+const desktop = new DesktopTools({ openPath: file => shell.openPath(file), openExternal: url => shell.openExternal(url),
+  native: require('./native-windows'), observeWorkspace, preferredBrowser: () => config.load().preferredBrowser });
+const agentBrowser = createAgentBrowser({ openUrl: (...args) => desktop.openUrl(...args) });
 const actions = new ActionAgent({ settings: () => config.load(), models: decisionModels,
   infer: inferDecision, web: new WebTools(),
-  desktop: new DesktopTools({ openPath: file => shell.openPath(file), openExternal: url => shell.openExternal(url), native: require('./native-windows') }),
+  desktop, music: new MusicPlayback({ desktop, observe: observePlayback }), workspace: () => goals().projects.workspace(),
   browser: agentBrowser, idle: () => !chats.size && !agent.busy && !memoryRequests.busy,
   progress: event => overlay?.webContents.send('task:progress', event),
 });
@@ -140,6 +245,13 @@ const personal = new PersonalAssistant({
   },
 });
 
+async function captureDisplay(displayId) {
+  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1600, height: 1000 }, fetchWindowIcons: false });
+  const source = sources.find(row => row.display_id === String(displayId));
+  if (!source || source.thumbnail.isEmpty()) throw Error('Windows did not provide a screen image.');
+  return source.thumbnail;
+}
+
 const screenAccess = new ScreenAccess({ settings: agentConfig,
   displays: () => {
     const fg = require('./native-windows').foregroundBounds();
@@ -150,25 +262,59 @@ const screenAccess = new ScreenAccess({ settings: agentConfig,
   toNativePoint: point => screen.dipToScreenPoint(point), input: require('./desktop-input').perform,
   confirm: confirmMemory,
   capture: async display => {
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1600, height: 1000 }, fetchWindowIcons: false });
-    const source = sources.find(row => row.display_id === String(display.id));
-    if (!source || source.thumbnail.isEmpty()) throw Error('Windows did not provide a screen image.');
-    const size = source.thumbnail.getSize();
-    return { url: `data:image/jpeg;base64,${source.thumbnail.toJPEG(65).toString('base64')}`, ...size };
+    const image = await captureDisplay(display.id);
+    return { url: `data:image/jpeg;base64,${image.toJPEG(65).toString('base64')}`, ...image.getSize() };
   },
 });
-const currentContext = () => {
+const externalForeground = () => {
+  const window = require('./native-windows').foregroundBounds();
+  return window?.pid === process.pid ? null : window;
+};
+const highlight = desktopHighlight({ BrowserWindow, screen, foreground: externalForeground,
+  enabled: () => screenAccess.enabled() && config.load().visible !== false,
+  onError: () => console.error('[capri] Could not keep the desktop highlight visible.') });
+const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
+  settings: () => config.load(), foreground: externalForeground, highlight: highlight.show,
+  yieldFocus: async () => {
+    if (!overlay?.isFocused()) return;
+    overlay.blur();
+    await new Promise(resolve => setTimeout(resolve, 100));
+  },
+  confirm: async (message, detail) => (await dialog.showMessageBox({ type: 'question', title: 'Capri - Desktop action', message,
+    detail, buttons: ['Cancel', 'Confirm'], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
+  captureWindow: async ({ x, y, width, height }) => {
+    const display = screen.getDisplayMatching(screen.screenToDipRect(null, { x, y, width, height }));
+    const area = screen.dipToScreenRect(null, display.bounds);
+    const image = await captureDisplay(display.id);
+    const size = image.getSize();
+    const scaleX = area.width / size.width, scaleY = area.height / size.height;
+    const left = Math.max(0, Math.ceil((x - area.x) / scaleX)), top = Math.max(0, Math.ceil((y - area.y) / scaleY));
+    const right = Math.min(size.width, Math.floor((x + width - area.x) / scaleX));
+    const bottom = Math.min(size.height, Math.floor((y + height - area.y) / scaleY));
+    if (right <= left || bottom <= top) throw Error('The foreground window is outside the captured display.');
+    const cropped = image.crop({ x: left, y: top, width: right - left, height: bottom - top });
+    return { image: cropped.toJPEG(90).toString('base64'), x: area.x + left * scaleX, y: area.y + top * scaleY, scaleX, scaleY };
+  },
+}) : null;
+app.on('before-quit', highlight.clear);
+const currentContext = text => {
   const p = permissions(agentConfig().privacy);
   const savedContinuity = goals().continuity.context();
   const remaining = Math.max(0, p.promptBudget - Buffer.byteLength(JSON.stringify(savedContinuity)));
   const savedGoals = p.memoryEnabled && !savedContinuity.length ? goals().context() : [];
+  let personalMemory;
+  if (p.memoryEnabled && p.memoryRecall) {
+    try { personalMemory = memory().personalContext(text); }
+    catch { console.error('[capri] Personal memory unavailable.'); }
+  }
   return { presentation, capabilities: capabilities.registry(agentConfig()), externalCodexEvents: codexEvents.snapshot(),
   savedContinuity, savedGoals, currentProject: goals().projects.context(Math.max(0, remaining - Buffer.byteLength(JSON.stringify(savedGoals)))),
   companionInterests: interests?.context() || [],
-  recentTasks: actions.grounding({ includeApps: false }),
-  recentConversation: brain?.history?.slice(-6) || [] };
+  ...(personalMemory ? { personalMemory } : {}),
+  recentTasks: actions.grounding({ includeApps: false }) };
 };
-const brainTools = new CodexTools({ settings: agentConfig, context: pcContext, screen: screenAccess,
+const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: resolveLang, context: pcContext,
+  screen: screenAccess, accessibility, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
   body: (action, { check, signal }) => new Promise((resolve, reject) => {
     check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Capri’s body is unavailable.'));
     const id = randomBytes(12).toString('hex');
@@ -179,7 +325,8 @@ const brainTools = new CodexTools({ settings: agentConfig, context: pcContext, s
     overlay.webContents.send('companion:body', { id, action });
   }),
   actions, store: memory, goals, curiosity: () => curiosity, state: settingsState, patch: updateConfig, confirm: confirmMemory });
-const brain = new CodexBrain({ settings: agentConfig,
+const brain = new CodexBrain({ settings: agentConfig, recentConversation,
+  warmIdleMs: 3 * 60 * 1000, canKeepWarm: () => !config.load().gamingMode && sessionAvailable,
   cwd: path.join(app.getPath('temp'), 'caprigpt-codex-brain'), tools: brainTools,
   systemTools: () => config.load().systemAccess === true, workspace: () => goals().projects.workspace() || app.getPath('home'), context: currentContext,
   onOutcome: receipt => {
@@ -202,7 +349,8 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const VERSION = require('../../package.json').version;
 const runtime = require('./runtime-info').runtimeInfo(ROOT, VERSION);
 const DEV = process.argv.includes('--dev');
-// Keep this prototype's preferences separate from the original app.
+app.setName('Capri');
+// Keep the existing profile across the rename and separate from upstream Capri.
 const smokeTest = process.argv.some((arg) => path.basename(arg) === 'smoke-electron.js');
 app.setPath('userData', smokeTest && process.env.CAPRIGPT_TEST_PROFILE
   ? process.env.CAPRIGPT_TEST_PROFILE : path.join(app.getPath('appData'), 'CapriGPT'));
@@ -221,27 +369,49 @@ const inferCognitive = async (request, signal) => {
 };
 curiosity = new CognitiveFoundation({ file: path.join(app.getPath('userData'), 'curiosity.sqlite'),
   settings: () => config.load(), context: pcContext });
+const initiativeTrial = new InitiativeTrial(curiosity.db);
 interests = new CompanionInterests({ db: curiosity.db, settings: () => config.load() });
+const interestCollaboration = new InterestCollaboration({ interests, infer: inferCognitive, settings: rendererConfig });
 const groundedCuriosity = new GroundedCuriosity({ journal: curiosity, goals, settings: () => config.load() });
 const cognitiveIdle = () => !foreground.active && !chats.size && !brain.busy && !agent.busy &&
   !actions.busy && !memoryRequests.busy && !requests.busy && !settingsRequests.busy;
+function checkInBlock() {
+  if (!sessionAvailable) return 'The Windows session was unavailable.';
+  if (fullscreenState.active) return 'A fullscreen window was active.';
+  if (voiceSession || (speech.current && speech.current.mode !== 'wake') || presentation.chatOpen) {
+    return 'A voice or text conversation was active.';
+  }
+  if (!cognitiveIdle() || reflection.busy || presentation.canSpeak === false) return 'Capri was busy.';
+  if (!overlay || overlay.isDestroyed() || !overlay.isVisible()) return 'The overlay was unavailable.';
+  if (powerMonitor.getSystemIdleTime() >= 300) return 'The PC was idle.';
+  return '';
+}
 reflection = new ReflectionEngine({ journal: curiosity, settings: () => config.load(),
   model: 'codex', models: decisionModels, infer: inferCognitive,
   canRun: () => cognitiveIdle() && !autonomy?.busy && sessionAvailable && !voiceSession &&
     (!speech.current || speech.current.mode === 'wake') && !fullscreenState.active });
 autonomy = new ProactiveConversation({ settings: rendererConfig, journal: curiosity,
-  interests,
+  interests, trial: initiativeTrial, canBringUp, quietTopics: () => quietTopics().slice(0, 12).map(row => row.topic),
   model: 'codex', models: decisionModels, infer: inferCognitive,
   observe: () => pcContext.snapshot('companion-conversation', ['contextForeground']),
+  warmVoice: () => tts.warm(),
   memories: () => memory().list(10),
-  canRun: () => cognitiveIdle() && !reflection.busy && sessionAvailable &&
-    (!speech.current || speech.current.mode === 'wake') && !voiceSession && !fullscreenState.active &&
-    !presentation.chatOpen && presentation.canSpeak !== false &&
-    Boolean(overlay && !overlay.isDestroyed() && overlay.isVisible()) && powerMonitor.getSystemIdleTime() < 300,
-  notify: text => {
+  sharedContext: () => {
+    const p = permissions(config.load().privacy);
+    const project = goals().projects.selected();
+    const preferences = p.memoryEnabled && p.memoryRecall ? memory().list(20)
+      .filter(row => canBringUp(row.text) && /^(?:I (?:like|love|enjoy|prefer) |me gusta[n]? |prefiero )/i.test(row.text) &&
+        !/\b(password|token|address|medical|health|bank|salary|contraseña|salud|banco)\b/i.test(row.text))
+      .slice(0, 2).map(row => row.text.slice(0, 140)) : [];
+    const name = project && project.name !== project.root ? project.name.slice(0, 100) : '';
+    return name || preferences.length ? { project: name, preferences } : null;
+  },
+  canRun: () => !checkInBlock(), blockedReason: checkInBlock,
+  notify: (text, { voiceUntil, mood, replyTo, canBuild } = {}) => {
     if (!overlay || overlay.isDestroyed() || presentation.chatOpen || fullscreenState.active) return false;
     brain.history = [...brain.history, { role: 'assistant', content: text }].slice(-24);
-    overlay.webContents.send('companion:conversation', text); return true;
+    checkInDeadline = voiceUntil || 0;
+    overlay.webContents.send('companion:conversation', { text, voiceUntil, mood, replyTo, canBuild }); return true;
   },
 });
 const PORT = Number(process.env.CAPRI_PORT) || 47823;
@@ -280,7 +450,7 @@ const speech = new SpeechInput({
 });
 
 const tts = new SpeechOutput({ root: ROOT, config: () => config.load(),
-  allowed: () => speech.allowed() && (voiceSession || config.load().visible !== false)
+  allowed: () => sessionAvailable && speech.allowed() && (voiceSession || config.load().visible !== false)
     && (!speech.current || ['wake', 'conversation'].includes(speech.current.mode)),
   notify: state => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('tts:state', state); },
 });
@@ -346,11 +516,13 @@ function createOverlay() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      spellcheck: true,
       backgroundThrottling: true,
       autoplayPolicy: 'no-user-gesture-required',
     },
   });
 
+  installChatSpelling(overlay, Menu);
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setIgnoreMouseEvents(true, { forward: true });
   const microphonePermission = (contents, permission, details={}) =>
@@ -525,9 +697,14 @@ function rendererConfig() {
 
 function updateConfig(patch) {
   const changes = key => Object.hasOwn(patch, key);
+  const oldPrivacy = permissions(config.load().privacy);
+  const nextPrivacy = patch.privacy ? permissions({ ...oldPrivacy, ...patch.privacy }) : oldPrivacy;
+  const revokedRecall = Object.keys(oldPrivacy).some(key =>
+    (key === 'memoryEnabled' || key === 'memoryRecall' || key === 'allApps' || key.startsWith('context')) &&
+      oldPrivacy[key] === true && nextPrivacy[key] === false);
   const policyChanged = ['routinesEnabled', 'gamingMode', 'agentEnabled', 'desktopActions', 'privacy', 'systemAccess', 'screenAwareness', 'autonomyEnabled', 'autonomyScreen'].some(changes);
-  const backendChanged = ['codexModel', 'codexExecutable', 'codexEffort'].some(changes);
-  if (['routinesEnabled', 'projectCuriosityEnabled', 'dailyReviewEnabled', 'dailyReviewNotify', 'proactiveEnabled', 'cognitiveEnabled', 'interestsEnabled', 'visible', 'lang'].some(changes)) {
+  const backendChanged = ['preferredBrowser', 'crunchyrollProfile', 'codexModel', 'codexExecutable', 'codexEffort'].some(changes);
+  if (['routinesEnabled', 'projectCuriosityEnabled', 'dailyReviewEnabled', 'dailyReviewNotify', 'proactiveEnabled', 'proactiveVoice', 'cognitiveEnabled', 'interestsEnabled', 'visible', 'lang'].some(changes)) {
     if (typeof autonomy !== 'undefined') autonomy?.touch();
     if (typeof reflection !== 'undefined') reflection?.cancel();
   }
@@ -538,13 +715,21 @@ function updateConfig(patch) {
     brain.cancel(); decisionBrain.cancel();
   }
   if (['gamingMode', 'privacy'].some(changes) || backendChanged) memoryRequests.cancel();
-  if (['gamingMode', 'privacy'].some(changes) || backendChanged) brain.reset();
+  if (['gamingMode', 'privacy', 'systemAccess', 'screenAwareness'].some(changes) || backendChanged) {
+    brain.reset({ keepRecent: !revokedRecall && !['systemAccess', 'screenAwareness', 'codexExecutable'].some(changes) });
+  }
   if ((patch.gamingMode === true || patch.visible === false) && speech.current?.mode !== 'wake') speech.cancel();
   if (patch.gamingMode === true || patch.visible === false
-      || ['muted', 'volume', 'ttsEnabled', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText', 'ttsDevice'].some(changes)) tts.cancel();
+      || ['muted', 'volume', 'ttsEnabled', 'speakTypedReplies', 'proactiveVoice', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText', 'ttsDevice'].some(changes)) tts.cancel();
   if (['ttsEnabled', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText'].some(changes) || patch.muted === true) tts.close();
-  if (patch.privacy) patch = { ...patch, privacy: permissions({ ...config.load().privacy, ...patch.privacy }) };
+  if (patch.privacy) patch = { ...patch, privacy: nextPrivacy };
   config.save(patch);
+  if (backendChanged || patch.gamingMode === true || patch.visible === false ||
+      [patch.interestsEnabled, patch.cognitiveEnabled, patch.agentEnabled].includes(false)) interestCollaboration.cancel();
+  if (speech.current?.checkIn && (patch.muted === true || patch.volume === 0 ||
+      [patch.checkInReplies, patch.proactiveVoice, patch.proactiveEnabled, patch.ttsEnabled].includes(false))) {
+    speech.cancel(); endVoiceSession();
+  }
   if (patch.wakeWordEnabled === false) { speech.cancel(); endVoiceSession(); }
   if (Object.hasOwn(patch, 'displayId')) fitOverlay();
   pcContext.eventSnapshot(); // discard event fields when permissions are revoked
@@ -562,6 +747,7 @@ function updateConfig(patch) {
 
 function settingsState() {
   return { config: { ...rendererConfig(), privacy: permissions(config.load().privacy) },
+    initiative: initiativeTrial.status(),
     runtime: runtime(), integration: codexEvents.snapshot(),
     project: goals().projects.selected(),
     startup: app.getLoginItemSettings(loginItemOptions()).openAtLogin,
@@ -575,6 +761,60 @@ function rebuildTray() {
 
 function openSettings() { settingsRoom?.open(); }
 
+function startInitiativeTrial() {
+  if (!initiativeTrial.start()) return 'There is already a quiet trial to review.';
+  autonomy.touch();
+  if (speech.current?.checkIn || checkInDeadline > Date.now()) {
+    if (speech.current?.checkIn) { speech.cancel(); endVoiceSession(); }
+    checkInDeadline = 0; tts.cancel();
+  }
+  settingsRoom?.update();
+  return 'Quiet trial started for 24 hours. Check-ins stay quiet until you choose to resume them.';
+}
+
+function initiativeCommand(text) {
+  const input = text.trim().replace(/[.!?]+$/, '');
+  const match = /^\/companion trial(?:\s+(.*))?$/i.exec(input);
+  const report = /^(?:show (?:me )?|review )?(?:the |my )?quiet trial(?: report)?$/i.test(input);
+  const natural = /^start (?:the |a )?quiet trial$/i.test(input) ? 'start'
+    : /^end (?:the )?quiet trial$/i.test(input) ? 'end' : /^resume (?:my |your )?check-ins$/i.test(input) ? 'resume' : null;
+  if (!match && !report && !natural) return null;
+  const action = (match?.[1] || natural || 'report').trim().toLowerCase();
+  const response = text => ({ handled: true, text });
+  if (action === 'start') return response(startInitiativeTrial());
+  if (action === 'end') {
+    if (!initiativeTrial.end()) return response('There is no quiet trial collecting decisions.');
+    autonomy.touch(); settingsRoom?.update();
+    return response('The trial is ready to review. Check-ins are still quiet.');
+  }
+  if (action === 'resume') {
+    if (!initiativeTrial.resume()) return response('Check-ins are already following your normal settings.');
+    autonomy.touch(); settingsRoom?.update();
+    return response('Check-ins are following your normal settings again.');
+  }
+  const rating = /^rate\s+#?(\d+)\s+(welcome|bad-timing|repetitive)$/.exec(action);
+  if (rating) return response(initiativeTrial.rate(Number(rating[1]), rating[2])
+    ? 'Feedback saved.' : 'I couldn’t find a rateable check-in with that number.');
+  const page = /^report(?:\s+before\s+#?(\d+))?$/.exec(action);
+  if (!page) return response('Use /companion trial report, start, end, resume, or rate <number> <welcome|bad-timing|repetitive>.');
+  const { startedAt, phase, endsAt } = initiativeTrial.status();
+  if (startedAt === null) return response('No quiet trial yet. Use /companion trial start.');
+  const summary = initiativeTrial.summary();
+  const rows = initiativeTrial.decisions(page[1] ? Number(page[1]) : undefined);
+  const counts = summary.map(row => `${row.count} ${row.outcome}`).join(', ');
+  const calls = summary.reduce((total, row) => total + row.calls, 0);
+  const latency = calls ? Math.round(summary.reduce((total, row) => total + (row.average_latency || 0) * row.calls, 0) / calls) : 0;
+  const status = phase === 'running' ? `Collecting until ${new Date(endsAt).toLocaleString()}.`
+    : phase === 'review' ? 'Ready for review. Check-ins are quiet.' : 'Check-ins have resumed.';
+  return response([
+    status, counts ? `${counts}. ${calls} model calls${calls ? `, about ${(latency / 1000).toFixed(1)} seconds per evaluated opportunity` : ''}.`
+      : 'No check-in opportunities recorded yet.',
+    ...rows.map(row => `#${row.id} · ${new Date(row.at).toLocaleString()} · ${row.outcome}${row.feedback ? ` · ${row.feedback}` : ''}\n${row.message ? `“${row.message}”\n` : ''}${row.reason}`),
+    ...(rows.length ? ['Rate an entry with /companion trial rate <number> welcome, bad-timing, or repetitive.'] : []),
+    ...(rows.length === 8 ? [`Older entries: /companion trial report before ${rows.at(-1).id}`] : []),
+  ].join('\n\n'));
+}
+
 async function projectCommand(text) {
   if (projectRouting || brain.busy || actions.busy || chats.size)
     return { handled: true, text: 'Finish or stop the current request before changing project context.' };
@@ -585,7 +825,8 @@ async function projectCommand(text) {
     const result = await goals().projects.route(text);
     groundedCuriosity.sync();
     if (goals().projects.scope() !== previousScope) actions.context?.clear();
-    brain.reset(); settingsRoom?.update();
+    brain.reset({ keepRecent: goals().projects.scope() === previousScope && !/^\/project\s+(?:forget-note|delete)\b/i.test(text) });
+    settingsRoom?.update();
     return result;
   } finally { projectRouting = false; }
 }
@@ -598,19 +839,39 @@ async function settingsAction(name, value) {
     case 'voice-preview': {
       if (!config.load().ttsEnabled || config.load().muted) return 'Enable spoken replies and unmute Capri to preview her voice.';
       if (!overlay || overlay.isDestroyed() || !overlay.isVisible()) return 'Bring Capri back to preview her voice.';
-      overlay.webContents.send('tts:state', { type: 'preview', text: "There you are, sweetheart. We can take this one step at a time. And yes, I noticed that little smile." });
+      overlay.webContents.send('tts:state', { type: 'preview', mood: deliveryStyle(value),
+        text: "There you are, sweetheart. Come here for a second. I have something to show you." });
       return 'Preparing her voice. The first preview needs a little time to warm up.';
     }
     case 'sounds-folder': fs.mkdirSync(userSoundsDir(), { recursive: true }); {
       const error = await shell.openPath(userSoundsDir()); if (error) throw Error(error); break;
     }
     case 'memory-export': return (await personal.route('/memory export')).text;
-    case 'memory-delete': { autonomy.touch(); const result = await personal.route('/memory delete-all'); brain.reset(); return result.text; }
+    case 'memory-delete': {
+      autonomy.touch(); const result = await personal.route('/memory delete-all');
+      brain.reset({ keepRecent: result.text !== 'All personal memories deleted.' }); return result.text;
+    }
+    case 'remember-chat': {
+      if (config.load().rememberRecentChat === value) break;
+      brain.cancel(); brain.reset({ keepRecent: true });
+      recentConversation()?.clear();
+      updateConfig({ rememberRecentChat: value });
+      break;
+    }
+    case 'clear-recent-chat': {
+      if (!await confirmMemory('Clear recent conversations?', 'This removes the recent chat text Capri can use to continue voice and text conversations.')) return 'Clear cancelled.';
+      brain.cancel(); brain.reset({ keepRecent: true });
+      recentConversation()?.clear();
+      return 'Recent conversations cleared.';
+    }
     case 'memory-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing memory.'); sendCommand('memory'); break;
     case 'interests-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing interests.'); sendCommand('interests'); break;
     case 'reviews-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing your day.'); sendCommand('reviews'); break;
     case 'curiosity-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing questions.'); sendCommand('curiosity'); break;
     case 'routines-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing routines.'); sendCommand('routines'); break;
+    case 'initiative-start': return startInitiativeTrial();
+    case 'initiative-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing check-ins.'); sendCommand('initiative'); break;
+    case 'initiative-resume': return initiativeCommand('/companion trial resume').text;
     case 'project-choose': return (await foreground.run(() => projectCommand('/project choose'))).text;
     case 'project-off': return (await foreground.run(() => projectCommand('/project off'))).text;
     case 'refresh': return runtime().currentSource ? 'Current local source is loaded.' : 'Local changes found. Restart Capri to load them.';
@@ -628,7 +889,7 @@ function loginItemOptions() {
 function createTray() {
   const icon = nativeImage.createFromPath(path.join(ROOT, 'assets', 'icons', 'tray.png'));
   tray = new Tray(icon);
-  tray.setToolTip('CapriGPT — local only');
+  tray.setToolTip('Capri — local only');
   tray.on('click', openSettings);
   tray.on('right-click', openSettings);
   rebuildTray();
@@ -650,8 +911,17 @@ function registerIpc() {
   ipcMain.on('tts:cancel', event => { if (speechCaller(event)) tts.cancel(false); });
   ipcMain.handle('speech:start', (event, request) => {
     if (!speechCaller(event)) return { ok: false, error: 'speech-unavailable' };
-    autonomy.touch(); tts.cancel();
-    return speech.start(request);
+    if (request?.checkIn === true) {
+      const cfg = config.load();
+      if (request.mode !== 'conversation' || !sessionAvailable || fullscreenState.active || cfg.gamingMode ||
+          !cfg.checkInReplies || !cfg.proactiveVoice || !cfg.proactiveEnabled || !cfg.ttsEnabled || cfg.muted || cfg.volume === 0 ||
+          Date.now() >= checkInDeadline) return { ok: false, error: 'speech-paused' };
+    }
+    if (request?.checkIn !== true) autonomy.touch();
+    tts.cancel();
+    const result = speech.start(request);
+    if (result.ok && request?.checkIn === true) checkInDeadline = 0;
+    return result;
   });
   ipcMain.handle('wake:enabled', (event, enabled) => {
     if (!speechCaller(event) || typeof enabled !== 'boolean') throw Error('Invalid wake-word preference.');
@@ -664,7 +934,10 @@ function registerIpc() {
   });
   ipcMain.on('speech:audio', (event, request) => { if(speechCaller(event))speech.audio(request); });
   ipcMain.handle('speech:conversation', (event, request) => speechCaller(event) ? speech.conversation(request?.id) : {ok:false,error:'speech-unavailable'});
-  ipcMain.on('speech:reset', (event, request) => { if(speechCaller(event))speech.resetUtterance(request?.id); });
+  ipcMain.on('speech:reset', (event, request) => {
+    if (speechCaller(event)) speech.resetUtterance(request?.id, request?.listening !== false,
+      Number.isSafeInteger(request?.preRollMs) ? request.preRollMs : undefined);
+  });
   ipcMain.on('speech:cancel', (event, request) => {
     if (speechCaller(event) && request?.id === speech.current?.id) speech.cancel();
   });
@@ -680,19 +953,31 @@ function registerIpc() {
     overlay.webContents.setBackgroundThrottling(!config.load().wakeWordEnabled && !voiceSession);
   });
   ipcMain.handle('runtime:info', () => runtime());
-  ipcMain.handle('personal:route', async (event, text, id, conversation, commandsOnly = false) => foreground.run(async () => {
+  ipcMain.handle('personal:route', async (event, text, id, conversation, commandsOnly = false, replyTo, conversationId) => foreground.run(async () => {
     try {
       if (event.sender !== overlay?.webContents) throw Error('Overlay required.');
       if (typeof text !== 'string' || text.length > 12000) throw Error('Invalid message.');
-      const inquiryAnchor = autonomy.state.lastInquiry;
-      const interestReply = autonomy.respond(text);
-      autonomy.touch();
       if (projectRouting) return { handled: true, text: 'Finish choosing your project before sending a request.' };
+      const trialReply = initiativeCommand(text);
+      if (trialReply) return trialReply;
+      const explanation = autonomy.explain(text, replyTo);
+      if (explanation) return explanation;
+      const inquiryAnchor = autonomy.state.lastInquiry;
+      const interestReply = autonomy.respond(text, commandsOnly ? undefined : replyTo);
+      autonomy.touch();
+      if (interestReply?.pursuitFeedback) { brain.reset({ keepRecent: true }); return interestReply; }
+      const topicPreference = await routeTopicPreference(text);
+      if (topicPreference) return topicPreference;
+      const collaboration = await interestCollaboration.route(text, { conversation: conversationId, turn: id,
+        interestId: interestReply?.buildInterestId, commandsOnly, onStart: () => speech.promoteCheckIn(conversationId),
+        onBusy: () => autonomy.defer(BUSY_PAUSE),
+        projectSelected: () => permissions(config.load().privacy).memoryEnabled && Boolean(goals().projects.selected()) });
+      if (collaboration) return collaboration;
       const routineCommand = await goals().routines.route(text, updateConfig);
       if (routineCommand) { brain.reset(); return routineCommand; }
       if (goals().routines.invocation(text)) return { handled: false };
       const feedbackCommand = groundedCuriosity.route(text);
-      if (feedbackCommand) { if (groundedCuriosity.quietFeedback()) autonomy.defer(60); brain.reset(); return feedbackCommand; }
+      if (feedbackCommand) { if (groundedCuriosity.quietFeedback()) autonomy.defer(60); brain.reset({ keepRecent: true }); return feedbackCommand; }
       const anchored = Boolean(projectFeedbackAnchor && projectFeedbackAnchor.scope === goals().projects.scope()
         && Date.now() - projectFeedbackAnchor.at >= 0 && Date.now() - projectFeedbackAnchor.at < 10 * 60000)
         || Boolean(inquiryAnchor && Date.now() - inquiryAnchor.at >= 0 && Date.now() - inquiryAnchor.at < 10 * 60000
@@ -700,9 +985,9 @@ function registerIpc() {
             && row.evidence_revision === inquiryAnchor.revision && row.scope_id === goals().projects.scope()));
       const feedback = groundedCuriosity.recordFeedback(text, { anchored });
       if (['unhelpful', 'repetitive'].includes(feedback)) autonomy.defer(60);
-      if (interestReply) { brain.reset(); return interestReply; }
+      if (interestReply) { brain.reset({ keepRecent: true }); return interestReply; }
       const interestCommand = interests.route(text, updateConfig);
-      if (interestCommand) { brain.reset(); return interestCommand; }
+      if (interestCommand) { brain.reset({ keepRecent: !/^\/interests\s+clear$/i.test(text.trim()) }); return interestCommand; }
       if (/^\/project(?:\s|$)/i.test(text.trim())) {
         return await projectCommand(text);
       }
@@ -742,10 +1027,14 @@ function registerIpc() {
         || (/^(?:remember(?: that)?|recuerda(?: que)?)\s+/i.test(text.trim())
           && !/\b(?:forget|remove|delete|edit|change|instead|olvida|borra|cambia)\b|[?]/i.test(text));
       if (/^\/(?:memory|privacy|context)(?:\s|$)/i.test(text.trim())
-          || (simpleMemory && commandsOnly === true)) {
+          || (simpleMemory && (commandsOnly === true || /^(?:forget\s+#?\d+\s*[.!]?$|edit memory\s+#?\d+\s*:|recall\s+)/i.test(text.trim())))) {
         const local = await personal.route(text);
-        if (local.handled) brain.reset();
+        if (local.handled) brain.reset({ keepRecent: !/^(?:All personal memories deleted\.|Forgot memory #|Updated memory #)/.test(local.text) });
         return local;
+      }
+      if (!commandsOnly) {
+        const direct = actions.routeDirect(text, id);
+        if (direct) return await direct;
       }
       return { handled: false };
     }
@@ -788,6 +1077,7 @@ function registerIpc() {
     if (!Number.isSafeInteger(id) || current?.role !== 'user' || typeof current.content !== 'string') return { ok: false, error: 'Invalid chat request.' };
     if (projectRouting) return { ok: false, error: 'Finish choosing your project before sending a request.' };
     if (chats.size || brain.busy || actions.busy) return { ok: false, error: 'One Capri request at a time.' };
+    if (config.load().speakTypedReplies && tts.allowed()) tts.warm();
     const abort = new AbortController();
     let finish;
     const done = new Promise(resolve => { finish = resolve; });
@@ -796,16 +1086,30 @@ function registerIpc() {
     chats.set(id, { abort, done });
     const feedbackAnchorAtStart = projectFeedbackAnchor;
     try {
+      const cfg = agentConfig();
+      const privacy = permissions(cfg.privacy);
+      const voice = request.mode === 'voice' && voiceSession;
+      let delivery;
+      const onDelivery = cfg.ttsEnabled && (voice || cfg.speakTypedReplies) ? style => {
+        delivery = style;
+        overlay?.webContents.send('chat:delta', { id, text: '', delivery });
+      } : undefined;
+      let statedMemory;
+      if (!cfg.gamingMode && privacy.memoryEnabled && privacy.memoryLearn) {
+        try { statedMemory = memory().learn(current.content).facts; }
+        catch { console.error('[capri] Could not save stated personal details.'); }
+      }
       const text = await brain.chat(current.content,
         text => overlay?.webContents.send('chat:delta', { id, text }),
-        text => overlay?.webContents.send('task:progress', { id, text }), { voice: request.mode === 'voice' && voiceSession });
+        text => overlay?.webContents.send('task:progress', { id, text }), { voice, statedMemory, onDelivery });
       if (projectFeedbackAnchor === feedbackAnchorAtStart) projectFeedbackAnchor = null;
-      return { ok: true, text };
+      return { ok: true, text, closeViaTools: true, delivery };
     } catch (error) { projectFeedbackAnchor = null; return { ok: false, error: abort.signal.aborted ? 'stopped' : error.message }; }
     finally { abort.signal.removeEventListener('abort', stop); chats.delete(id); finish(); }
   }));
   ipcMain.on('chat:stop', (event, id) => {
     if (event.sender !== overlay?.webContents) return;
+    interestCollaboration.cancel(id);
     chats.get(id)?.abort.abort(); brain.cancel(); decisionBrain.cancel();
     settingsRequests.cancel(); agent.cancel(); requests.cancel(); memoryRequests.cancel();
   });
@@ -952,6 +1256,11 @@ function main() {
     if (fs.existsSync(path.join(app.getPath('userData'), 'personal-memory.sqlite'))) {
       try { memory(); } catch { console.error('[capri] Personal memory unavailable; other features remain available.'); }
     }
+    try {
+      const history = recentConversation();
+      if (config.load().rememberRecentChat === true) history?.prune();
+      else history?.clear();
+    } catch { console.error('[capri] Recent conversation storage unavailable.'); }
     if (fs.existsSync(path.join(app.getPath('userData'), 'companion-goals.sqlite'))) {
       try { goals(); } catch { console.error('[capri] Saved goals unavailable.'); }
     }
@@ -1004,13 +1313,23 @@ function main() {
     }, 60000);
     reflectionTimer.unref(); app.once('before-quit', () => clearInterval(reflectionTimer));
     for (const event of ['suspend', 'resume', 'lock-screen', 'unlock-screen']) powerMonitor.on(event, () => {
-      sessionAvailable = event === 'resume' || event === 'unlock-screen'; autonomy.touch(); reflection.cancel();
+      sessionAvailable = event === 'resume' || event === 'unlock-screen';
+      autonomy.observeIdle(null); autonomy.touch(); reflection.cancel();
+      if (!sessionAvailable) {
+        brain.dropWarmClient();
+        checkInDeadline = 0; tts.cancel();
+        interestCollaboration.cancel();
+        if (speech.current?.checkIn) { speech.cancel(); endVoiceSession(); }
+      }
     });
     const presenceTimer = setInterval(() => {
+      const cfg = config.load();
+      autonomy.observeIdle(sessionAvailable && cfg.proactiveVoice && permissions(cfg.privacy).contextEvents
+        ? powerMonitor.getSystemIdleTime() : null);
       try {
         groundedCuriosity.sync();
         const offered = goals().reviews.tick({
-          available: autonomy.enabled() && !autonomy.busy && autonomy.canRun(),
+          available: initiativeTrial.status().phase === 'live' && autonomy.enabled() && !autonomy.busy && autonomy.canRun(),
           notify: text => {
             if (!sessionAvailable || !overlay || overlay.isDestroyed() || !autonomy.canRun()) return false;
             brain.history = [...brain.history, { role: 'assistant', content: text }].slice(-24);
@@ -1035,7 +1354,7 @@ function main() {
     windowWatch?.stop();
     fullscreenWatch?.stop();
     clearTimeout(fullscreenHideTimer);
-    memoryStore?.close(); goalStore?.close(); curiosity?.close();
+    memoryStore?.close(); recentChatStore?.close(); goalStore?.close(); curiosity?.close();
   });
   app.on('window-all-closed', (e) => e.preventDefault());
 }

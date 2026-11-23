@@ -3,7 +3,7 @@
 const os = require('node:os');
 
 const DEFAULT_PRIVACY = Object.freeze({
-  memoryEnabled: false, memoryCandidates: false, memoryRecall: true, memoryConfirmChanges: false, retentionDays: 90,
+  memoryEnabled: false, memoryCandidates: false, memoryLearn: false, memoryRecall: true, memoryConfirmChanges: false, retentionDays: 90,
   contextTime: true, contextPower: true, contextForeground: true, contextTitles: true,
   contextProcesses: true, contextPerformance: true, contextEvents: true, allApps: true,
   processAllowlist: ['code', 'chrome', 'firefox', 'spotify', 'discord'],

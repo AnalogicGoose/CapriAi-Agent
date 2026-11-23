@@ -4,8 +4,8 @@ const { StringDecoder } = require('node:string_decoder');
 
 // One owned stdio process; no connection to the desktop app's private daemon.
 class CodexClient {
-  constructor({ executable, cwd, nativeTools = false, spawnProcess = spawn, timeout = 15000 }) {
-    Object.assign(this, { executable, cwd, nativeTools, spawnProcess, timeout });
+  constructor({ executable, cwd, nativeTools = false, warmThreads = false, spawnProcess = spawn, timeout = 15000 }) {
+    Object.assign(this, { executable, cwd, nativeTools, warmThreads, spawnProcess, timeout });
     this.pending = new Map(); this.nextId = 0; this.closed = false;
     this.onNotification = () => {}; this.onRequest = () => {};
     this.onFailure = () => {};
@@ -13,12 +13,14 @@ class CodexClient {
   async start() {
     if (!this.executable) throw Error('Codex CLI was not found. Choose codex.exe in Connections.');
     const args = ['app-server', '--listen', 'stdio://'];
+    // The app server needs its local code-mode host to dispatch Capri's dynamic tools.
     const disabled = this.nativeTools ? ['hooks', 'memories', 'multi_agent']
-      : ['shell_tool', 'unified_exec', 'apps', 'hooks', 'memories', 'multi_agent', 'view_image', 'remote_plugin', 'skill_search', 'workspace_dependencies', 'code_mode_host'];
+      : ['shell_tool', 'unified_exec', 'apps', 'hooks', 'memories', 'multi_agent', 'view_image', 'remote_plugin', 'skill_search', 'workspace_dependencies'];
     for (const flag of disabled) {
       args.push('-c', `features.${flag}=false`);
     }
     args.push('-c', 'model_provider="openai"');
+    if (this.warmThreads) args.push('-c', 'thread_unload_delay_secs=5');
     if (this.nativeTools) args.push('-c', 'features.shell_tool=true', '-c', 'features.unified_exec=true', '-c', 'features.view_image=true', '-c', 'web_search="live"');
     else args.push('-c', 'features.code_mode.enabled=false', '-c', 'web_search="disabled"', '-c', 'sandbox_mode="read-only"');
     this.proc = this.spawnProcess(this.executable, args, { cwd: this.cwd, windowsHide: true,
@@ -47,7 +49,7 @@ class CodexClient {
       }
     });
     try {
-      await this.request('initialize', { clientInfo: { name: 'caprigpt', title: 'CapriGPT', version: '0.4.0' },
+      await this.request('initialize', { clientInfo: { name: 'caprigpt', title: 'Capri', version: '0.4.0' },
         capabilities: { experimentalApi: true } });
       this.send({ method: 'initialized', params: {} });
       return this;
@@ -75,11 +77,11 @@ class CodexClient {
   respond(id, result, error) {
     if (!this.closed) this.send(error ? { id, error } : { id, result });
   }
-  request(method, params) {
+  request(method, params, timeout = this.timeout) {
     return new Promise((resolve, reject) => {
       if (this.closed) return reject(Error('Codex connection is closed.'));
       const id = ++this.nextId;
-      const timer = setTimeout(() => { this.pending.delete(id); reject(Error(`Codex ${method} timed out.`)); }, this.timeout);
+      const timer = setTimeout(() => { this.pending.delete(id); reject(Error(`Codex ${method} timed out.`)); }, timeout);
       this.pending.set(id, { resolve, reject, timer });
       try { this.send({ id, method, params }); }
       catch (error) { clearTimeout(timer); this.pending.delete(id); reject(error); }

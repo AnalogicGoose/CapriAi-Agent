@@ -15,7 +15,7 @@ function namedAppQuestion(text, followUp) {
   return Object.entries(NAMES).find(([name, label]) => simple(name) === key || simple(label) === key)?.[0] || match[1];
 }
 
-const HELP = 'Local commands: remember <fact>; forget <ID>; edit memory <ID>: <fact>; recall <words>; /memory list; /memory export; /memory delete-all; /context; /context event; /privacy status. Right-click Capri for Memory and PC awareness settings. Requested memory changes follow your review preference; suggested memories and deleting all memories still ask first.';
+const HELP = 'Local commands: remember <fact>; forget <ID>; edit memory <ID>: <fact>; recall <words>; /memory list; /memory topics; /memory export; /memory delete-all; /context; /context event; /privacy status. Say “talk less about <topic>” or “bring up <topic> again” to change a topic preference. Right-click Capri for Memory and PC awareness settings.';
 const format = rows => rows.length ? rows.map(r => `#${r.id}: ${r.text} [${r.source}; updated ${r.updated_at}]`).join('\n') : 'No matching memories.';
 
 class PersonalAssistant {

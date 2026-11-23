@@ -3,6 +3,8 @@
 const { DatabaseSync } = require('node:sqlite');
 const fs = require('node:fs');
 const path = require('node:path');
+const { statements, contextualFacts, topicKey, mentionsTopic, memorySubject, memoryCorrection } = require('./personal-context');
+const { TopicRecaps } = require('./topic-recaps');
 
 function fact(text) {
   if (typeof text !== 'string' || !text.trim() || text.length > 1000) throw Error('Use 1–1000 characters per memory.');
@@ -28,16 +30,20 @@ class MemoryStore {
       CREATE TABLE IF NOT EXISTS agent_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,
         status TEXT NOT NULL, created_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS quiet_topics (
+        key TEXT PRIMARY KEY, topic TEXT NOT NULL, updated_at TEXT NOT NULL);
       `);
     // Profile facts share normal edit/delete/retention controls, but can be
     // recalled without a keyword match. Existing memories stay ordinary.
     if (!this.db.prepare('PRAGMA table_info(memories)').all().some(column => column.name === 'profile')) {
       this.db.exec('ALTER TABLE memories ADD COLUMN profile INTEGER NOT NULL DEFAULT 0 CHECK(profile IN (0,1));');
     }
-    this.db.exec('PRAGMA user_version=3;');
+    this.recaps = new TopicRecaps(this.db, this.now, this.retentionDays);
+    this.db.exec('PRAGMA user_version=5;');
     this.prune();
   }
   prune() {
+    this.recaps.prune();
     // Operational journal contains codes only, never goals, titles or model output.
     this.db.prepare('DELETE FROM agent_events WHERE created_at < ?').run(new Date(this.now().getTime() - 7 * 86400000).toISOString());
     const days = this.retentionDays();
@@ -54,7 +60,7 @@ class MemoryStore {
   }
   remember(text, source = 'explicit', { profile = false } = {}) {
     text = fact(text);
-    if (!['explicit', 'conversation-confirmed', 'user-edit'].includes(source)) throw Error('Invalid memory source.');
+    if (!['explicit', 'conversation-confirmed', 'conversation-stated', 'user-edit'].includes(source)) throw Error('Invalid memory source.');
     this.prune();
     const existing = this.db.prepare('SELECT * FROM memories WHERE text = ?').get(text);
     if (existing) {
@@ -93,7 +99,94 @@ class MemoryStore {
       this.db.exec('COMMIT');
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
-  clear() { this.db.exec('DELETE FROM memories; VACUUM;'); }
+  clear() {
+    this.recaps.clear();
+    this.db.exec('DELETE FROM memories; DELETE FROM quiet_topics; VACUUM;');
+  }
+  quietTopics() {
+    return this.db.prepare('SELECT key, topic FROM quiet_topics ORDER BY updated_at DESC, key').all();
+  }
+  setQuiet(topic, quiet) {
+    if (!quiet) return Boolean(this.db.prepare('DELETE FROM quiet_topics WHERE key=?').run(topicKey(topic)).changes);
+    return Boolean(this.db.prepare(`INSERT INTO quiet_topics(key, topic, updated_at) VALUES(?,?,?)
+      ON CONFLICT(key) DO UPDATE SET topic=excluded.topic, updated_at=excluded.updated_at`)
+      .run(topicKey(topic), topic, this.now().toISOString()).changes);
+  }
+  learn(text) {
+    const correction = memoryCorrection(text);
+    if (correction) return this.applyCorrection(correction, statements(text));
+    return this.learnFacts(statements(text));
+  }
+  applyCorrection({ before, after, replacement }, otherFacts) {
+    this.prune();
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const candidates = this.db.prepare('SELECT id, text, profile FROM memories ORDER BY profile DESC, id').all()
+        .map(row => ({ ...row, subject: memorySubject(row.text) }))
+        .filter(row => row.subject?.kind === before.kind);
+      const old = candidates.filter(row => row.subject.key === before.key);
+      const current = candidates.find(row => row.subject.key === after.key);
+      const target = current || old[0];
+      const saved = target ? this.edit(target.id, replacement) : this.remember(replacement, 'conversation-stated');
+      if (old.some(row => row.profile) && !saved.profile) {
+        this.db.prepare('UPDATE memories SET profile=1 WHERE id=?').run(saved.id);
+      }
+      for (const row of old) {
+        if (row.id !== saved.id) this.forget(row.id);
+      }
+      const learned = this.learnFacts(otherFacts.filter(text => {
+        const subject = memorySubject(text);
+        return subject?.kind !== after.kind || (subject.key !== after.key && subject.key !== before.key);
+      }));
+      this.db.exec('COMMIT');
+      return { added: Number(!target) + learned.added, facts: [saved.text, ...learned.facts] };
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  learnInContext(text, details) {
+    const stated = statements(text);
+    const fromContext = contextualFacts(text, details);
+    return this.learnFacts(fromContext.filter(row =>
+      !stated.some(clause => mentionsTopic(clause, topicKey(row.detail)))).map(row => row.text));
+  }
+  learnFacts(clauses) {
+    if (!clauses.length) return { added: 0, facts: [] };
+    this.prune();
+    const existing = this.db.prepare('SELECT id, text FROM memories WHERE lower(text)=lower(?) LIMIT 1');
+    const refresh = this.db.prepare("UPDATE memories SET updated_at=? WHERE id=? AND source='conversation-stated'");
+    let added = 0;
+    const facts = new Set();
+    for (const clause of new Set(clauses)) {
+      const row = existing.get(clause);
+      if (row) {
+        refresh.run(this.now().toISOString(), row.id);
+        facts.add(row.text);
+      } else {
+        facts.add(this.remember(clause, 'conversation-stated').text);
+        added++;
+      }
+    }
+    return { added, facts: [...facts] };
+  }
+  personalContext(query) {
+    const quietTopics = this.quietTopics();
+    const visible = row => !quietTopics.some(({ key }) => mentionsTopic(row.text, key) && !mentionsTopic(query, key));
+    const rows = [...this.search(query, 12).filter(visible).slice(0, 5),
+      ...this.profile(6).filter(visible).slice(0, 3), ...this.list(32).filter(visible).slice(0, 6)];
+    const facts = [];
+    for (const row of rows) {
+      if (facts.some(fact => fact.id === row.id)) continue;
+      const entry = { id: row.id, text: row.text, updatedAt: row.updated_at };
+      if (Buffer.byteLength(JSON.stringify([...facts, entry])) <= 2400) facts.push(entry);
+    }
+    return { facts, quietTopics: quietTopics.slice(0, 12).map(row => row.topic) };
+  }
+  matchingTopic(key) {
+    this.prune();
+    return this.db.prepare('SELECT * FROM memories').all().filter(row => mentionsTopic(row.text, key));
+  }
   list(limit = 100) {
     this.prune();
     return this.db.prepare('SELECT * FROM memories ORDER BY updated_at DESC,id DESC LIMIT ?').all(Math.min(1000, Math.max(1, limit)));
@@ -116,7 +209,8 @@ class MemoryStore {
   export() {
     this.prune();
     return JSON.stringify({ version: 1, exported_at: this.now().toISOString(), memories:
-      this.db.prepare('SELECT * FROM memories ORDER BY id').all() }, null, 2);
+      this.db.prepare('SELECT * FROM memories ORDER BY id').all(), quiet_topics: this.quietTopics().map(row => row.topic),
+      topic_recaps: this.recaps.list() }, null, 2);
   }
   close() { this.db.close(); }
 }

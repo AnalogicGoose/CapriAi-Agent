@@ -151,6 +151,8 @@ async function boot() {
     hoverChip();
   });
   window.addEventListener('contextmenu', (e) => {
+    // Let Chromium reach the main-process spelling/edit menu for the composer.
+    if (e.target.closest?.('.panel__input')) return;
     e.preventDefault();
     if (chip.visible && chip.contains(e.clientX, e.clientY, 0)) host.openMenu();
   });
@@ -199,7 +201,8 @@ async function boot() {
     talkMenu?.show();
   };
   panel.onChar = (kind) => {
-    if (panel.current?.chat?.mode === 'text' || !voice.spoken?.config?.ttsEnabled) voice.play('blip', { mood: kind });
+    const spoken = voice.spoken?.enabled && (chat.speaksReplies || panel.current?.voiceUntil > Date.now());
+    if (!spoken) voice.play('blip', { mood: kind });
   };
   panel.onTalk = (talking) => talking && capri.mode !== 'sleep'
     && !capri.act?.player.name.startsWith('idle') && capri.perform('talk');
@@ -219,14 +222,18 @@ async function boot() {
     },
   });
   voice.spoken.configure(config);
-  host.onFullscreenState(state => { if (state.active && !wakeListener?.session) voice.spoken.stop(); });
+  host.onFullscreenState(state => {
+    if (!state.active) return;
+    if (voiceCall?.checkIn) voiceCall.end();
+    if (!wakeListener?.session) voice.spoken.stop();
+  });
   const chat = new Chat({ capri, panel, voice, host, brain });
   capri.onIdleWave = () => {}; // A wave is an animation; speech comes from Codex.
   const publishCompanionState = () => {
     if (voiceCall?.active) capri.nextMove = capri.nextGaze = performance.now() + 60000;
     return host.companionState?.({ mood: capri.companion.mood,
     routine: capri.companion.options.dailyRoutine ? (new Date().getHours() < 6 ? 'night' : new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening') : '',
-    chatOpen: chat.open || Boolean(voiceCall?.active), voiceActive: Boolean(voiceCall?.active), canSpeak: !wakeListener?.session && !talkMenu?.visible && !capri.busy && capri.mode !== 'alert' && !['alert', 'error', 'report'].includes(panel.current?.kind) });
+    chatOpen: chat.open || Boolean(voiceCall?.active && !voiceCall.checkIn), voiceActive: Boolean(voiceCall?.active), canSpeak: !voiceCall?.active && !wakeListener?.session && !talkMenu?.visible && !capri.busy && capri.mode !== 'alert' && !['alert', 'error', 'report'].includes(panel.current?.kind) });
   };
   setInterval(publishCompanionState, 15000);
   host.onBodyAction?.(async ({ id, action }) => {
@@ -241,13 +248,23 @@ async function boot() {
   let restoreStowed = false;
   voiceCall = new VoiceCall({ host, speaker: voice.spoken, history: chat,
     indicator: document.getElementById('voice-indicator'),
-    onStart: async () => {
+    onThinking: on => capri.setChatThinking(on),
+    onStart: async checkIn => {
       if (!voice.spoken.enabled) throw Error('Enable spoken replies in Sound settings first.');
+      if (checkIn) {
+        wakeListener.pause();
+        voiceCall.place(capri.head(), capri.view); publishCompanionState(); refreshHit(true);
+        return;
+      }
       dictation.cancel(); chat.close(); panel.hide(); panel.setTicker(null); talkMenu?.hide();
       wakeListener.session = true; document.body.classList.add('voice-session');
       restoreStowed = capri.stowed; if (capri.stowed) await capri.unstow();
       capri.wake(); capri.nextMove = capri.nextGaze = performance.now() + 60000;
       voiceCall.place(capri.head(), capri.view); publishCompanionState(); refreshHit(true);
+    },
+    onPromote: () => {
+      wakeListener.session = true; document.body.classList.add('voice-session');
+      panel.hide(); publishCompanionState(); refreshHit(true);
     },
     onEnd: () => {
       wakeListener.session = false; document.body.classList.remove('voice-session');
@@ -272,7 +289,7 @@ async function boot() {
   chat.onClose = () => { if (!voiceCall.active && !panel.leaving && !wakeListener.transferring) wakeListener.endSession(); };
   panel.onHidden = () => { if (!voiceCall.active && !chat.open && !wakeListener.transferring) wakeListener.endSession(); };
   wakeListener.configure(config);
-  if (config.wakeWordEnabled) voiceCall.prepare().catch(() => {});
+  if (config.wakeWordEnabled || (config.proactiveVoice && config.checkInReplies)) voiceCall.prepare().catch(() => {});
   // The demo's second half, after its fake Claude session: everything she does on her own, one
   // after the other, a line before each.
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -354,19 +371,38 @@ async function boot() {
     else if (panel.visible && ['alert', 'error', 'report'].includes(panel.current?.kind)) return;
     else panel.say({ kind: 'info', face: 'look', line: text, hold: 10000 });
   });
-  host.onConversation?.(text => {
-    if (wakeListener.session || chat.open || panel.visible || talkMenu.visible || capri.gaming || capri.fullscreen ||
+  host.onConversation?.(message => {
+    const { text, voiceUntil, mood, replyTo, canBuild } = typeof message === 'string' ? { text: message } : (message || {});
+    const available = () => !document.hidden && !wakeListener.session && !chat.open &&
+      !talkMenu.visible && !capri.gaming && !capri.fullscreen;
+    if (!available() || voiceCall.active || panel.visible ||
         typeof text !== 'string' || text.length > 320) return;
     const es = brain.lang === 'es';
-    panel.say({ kind: 'info', face: 'look', line: text, hold: 20000,
+    const face = mood === 'curious' ? 'grin' : mood === 'pleased' ? 'calm' : 'look';
+    let replyWindow;
+    panel.say({ kind: 'info', face, line: text, voiceUntil, hold: voiceUntil ? 35_000 : 20_000,
+      onLeave: () => {
+        if (replyWindow && voiceCall.checkIn?.options === replyWindow) voiceCall.end();
+        voice.spoken.stopProactive();
+      },
       actions: [{ id: 'reply', label: es ? 'Responder' : 'Reply', primary: true },
+        ...(canBuild ? [{ id: 'build', label: es ? 'Crear juntos' : 'Build together' }] : []),
         { id: 'quiet', label: es ? 'Silenciar charlas' : 'Pause check-ins' }],
       onAction: async id => {
         voice.spoken?.stop(); panel.hide();
-        if (id === 'reply') await chat.start(false, text);
+        if (id === 'reply' || id === 'build') await chat.start(false, text, { replyTo });
+        if (id === 'build' && chat.open) await chat.send(es ? 'Hagámoslo juntos.' : 'Let’s build that together.');
         if (id === 'quiet') await host.personalRoute('/companion off');
       },
     });
+    const checkIn = panel.current;
+    if (voiceUntil && checkIn?.line === text) {
+      const canPlay = () => available() && panel.visible && panel.current === checkIn;
+      if (voice.spoken.enabled && voice.volume > 0 && voice.spoken.config?.checkInReplies) {
+        replyWindow = { text, deadline: voiceUntil, available: canPlay, mood, replyTo };
+        void voiceCall.startCheckIn(replyWindow);
+      } else voice.spoken.speakProactive(text, voiceUntil, canPlay, mood);
+    }
   });
   new FullscreenPresence({ capri, host, onChange: () => {
     ++pointerRevision;
@@ -396,7 +432,9 @@ async function boot() {
   });
 
   host.onConfig((cfg) => {
-    if ((!cfg.wakeWordEnabled && voiceCall.fromWake) || !cfg.ttsEnabled || cfg.muted) voiceCall.end();
+    if ((!cfg.wakeWordEnabled && voiceCall.fromWake) || !cfg.ttsEnabled || cfg.muted ||
+        (voiceCall.checkIn && (!cfg.checkInReplies || !cfg.proactiveVoice || !cfg.proactiveEnabled || cfg.volume === 0 ||
+          cfg.gamingMode || cfg.visible === false))) voiceCall.end();
     capri.companion.configure(cfg);
     wakeListener.configure(cfg);
     voice.configure(cfg);
@@ -454,6 +492,11 @@ async function boot() {
         talkMenu.hide({ keepFocus: true });
         await chat.start(true);
         await chat.send('/review today');
+        break;
+      case 'initiative':
+        talkMenu.hide({ keepFocus: true });
+        await chat.start(true);
+        await chat.send('/companion trial report');
         break;
       case 'curiosity':
         talkMenu.hide({ keepFocus: true });
