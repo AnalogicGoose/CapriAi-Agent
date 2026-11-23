@@ -86,6 +86,11 @@ class WindowsAccessibility {
         width: bounds.width * frame.scaleX, height: bounds.height * frame.scaleY } }));
   }
 
+  controlBounds(id) {
+    const control = this.observation?.controls.get(id);
+    return control ? { bounds: control.bounds, window: this.observation.window } : null;
+  }
+
   async use(operation, id, value, { signal, check, text }) {
     check();
     const observed = this.observation;
