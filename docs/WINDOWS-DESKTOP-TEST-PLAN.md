@@ -28,3 +28,12 @@ Status legend: **U** = automated unit test (mocked), **W** = real Windows run (h
 
 ## Running the real-OCR test
 `$env:CAPRI_REAL_OCR='1'; npm test` (PowerShell). It is skipped by default: the first CI run of it failed on the GitHub runner (log not available to diagnose), so it is opt-in until it can be made deterministic there.
+
+## Real-desktop check (`npm run test:windows-desktop`)
+Opens a fixture window on every display and exercises the real overlay, real screen capture and real Windows OCR. It needs an interactive Windows session and is not part of CI.
+
+Verified 2026-11-23 on a 1920x1080 @1x primary and a 1440x900 @2x secondary at a negative origin:
+- The highlight surrounds the target within its 3 DIP frame + 2 DIP shadow on both displays (no scaling or monitor-origin drift). Shown in ~59 ms.
+- OCR on the native-resolution capture finds 11 px text on both displays and maps it inside the text's real bounds. The old 1600x1000 capture missed the same text on the 1080p display. Capture ~0.4 s + OCR ~0.4 s per lookup.
+
+Still manual: real invoke/set-value actions (need the confirmation dialog), password-field exclusion on a real password box, 150% scaling, and `npm run test:desktop`, whose Codex-status assertion at `scripts/smoke-electron.js:1569` fails the same way on the pre-#5 commit `2f248d8` (pre-existing, unrelated to accessibility or OCR).
