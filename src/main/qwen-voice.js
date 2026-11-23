@@ -91,7 +91,8 @@ class QwenVoice {
       clearTimeout(this.idle);
       return await new Promise(resolve => {
         const id = String(serial);
-        const timer = setTimeout(() => { this.cancel(); this.close(); resolve({ ok: false, error: 'Voice generation timed out.' }); }, 90000).unref();
+        // Resolve first: cancel() would otherwise settle this request as 'cancelled'.
+        const timer = setTimeout(() => { resolve({ ok: false, error: 'Voice generation timed out.' }); this.cancel(); this.close(); }, 90000).unref();
         this.current = { id, clientId: request.id, allowed, resolve, timer };
         this.send({ type: 'speak', id, text: request.text, language: 'Auto' });
       });

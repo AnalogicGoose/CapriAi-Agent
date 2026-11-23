@@ -138,6 +138,10 @@ test('warm foreground requests reuse the process, isolate threads and release th
     assert.equal(f.client(), proc);
     assert.deepEqual(deltas, ['Hello']);
     assert.equal(f.calls.filter(([method]) => method === 'initialize').length, 1);
+    // The warm process already verified the account and model; config is still read per turn.
+    assert.equal(f.calls.filter(([method]) => method === 'model/list').length, 1);
+    assert.equal(f.calls.filter(([method]) => method === 'account/read').length, 1);
+    assert.equal(f.calls.filter(([method]) => method === 'config/read').length, 2);
     assert.deepEqual(f.calls.filter(([method]) => method === 'thread/unsubscribe').map(([, arg]) => arg.threadId), ['thread-1', 'thread-2']);
     gamingMode = true; f.brain.cancel();
     assert.equal(proc.closed, true);

@@ -54,6 +54,15 @@ test('capture rechecks permissions and foreground, and consequential input honor
   await assert.rejects(g.service.act({ snapshotId: frame.snapshotId, kind: 'key', key: 'enter', risk: 'consequential', summary: 'Send message' }, g.context), /revoked/);
   assert.equal(g.calls.length, 0);
 });
+test('destructive chords need review however the model spells them', async () => {
+  for (const key of ['ctrl+w', 'control+w', 'Ctrl + W', 'alt + f4', 'ALT+F4', 'ctrl+shift+delete', 'Control + Shift + W']) {
+    const f = fixture(), frame = await f.service.snapshot();
+    let reviewed = false;
+    f.service.confirm = async () => { reviewed = true; return false; };
+    const result = await f.service.act({ snapshotId: frame.snapshotId, kind: 'key', key, risk: 'routine', summary: 'Close' }, f.context);
+    assert.equal(reviewed, true, key); assert.equal(result.cancelled, true, key); assert.equal(f.calls.length, 0, key);
+  }
+});
 test('native input buffers encode Unicode, key-up pairs and mouse events without recording input', () => {
   for (const size of [40, 28]) {
     const typed = records({ kind: 'type', text: 'á😀' }, size), offset = size === 40 ? 8 : 4;

@@ -52,7 +52,9 @@ class ScreenAccess {
     };
     validateFrame();
     if (!['routine', 'consequential'].includes(args.risk)) throw Error('Classify the action risk.');
-    if (args.risk === 'consequential' || (args.kind === 'key' && /(?:delete|alt\+f4|ctrl\+w)/i.test(args.key || ''))) {
+    // desktop-input also accepts "control" and spaced chords; match the normalized form.
+    const chord = String(args.key || '').toLowerCase().replace(/\s+/g, '').replace(/\bcontrol\b/g, 'ctrl');
+    if (args.risk === 'consequential' || (args.kind === 'key' && /(?:delete|alt\+f4|ctrl\+(?:shift\+)?w)/.test(chord))) {
       if (!await this.confirm('Review Capri’s desktop action', `${args.summary}\n\nCurrent request: ${text}\nAction: ${args.kind}${args.key ? ` (${args.key})` : ''}`)) return { inputSent: false, cancelled: true };
     }
     check();
