@@ -58,6 +58,23 @@ test('game pause resets on a fresh config load while other preferences survive',
   const next=boot().load();assert.equal(next.gamingMode,false);
   assert.equal(next.volume,0.3);assert.equal(next.muted,true);assert.equal(next.scale,0.8);assert.equal(next.privacy.memoryEnabled,false);
 });
+test('config saves replace the file atomically and an unreadable file is kept before defaults load',()=>{
+  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+  const files=new Map([['/profile/config.json','{"volume":0.2,']]),ops=[];
+  const fakeFs={readFileSync:file=>{if(!files.has(file))throw Object.assign(Error('missing'),{code:'ENOENT'});return files.get(file);},
+    writeFileSync:(file,text)=>{ops.push(['write',file]);files.set(file,text);},mkdirSync(){},rmSync(){},
+    renameSync:(from,to)=>{ops.push(['rename',from,to]);files.set(to,files.get(from));files.delete(from);},
+    copyFileSync:(from,to)=>{ops.push(['copy',from,to]);files.set(to,files.get(from));}};
+  const module={exports:{}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/main/config.js'),'utf8'),{module,console:{error(){}},__dirname:path.resolve(__dirname,'../src/main'),
+    require:name=>name==='electron'?{app:{getPath:()=>'/profile'}}:name==='node:fs'?fakeFs:name==='node:path'?path.posix:name==='./voice-setup'?{voiceSetup:(_root,value)=>value}:require('../src/main/settings-migration')});
+  const config=module.exports;
+  assert.equal(config.load().volume,config.DEFAULTS.volume);
+  assert.equal(files.get('/profile/config.json.unreadable'),'{"volume":0.2,');
+  config.save({volume:0.4});
+  assert.deepEqual(ops.slice(-2),[['write','/profile/config.json.tmp'],['rename','/profile/config.json.tmp','/profile/config.json']]);
+  assert.equal(JSON.parse(files.get('/profile/config.json')).volume,0.4);
+});
 test('conversation and hypothetical or negated settings requests do not mutate',async()=>{
   const f=fixture({intent:'chat'});
   for(const text of ['Hello','What is the volume of a sphere?','Do not activate game mode','What if I activate game mode?','change Firefox settings']) {

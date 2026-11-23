@@ -84,6 +84,10 @@ class CodexBrain {
     if (!this.stopping) this.client?.close(); this.tools.cancel?.();
   }
   async inspect(client) {
+    // A warm process already verified its account and model: skip two round trips per turn.
+    // Changing the model or executable cancels the brain, which drops the warm process.
+    const selectedModel = this.settings().codexModel || '';
+    if (client.inspected?.selectedModel === selectedModel && this.lastStatus?.ok) return client.inspected.result;
     const account = await client.request('account/read', { refreshToken: false });
     if (!account.account && account.requiresOpenaiAuth !== false) throw Error('Sign in with the Codex CLI first: codex login.');
     let data = [], cursor = null;
@@ -99,6 +103,7 @@ class CodexBrain {
     this.lastStatus = { ok: true, backend: 'codex', model: modelName,
       models: data.map(row => ({ id: row.model || row.id })), account: account.account?.type || 'provider',
       cloud: true, verifiedInference: false };
+    client.inspected = { selectedModel, result: { model, modelName } };
     return { model, modelName };
   }
   async status() {

@@ -66,6 +66,20 @@ function file() {
   return path.join(app.getPath('userData'), 'config.json');
 }
 
+// A crash or power loss mid-write must not leave a truncated config.json:
+// an unreadable file would silently reset every preference on the next start.
+function write(data) {
+  const target = file(), temp = `${target}.tmp`; // one instance: the single-instance lock owns the profile
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(temp, JSON.stringify(data, null, 2));
+  try { fs.renameSync(temp, target); }
+  catch {
+    // Sync clients and antivirus can briefly lock the target on Windows.
+    fs.writeFileSync(target, JSON.stringify(data, null, 2));
+    try { fs.rmSync(temp, { force: true }); } catch { /* best effort */ }
+  }
+}
+
 function load() {
   if (cache) return cache;
   try {
@@ -74,13 +88,18 @@ function load() {
     // Keep pause changes in this process, but always begin a fresh run active.
     cache = { ...DEFAULTS, ...migrated, gamingMode: false };
     if (migrated !== saved || saved.gamingMode === true) {
-      try { fs.writeFileSync(file(), JSON.stringify(cache, null, 2)); }
+      try { write(cache); }
       catch { console.error('[capri] Could not persist updated PC defaults.'); }
     }
-  } catch {
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      // Keep the unreadable file for recovery before defaults replace it.
+      try { fs.copyFileSync(file(), `${file()}.unreadable`); } catch { /* nothing to keep */ }
+      console.error('[capri] config.json was unreadable; defaults loaded and a copy kept as config.json.unreadable.');
+    }
     cache = { ...DEFAULTS, ...voiceSetup(path.resolve(__dirname, '../..'), migrateControlRoom(migratePcSettings())) };
     if (cache.ttsSetupId) {
-      try { fs.mkdirSync(path.dirname(file()), { recursive: true }); fs.writeFileSync(file(), JSON.stringify(cache, null, 2)); }
+      try { write(cache); }
       catch { console.error('[capri] Could not persist prepared voice settings.'); }
     }
   }
@@ -90,8 +109,7 @@ function load() {
 function save(patch) {
   cache = { ...load(), ...patch };
   try {
-    fs.mkdirSync(path.dirname(file()), { recursive: true });
-    fs.writeFileSync(file(), JSON.stringify(cache, null, 2));
+    write(cache);
   } catch (err) {
     console.error('[capri] could not save config:', err.message);
   }

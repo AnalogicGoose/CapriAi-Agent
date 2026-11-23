@@ -1041,8 +1041,8 @@ function registerIpc() {
     }
     catch (err) { return { handled: true, text: `Local assistant unavailable: ${err.message}` }; }
   }));
-  ipcMain.handle('task:openResult', async (_event, ref) => {
-    try { if (typeof ref!=='string'||!/^[a-f0-9]{16}$/.test(ref)) throw Error('Invalid result.'); return {ok:true,...await actions.openResult(ref)}; }
+  ipcMain.handle('task:openResult', async (event, ref) => {
+    try { if (!speechCaller(event)) throw Error('Overlay required.'); if (typeof ref!=='string'||!/^[a-f0-9]{16}$/.test(ref)) throw Error('Invalid result.'); return {ok:true,...await actions.openResult(ref)}; }
     catch(error) { return {ok:false,error:error.message}; }
   });
   ipcMain.handle('integration:status', () => codexEvents.snapshot());
@@ -1052,7 +1052,8 @@ function registerIpc() {
     if (!ignore && !overlay.isFocusable()) overlay.setFocusable(true);
     overlay.setIgnoreMouseEvents(ignore, { forward: true });
   });
-  ipcMain.handle('overlay:cursor', () => {
+  ipcMain.handle('overlay:cursor', event => {
+    if (!speechCaller(event) || overlay.isDestroyed()) return { x: 0, y: 0, inside: false };
     const p = screen.getCursorScreenPoint();
     const b = overlay.getBounds();
     return { x: p.x - b.x, y: p.y - b.y, inside: p.x >= b.x && p.y >= b.y && p.x < b.x + b.width && p.y < b.y + b.height };
@@ -1062,7 +1063,7 @@ function registerIpc() {
     if (event.sender !== overlay?.webContents) throw Error('Overlay required.');
     return updateConfig(DEV || smokeTest ? patch : overlayPatch(patch));
   });
-  ipcMain.handle('demo:window', (_e, open) => demoWindow(open));
+  ipcMain.handle('demo:window', (event, open) => speechCaller(event) ? demoWindow(open) : false);
   // right-clicking her: the same menu as the tray icon (which Windows often hides behind the ^ by the clock)
   ipcMain.on('menu:open', openSettings);
   ipcMain.handle('windows:get', () => lastWindows);
@@ -1116,11 +1117,13 @@ function registerIpc() {
   });
   // closing an app you asked her to close, once you've clicked to confirm (apps.js)
   const appInfo = (app) => app && { name: app.process, label: app.label };
-  ipcMain.handle('apps:list', async () => config.load().desktopActions && !config.load().gamingMode
+  ipcMain.handle('apps:list', async event => speechCaller(event) && config.load().desktopActions && !config.load().gamingMode
     ? (await apps.list().catch(() => [])).map(appInfo) : []);
-  ipcMain.handle('apps:find', async (_e, wanted) => config.load().desktopActions && !config.load().gamingMode
+  ipcMain.handle('apps:find', async (event, wanted) => speechCaller(event) && config.load().desktopActions && !config.load().gamingMode
     ? appInfo(await apps.find(wanted).catch(() => null)) : null);
-  ipcMain.handle('apps:close', closeApp);
+  // Only the overlay may ask to close apps; the dialog still confirms every request.
+  ipcMain.handle('apps:close', (event, request) => speechCaller(event)
+    ? closeApp(event, request || {}) : { error: 'Overlay required.' });
   // typing to her: the overlay takes the keyboard while the chat is open, and gives it back after
   ipcMain.on('overlay:focus', (event, on) => {
     if (!speechCaller(event)) return;
@@ -1131,7 +1134,8 @@ function registerIpc() {
     else if (on === false) overlay.blur();
   });
   // her report card's copy button: a picture of that part of the overlay, on the clipboard
-  ipcMain.handle('panel:copy', async (_e, rect) => {
+  ipcMain.handle('panel:copy', async (event, rect) => {
+    if (!speechCaller(event) || overlay.isDestroyed()) return false;
     const image = await overlay.webContents.capturePage(rect);
     if (image.isEmpty()) return false;
     const png = new Blob([image.toPNG()], { type: 'image/png' });
