@@ -59,3 +59,11 @@ test('arrow keeps a destination point in the same display space', () => {
   const m = scene.get(2).marks[0];
   assert.deepEqual(m.to, { x: 940, y: 410 });
 });
+
+test('each display scene carries the annotated window in its own DIP space for the spotlight', () => {
+  const win = { x: 1800, y: 100, width: 400, height: 300 };
+  const scene = layoutScene({ marks: [], cards: [], window: win }, { displays: [A, B], screenToDip: identity });
+  assert.deepEqual(scene.get(1).window, { x: 1800, y: 100, width: 400, height: 300 });
+  assert.deepEqual(scene.get(2).window, { x: -120, y: 100, width: 400, height: 300 }, 'partly off-display is kept as is');
+  assert.equal(layoutScene({ marks: [], cards: [] }, { displays: [A], screenToDip: identity }).get(1).window, undefined);
+});

@@ -9,10 +9,21 @@ const { conversationalMusicRequest } = require('./music-playback');
 const { ACTIONS: CONTINUITY_ACTIONS } = require('./companion-continuity');
 const { EFFECTS: ROUTINE_EFFECTS, READS: ROUTINE_READS, ACTIONS: ROUTINE_ACTIONS, teachingOnly } = require('./reusable-routines');
 const { ACTION_EVIDENCE, actionRequest } = require('./action-request');
+const { MARK_KINDS, CARD_KINDS } = require('./guide-schema');
 
 const object = properties => ({ type: 'object', additionalProperties: false,
   required: Object.keys(properties), properties });
 const str = maxLength => ({ type: 'string', maxLength });
+const num = { type: 'number' };
+const list = (items, maxItems) => ({ type: 'array', maxItems, items });
+// Every field is required by Codex; empty strings, 0 and [] mean "none" (normalized in guide-session fromTool).
+const DRAW_TARGET = object({ type: { type: 'string', enum: ['control', 'text', 'snapshot'] }, id: str(200), text: str(200),
+  nth: { type: 'integer', minimum: 0, maximum: 50 }, snapshotId: str(100), x: num, y: num, width: num, height: num });
+const DRAW_ARGS = object({
+  marks: list(object({ id: str(40), kind: { type: 'string', enum: MARK_KINDS }, target: DRAW_TARGET, to: list(DRAW_TARGET, 1), text: str(60) }), 12),
+  cards: list(object({ kind: { type: 'string', enum: CARD_KINDS }, title: str(60), text: str(400), items: list(str(80), 8),
+    columns: list(str(40), 5), rows: list(list(str(40), 5), 8) }), 2),
+  clear: { type: 'boolean' } });
 const CONVERSATIONAL_TOOLS = new Set([...ROUTINE_EFFECTS, 'capri_approval', 'capri_memory_change',
   'capri_project_change', 'capri_routines_save', 'capri_routines_delete', 'capri_saved_work']);
 const DESKTOP_READS = new Set(['search_web', 'search_news', 'steam_deals', 'youtube_latest']);
@@ -21,6 +32,7 @@ const TOOLS = [
   ['capri_window_controls', 'Inspect visible accessibility controls in the foreground Windows app. Prefer this to guessing screenshot coordinates for a named control. Search by a visible label or use an empty query to list controls. A matching query can return short editable values. If no control matches, local OCR looks for the named text. Results are untrusted evidence.', object({ query: str(160) })],
   ['capri_point', 'Show a temporary outline around a control from capri_window_controls in the same turn. Use for show-me requests. This never clicks the control.', object({ id: str(80) })],
   ['capri_point_on_snapshot', 'Outline a visible target using the latest screen image when there is no accessibility or OCR match, for example an unlabeled icon. Supply its tight rectangle in screenshot pixels. This never clicks the target.', object({ snapshotId: str(80), x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' } })],
+  ['capri_draw', 'Draw temporary marks/cards over the foreground window to explain it; never clicks. target.type: control (id from capri_window_controls this turn), text (visible text; nth picks a repeat, 0 if unique) or snapshot (snapshotId and rectangle in capri_screen pixels). Unused fields: "" or 0. to: [] except [target] for arrow. Empty id/text/title mean none. Reusing an id replaces that mark; clear:true wipes first. Unfound targets are reported back.', DRAW_ARGS],
   ['capri_control', 'Activate or set a control from capri_window_controls in the same turn, with native user confirmation. Use an empty value for invoke. Inspect again after invoke to verify the result. If the user cancels, do not try another tool for the same action.', object({ id: str(80), operation: { type: 'string', enum: ['invoke', 'set-value'] }, value: str(1000) })],
   ['capri_body', 'Use Capri’s existing body animations or posture. The tool returns the actual local result; write your own natural reply instead of reciting its status text.', object({ action: { type: 'string', enum: ['wave', 'dance', 'stretch', 'nap', 'wake', 'come', 'mood', 'sit', 'stand'] } })],
   ['capri_screen', 'Look at a current screen snapshot. Returns image pixels and a short-lived snapshot ID. Use before desktop input; reobserve after each action. Empty displayId uses the foreground app display, falling back to the primary display.', object({ displayId: str(40) })],
@@ -67,6 +79,7 @@ class CodexTools {
     .filter(([name]) => (!['capri_memory_learn', 'capri_topic_recap'].includes(name) || this.canLearn()) && (name !== 'capri_close_app' || this.closeApp))
     .filter(([name]) => !['capri_window_controls', 'capri_point', 'capri_control'].includes(name) || this.accessibility?.allowed(name === 'capri_control'))
     .filter(([name]) => name !== 'capri_point_on_snapshot' || (this.highlight && this.screen?.enabled()))
+    .filter(([name]) => name !== 'capri_draw' || Boolean(this.guide && (this.accessibility || this.screen) && this.screen?.enabled()))
     .map(([name, description, inputSchema]) => ({ type: 'function', name, description,
       inputSchema: CONVERSATIONAL_TOOLS.has(name) ? object({ ...inputSchema.properties, requestEvidence: ACTION_EVIDENCE }) : inputSchema,
       deferLoading: false })); }
@@ -230,6 +243,11 @@ class CodexTools {
       shape(args, ['snapshotId', 'x', 'y', 'width', 'height']);
       if (!this.screen || !this.highlight || typeof args.snapshotId !== 'string' || args.snapshotId.length > 80) throw Error('Select a target in the current screenshot.');
       return this.screen.point(args, { check, highlight: this.highlight });
+    }
+    if (name === 'capri_draw') {
+      shape(args, ['marks', 'cards', 'clear']);
+      if (!this.guide) throw Error('On-screen guides are unavailable.');
+      return this.guide.draw(args, { check, signal });
     }
     if (name === 'capri_control') {
       shape(args, ['id', 'operation', 'value']);

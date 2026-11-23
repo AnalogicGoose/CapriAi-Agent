@@ -25,6 +25,10 @@ const { CodexTools } = require('./codex-tools');
 const { ScreenAccess } = require('./screen-access');
 const { WindowsAccessibility } = require('./windows-accessibility');
 const { desktopHighlight } = require('./desktop-highlight');
+const { GuideTargets } = require('./guide-targets');
+const { layoutScene } = require('./guide-scene');
+const { createGuideLayer } = require('./guide-layer');
+const { GuideSession } = require('./guide-session');
 const { CognitiveFoundation } = require('./cognitive-foundation');
 const { GroundedCuriosity } = require('./grounded-curiosity');
 const { ReflectionEngine } = require('./cognitive-reflection');
@@ -298,6 +302,17 @@ const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
   },
 }) : null;
 app.on('before-quit', highlight.clear);
+// The guide layer is separate from her overlay: onFullscreen hides only the overlay, never this layer.
+const guide = new GuideSession({
+  targets: new GuideTargets({ accessibility, screen: screenAccess, foreground: externalForeground }),
+  layer: createGuideLayer({ BrowserWindow, screen, preload: path.join(__dirname, '..', 'guide-preload.js'),
+    page: path.join(__dirname, '..', 'renderer', 'guide.html') }),
+  layout: scene => layoutScene(scene, { displays: screen.getAllDisplays(), screenToDip: rect => screen.screenToDipRect(null, rect) }),
+  foreground: externalForeground,
+  // ScreenAccess reads agentConfig, which lifts Gaming mode only while a voice session is active.
+  allowed: () => screenAccess.enabled(),
+});
+app.on('before-quit', () => guide.clear('quit'));
 const currentContext = text => {
   const p = permissions(agentConfig().privacy);
   const savedContinuity = goals().continuity.context();
@@ -315,7 +330,7 @@ const currentContext = text => {
   recentTasks: actions.grounding({ includeApps: false }) };
 };
 const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: resolveLang, context: pcContext,
-  screen: screenAccess, accessibility, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
+  screen: screenAccess, accessibility, guide, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
   body: (action, { check, signal }) => new Promise((resolve, reject) => {
     check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Capri’s body is unavailable.'));
     const id = randomBytes(12).toString('hex');
@@ -719,6 +734,7 @@ function updateConfig(patch) {
   if (['gamingMode', 'privacy', 'systemAccess', 'screenAwareness'].some(changes) || backendChanged) {
     brain.reset({ keepRecent: !revokedRecall && !['systemAccess', 'screenAwareness', 'codexExecutable'].some(changes) });
   }
+  if (patch.gamingMode === true || patch.screenAwareness === false) guide.clear('paused');
   if ((patch.gamingMode === true || patch.visible === false) && speech.current?.mode !== 'wake') speech.cancel();
   if (patch.gamingMode === true || patch.visible === false
       || ['muted', 'volume', 'ttsEnabled', 'speakTypedReplies', 'proactiveVoice', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText', 'ttsDevice'].some(changes)) tts.cancel();
@@ -958,6 +974,7 @@ function registerIpc() {
     try {
       if (event.sender !== overlay?.webContents) throw Error('Overlay required.');
       if (typeof text !== 'string' || text.length > 12000) throw Error('Invalid message.');
+      guide.clear('new-request');
       if (projectRouting) return { handled: true, text: 'Finish choosing your project before sending a request.' };
       const trialReply = initiativeCommand(text);
       if (trialReply) return trialReply;
@@ -1078,6 +1095,7 @@ function registerIpc() {
     if (!Number.isSafeInteger(id) || current?.role !== 'user' || typeof current.content !== 'string') return { ok: false, error: 'Invalid chat request.' };
     if (projectRouting) return { ok: false, error: 'Finish choosing your project before sending a request.' };
     if (chats.size || brain.busy || actions.busy) return { ok: false, error: 'One Capri request at a time.' };
+    guide.clear('new-request');
     if (config.load().speakTypedReplies && tts.allowed()) tts.warm();
     const abort = new AbortController();
     let finish;
@@ -1317,6 +1335,7 @@ function main() {
       sessionAvailable = event === 'resume' || event === 'unlock-screen';
       autonomy.observeIdle(null); autonomy.touch(); reflection.cancel();
       if (!sessionAvailable) {
+        guide.clear('locked');
         brain.dropWarmClient();
         checkInDeadline = 0; tts.cancel();
         interestCollaboration.cancel();

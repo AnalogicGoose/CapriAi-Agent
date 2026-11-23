@@ -104,6 +104,10 @@ function layoutScene({ marks = [], cards = [], window: win }, { displays, screen
   }
   if (win) {
     const dipWin = screenToDip(win);
+    // Every display gets the window in its own space, so a spotlight dims only the window (may be partly off-display).
+    for (const d of displays) {
+      scene.get(d.id).window = { x: dipWin.x - d.bounds.x, y: dipWin.y - d.bounds.y, width: dipWin.width, height: dipWin.height };
+    }
     const display = displayAt(displays, center(dipWin));
     if (display) {
       const rel = { x: dipWin.x - display.bounds.x, y: dipWin.y - display.bounds.y, width: dipWin.width, height: dipWin.height };

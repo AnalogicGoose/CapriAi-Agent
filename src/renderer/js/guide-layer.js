@@ -100,11 +100,14 @@ function drawPill(label, text) {
   marksLayer.append(pill);
 }
 
-function drawMarks(marks, width, height) {
+function drawMarks(marks, width, height, win) {
   const spots = marks.filter(m => m.kind === 'spotlight' && validBox(m.box));
   if (spots.length) {
+    // Dim only the annotated window (the whole display only if the window is unknown).
+    const area = validBox(win) ? win : { x: 0, y: 0, width, height };
     const holes = spots.map(m => `M${points(chamfer(grow(m.box, SPOT_PAD), cutSize())).replaceAll(' ', 'L')}Z`).join('');
-    shapes.append(svg('path', { class: 'guide-spot', 'fill-rule': 'evenodd', d: `M0,0H${width}V${height}H0Z${holes}` }));
+    shapes.append(svg('path', { class: 'guide-spot', 'fill-rule': 'evenodd',
+      d: `M${area.x},${area.y}H${area.x + area.width}V${area.y + area.height}H${area.x}Z${holes}` }));
   }
   let ordinal = 0;
   for (const mark of marks) {
@@ -186,7 +189,7 @@ function draw(scene) {
   marksLayer.replaceChildren();
   cardsLayer.replaceChildren();
   shapes.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  drawMarks(Array.isArray(scene?.marks) ? scene.marks : [], width, height);
+  drawMarks(Array.isArray(scene?.marks) ? scene.marks : [], width, height, scene?.window);
   for (const card of Array.isArray(scene?.cards) ? scene.cards : []) drawCard(card);
 }
 
