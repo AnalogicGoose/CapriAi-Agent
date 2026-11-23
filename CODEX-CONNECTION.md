@@ -6,7 +6,7 @@ The notification connection is implemented and live-tested. On this laptop, all 
 
 1. Keep Capri running. Open a terminal and run `codex`.
 2. Inside Codex, enter `/hooks`.
-3. Review the CapriGPT handlers whose command ends in `hooks/caprigpt-codex-hook.js`. Trust the definitions you have reviewed. Do not change your normal tool-approval settings.
+3. Review the Capri handlers whose command ends in `hooks/caprigpt-codex-hook.js`. Trust the definitions you have reviewed. Do not change your normal tool-approval settings.
 4. Start a fresh Codex turn, or reopen the Codex chat if it needs to reload its configuration.
 5. Right-click Capri → **Codex companion notifications → Connection status / activation help**. After a genuine hook fires, the status reports its receipt time. Until then, it honestly says no real event has arrived.
 
@@ -44,7 +44,7 @@ The Codex lifecycle connection is separate from model routing. Capri still talks
 
 ## Install, remove, and test
 
-On another PC, run these from the CapriGPT folder after installing Node and Codex:
+On another PC, run these from the Capri folder after installing Node and Codex:
 
 ```powershell
 npm.cmd run codex:install
@@ -57,7 +57,7 @@ npm.cmd run codex:status
 npm.cmd run codex:uninstall
 ```
 
-Uninstall removes only CapriGPT handlers. It preserves other hooks and backups. Restart/reload Codex afterward.
+Uninstall removes only Capri handlers. It preserves other hooks and backups. Restart/reload Codex afterward.
 
 ```powershell
 npm.cmd test

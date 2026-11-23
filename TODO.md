@@ -1,4 +1,4 @@
-# CapriGPT to-do list
+# Capri to-do list
 
 - [x] Quiet mode: use animations for routine work; reserve messages for completion, approval and tool errors.
 - [ ] Optional local memory: remember preferred name, language and tone, with controls to view and delete saved information.

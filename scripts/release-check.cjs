@@ -50,7 +50,7 @@ async function artifacts() {
   const manifest = source();
   const dist = path.join(root, 'dist');
   inspectArchive(path.join(dist, 'win-unpacked', 'resources', 'app.asar'), manifest.version);
-  const installer = `CapriGPT-Setup-${manifest.version}.exe`;
+  const installer = `Capri-Setup-${manifest.version}.exe`;
   const data = fs.readFileSync(path.join(dist, installer));
   assert.equal(data.subarray(0, 2).toString(), 'MZ', 'Installer must be a Windows executable');
   manifest.artifacts = [{ file: installer, bytes: data.length,

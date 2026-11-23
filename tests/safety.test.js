@@ -105,6 +105,10 @@ test('desktop gate denies disabled, cancelled, protected and gaming requests', a
   await handler(null, { name: 'test-app' });
   assert.equal(closes, 0);
   cfg.gamingMode = false;
+  let stopped = false;
+  duringDialog = () => { stopped = true; };
+  await handler(null, { name: 'test-app' }, () => { if (stopped) throw Error('Request stopped'); });
+  assert.equal(closes, 0);
   duringDialog = () => {};
   await handler(null, { name: 'test-app' });
   assert.equal(closes, 1);

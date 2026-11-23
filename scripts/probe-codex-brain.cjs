@@ -90,7 +90,7 @@ async function probe(executable, { spawnProcess = spawn, timeoutMs = 12000 } = {
   const timer = setTimeout(() => { fail(Error('Codex diagnostic timed out.')); proc.kill(); }, timeoutMs);
   try {
     const initialized = await request('initialize', {
-      clientInfo: { name: 'caprigpt_research', title: 'CapriGPT read-only research', version: '0.1.0' },
+      clientInfo: { name: 'caprigpt_research', title: 'Capri read-only research', version: '0.1.0' },
       capabilities: { experimentalApi: true },
     });
     send({ method: 'initialized', params: {} });

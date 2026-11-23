@@ -35,6 +35,19 @@ file-change item. Stop sends turn/interrupt before closing the owned process,
 allowing Codex to cancel its work. Closing a turn cannot undo completed actions.
 Foreground requests have a ten-minute deadline and up to forty Capri tool calls.
 
+### Direct Windows actions
+
+Clear launch requests for known apps bypass the model. Capri checks for a
+visible app window through Windows. For **Open my workspace**, Capri opens the
+selected project folder and verifies the exact path in File Explorer.
+
+For a named song, try **Play One More Time by Daft Punk**. Capri resolves the
+requested title and artist from public YouTube results, opens the track in
+YouTube Music in your usual browser and checks Windows media playback. She
+confirms playback only when Windows reports a matching title and artist
+playing. An ambiguous result asks for the artist. If a lookup cannot find a
+matching official track, Capri opens the search results to help you choose.
+
 ## Presence and conversation
 
 Normal greetings, idle remarks, satellite commentary and completion chatter no
@@ -134,7 +147,25 @@ are supplied to foreground chat. Recall switches and Memory retention apply;
 large records can remain saved without fitting the automatic context allowance.
 Deleting personal memories with `/memory delete-all` does not delete goals.
 Delete goals individually with `/goals delete <id>`; listing/export/deletion remain
-available while Memory is off. Restart clears chat history but retains goals.
+available while Memory is off. Goals survive restart. Recent chat also survives
+when **Remember recent chats** is enabled in the Control room.
+
+## Quiet check-in trial
+
+Start a one-day trial in **Control room → PC awareness → Quiet trial**.
+Capri evaluates her usual opportunities using the enabled context sources.
+She keeps proposed text, a reason for the check-in, and counts for quiet,
+blocked, or repeated opportunities. The log stays local and expires after
+seven days. Existing drafts can be considered during the trial. Private
+draft work and notifications wait until check-ins resume.
+
+Say **Show me the quiet trial** to review the decisions, model calls and
+latency. Use `/companion trial rate <number> welcome`, `bad-timing`, or
+`repetitive`. Recent bad timing increases the gap between ordinary
+opportunities by five minutes. A topic rated repetitive is set aside for
+a day. Check-ins stay quiet after the trial ends until you explicitly
+resume them. During live check-ins, **Why did you bring that up?** explains
+the reason Capri used for a recently delivered check-in.
 
 ## Validation
 

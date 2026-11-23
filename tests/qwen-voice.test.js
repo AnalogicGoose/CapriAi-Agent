@@ -94,7 +94,11 @@ test('streamed text queues complete phrases once and Escape suppresses the rest 
     player.configure({ ttsEnabled: true, ttsEngine: 'qwen' });
     player.play = async text => { spoken.push(text); };
     const first = 'Easy, sweetheart. We can take this one step at a time. ';
-    player.beginResponse(); player.updateResponse(first + 'Let');
+    player.beginResponse(); player.updateResponse('Easy, sweetheart');
+    assert.deepEqual(spoken, []);
+    player.updateResponse('Easy, sweetheart.');
+    assert.deepEqual(spoken, ['Easy, sweetheart.'], 'The first sentence starts at its period, without a following token.');
+    player.updateResponse(first + 'Let');
     await new Promise(resolve => setImmediate(resolve));
     player.updateResponse(first + "Let's save your work.", true);
     await new Promise(resolve => setImmediate(resolve));
@@ -103,5 +107,15 @@ test('streamed text queues complete phrases once and Escape suppresses the rest 
     player.updateResponse('This must stay silent.', true);
     await new Promise(resolve => setImmediate(resolve)); assert.deepEqual(spoken, []);
     assert.equal(speechText('Hello ```js\nsecret()``` [[close:app]] [friend](https://example.com)'), 'Hello friend');
+    player.configure({ ttsEnabled: true, ttsEngine: 'windows' });
+    player.beginResponse();
+    player.updateResponse('Dr.');
+    player.updateResponse('Dr. Kim set it to 7.');
+    assert.deepEqual(spoken, []);
+    player.updateResponse('Dr. Kim set it to 7.5. The');
+    assert.deepEqual(spoken, ['Dr. Kim set it to 7.5.']);
+    player.updateResponse('Dr. Kim set it to 7.5. The value is saved.', true);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(spoken, ['Dr. Kim set it to 7.5.', 'The value is saved.']);
   } finally { Object.assign(global, saved); }
 });

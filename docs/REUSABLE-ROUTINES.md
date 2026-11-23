@@ -60,8 +60,20 @@ The current user request is bound to one immutable definition/version in the
 current project. Edited/forgotten definitions, changed project roots, revoked
 Memory/recall, disabling routines, cancellation or failed steps stop further work.
 Earlier effects may remain; cancellation does not close apps or undo file changes.
-Missing input stops the run and asks the specific clarification. A new invocation
-starts at step one rather than guessing which external effects are safe to skip.
+Missing input stops the run and asks the specific clarification.
+
+## Resume an unfinished run
+
+After addressing the reported problem, say **“Resume routine Study setup”** or
+**“Retry that routine.”** Naming it selects that routine’s latest run in the
+current project. Without a name, Capri uses the current project’s most recent
+routine run. You can also use **“Resume routine #3.”**
+
+The new attempt starts at the first unfinished step and carries forward the
+receipts for earlier steps. This works after closing and reopening Capri. A
+failed or interrupted step may already have had an effect, so review its state
+before retrying. The same action reviews still apply. If the recipe has changed,
+use **“Run Study setup”** to start from step one with the new definition.
 
 ## Names, scope and edits
 

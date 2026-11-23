@@ -7,10 +7,4 @@ class SpeechAdapter {
   async speak(text, { signal } = {}) { signal?.throwIfAborted(); throw Error('Local speech synthesis is not installed.'); }
   stop() {}
 }
-class AccessibilityAdapter {
-  async inspect({ signal } = {}) { signal?.throwIfAborted(); throw Error('Windows UI Automation reader is not installed.'); }
-  // Future implementation: stable element identity, fresh inspection, native
-  // confirmation of the exact effect, then revalidation before Invoke/Value.
-  async invokeApproved() { throw Error('Accessibility actions are not installed.'); }
-}
-module.exports = { SpeechAdapter, AccessibilityAdapter };
+module.exports = { SpeechAdapter };

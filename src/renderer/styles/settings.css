@@ -76,6 +76,7 @@ h1 { font-size:27px; letter-spacing:-.5px; margin:0 0 8px; font-weight:600; }
 .button:hover,.segments button:hover { border-color:#31ff7290; }
 .button.danger { color:#ff9ab2; border-color:#8d526d80; background:#31202d; }
 .actions { display:flex; gap:8px; flex-wrap:wrap; }
+.row .voice-preview select { flex:0 1 auto; width:auto; max-width:none; }
 .meter { display:flex; align-items:center; gap:10px; }.meter input { width:125px; accent-color:var(--green); }
 .meter output { font:10px var(--font-mono); width:32px; text-align:right; }
 .fact-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }

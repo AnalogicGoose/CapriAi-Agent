@@ -28,6 +28,15 @@ test('whole-request interpretation searches then opens an observed website in th
   assert.match(result.text,/Sent .*Firefox/);
   assert.equal(f.interpreter.busy,false);
 });
+
+test('media destinations preserve an explicitly requested browser through interpretation',async()=>{
+  const decision=act(step('open_media','anime'));
+  decision.goals=[{type:'open_website',target:'Crunchyroll',browser:'Firefox'}];
+  const f=fixture([decision]);
+  const result=await f.interpreter.route("let's watch anime in Firefox",12);
+  assert.equal(result.completed,true,result.text);
+  assert.deepEqual(f.calls,[['website','https://www.crunchyroll.com/','Firefox']]);
+});
 test('conversation, examples and negative requests cause no actions; clarification retains the original goal',async()=>{
   for(const input of ['I like Firefox','How would I open a website?','Do not open Netflix','hello']) {
     const f=fixture([terminal('chat')]);assert.equal(await f.interpreter.route(input),null);assert.deepEqual(f.calls,[]);

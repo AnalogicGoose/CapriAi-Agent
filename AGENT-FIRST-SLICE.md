@@ -39,7 +39,7 @@ chat layout, memory confirmation, and app protection remain in use.
 
 ## Use
 
-Start from **CapriGPT** on the desktop. In chat or the offline local commands panel:
+Start from **Capri** on the desktop. In chat or the offline local commands panel:
 
 ```text
 /agent status
