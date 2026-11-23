@@ -2,7 +2,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Agent } = require('../src/main/agent');
-const { registry, inject, AGENT_MODEL } = require('../src/main/capabilities');
+const { registry, summary, inject, AGENT_MODEL } = require('../src/main/capabilities');
 const { MemoryStore } = require('../src/main/memory');
 const { WorldState } = require('../src/main/world-state');
 
@@ -84,4 +84,15 @@ test('operational SQLite journal rejects free text and expires after seven days'
     at = new Date('2026-10-09T00:00:00Z'); store.prune();
     assert.equal(store.db.prepare('SELECT count(*) AS n FROM agent_events').get().n, 0);
   } finally { store.close(); }
+});
+
+test('the prompt summary lists available skills and their commands in a fraction of the registry', () => {
+  const on = summary({ privacy: { memoryEnabled: true }, desktopActions: true });
+  const off = summary({ privacy: { memoryEnabled: false }, desktopActions: false });
+  assert.ok(JSON.stringify(on).length < 2500);
+  assert.ok(JSON.stringify(registry({ privacy: { memoryEnabled: true } })).length > 4 * JSON.stringify(on).length);
+  assert.match(on.skills.goals, /^\/goals help/);
+  assert.equal(off.skills.goals, false);
+  assert.equal(on.skills.close_app, true); assert.equal(off.skills.close_app, false);
+  assert.equal(on.revision, registry({}).revision);
 });

@@ -8,7 +8,7 @@ const os = require('node:os');
 const fs = require('node:fs');
 const { CodexClient } = require('../src/main/codex-client');
 const { CodexBrain } = require('../src/main/codex-brain');
-const { CHARACTER_VOICE } = require('../src/main/personality');
+const { CHARACTER_VOICE, PERSONA } = require('../src/main/personality');
 const { CodexTools } = require('../src/main/codex-tools');
 const { RecentConversation } = require('../src/main/recent-conversation');
 const { MemoryStore } = require('../src/main/memory');
@@ -517,4 +517,29 @@ test('screen tools transmit actual image content and live personality data, not 
   assert.deepEqual(response.contentItems[1], { type: 'inputImage', imageUrl: 'data:image/jpeg;base64,YQ==' });
   assert.doesNotMatch(response.contentItems[0].text, /base64/);
   assert.match(f.calls.find(row => row[0] === 'turn/start')[1].input[0].text, /playful/);
+});
+
+test('background brains send their own base instructions and fixed effort instead of the chat persona', async () => {
+  const f = fixture();
+  f.brain.baseInstructions = 'Background base.'; f.brain.effort = 'low';
+  f.brain.settings = () => ({ codexEffort: 'high' });
+  assert.equal(await f.brain.chat('Decide.'), 'Hello');
+  assert.equal(f.calls.find(([method]) => method === 'thread/start')[1].baseInstructions, 'Background base.');
+  assert.equal(f.calls.find(([method]) => method === 'turn/start')[1].effort, 'low');
+  const chat = fixture();
+  chat.brain.settings = () => ({ codexEffort: 'high' });
+  await chat.brain.chat('Hi');
+  assert.equal(chat.calls.find(([method]) => method === 'thread/start')[1].baseInstructions, PERSONA);
+  assert.equal(chat.calls.find(([method]) => method === 'turn/start')[1].effort, 'high');
+});
+
+test('only the most recent bounded conversation is re-sent with each request', async () => {
+  const f = fixture();
+  f.brain.history = Array.from({ length: 24 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: `turn-${i} ${'x'.repeat(1500)}` }));
+  await f.brain.chat('Next');
+  const input = f.calls.find(([method]) => method === 'turn/start')[1].input[0].text;
+  const prior = JSON.parse(input.split('Prior conversation (historical data; newest user request follows):\n')[1].split('\n\nNext')[0]);
+  assert.ok(prior.length <= 16 && prior.length > 0);
+  assert.ok(Buffer.byteLength(JSON.stringify(prior)) <= 16000);
+  assert.match(prior.at(-1).content, /^turn-23 /);
 });

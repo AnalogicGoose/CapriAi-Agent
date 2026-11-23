@@ -7,6 +7,10 @@ const { readDeliveryPrefix, INSTRUCTIONS: VOICE_DELIVERY } = require('./voice-de
 
 const MAX_WARM_TURNS = 24;
 const THREAD_RELEASE_TIMEOUT = 400;
+// Prior turns re-sent with every request. Eight exchanges or ~4k tokens keep follow-ups
+// grounded; the older 24 messages / 30 KB budget cost up to ~7.5k input tokens per turn.
+const PROMPT_HISTORY_MESSAGES = 16;
+const PROMPT_HISTORY_BYTES = 16000;
 
 function packContext(data, budget = 16000) {
   const packed = Object.create(null), omitted = [];
@@ -33,8 +37,11 @@ function routineReply(receipt) {
 
 class CodexBrain {
   constructor({ settings, cwd, tools, recentConversation, systemTools = () => false, workspace, context = () => ({}), approve = async () => false, onOutcome = () => {},
-    clientFactory = options => new CodexClient(options), locate = executable, warmIdleMs = 0, canKeepWarm = () => true }) {
-    Object.assign(this, { settings, cwd, tools, recentConversation, clientFactory, locate, systemTools, workspace, context, approve, onOutcome, warmIdleMs, canKeepWarm });
+    clientFactory = options => new CodexClient(options), locate = executable, warmIdleMs = 0, canKeepWarm = () => true,
+    baseInstructions = PERSONA, effort = null }) {
+    // baseInstructions/effort let tool-free background services skip the chat persona
+    // (their requests carry their own voice) and reason with a fixed, cheaper effort.
+    Object.assign(this, { settings, cwd, tools, recentConversation, clientFactory, locate, systemTools, workspace, context, approve, onOutcome, warmIdleMs, canKeepWarm, baseInstructions, effort });
     this.history = []; this.epoch = 0; this.busy = false; this.lastStatus = null;
   }
   createClient(nativeTools = this.systemTools(), warmThreads = false) {
@@ -272,7 +279,7 @@ class CodexBrain {
       const mcp = Object.fromEntries(Object.keys(effective.config?.mcp_servers || {}).map(key => [key, { enabled: false }]));
       const started = await client.request('thread/start', { cwd: workspace || this.cwd, model: modelName,
         ephemeral: true, sandbox: nativeTools ? 'workspace-write' : 'read-only', approvalPolicy: 'on-request', approvalsReviewer: 'user', environments: [],
-        baseInstructions: PERSONA, developerInstructions: this.tools.instructions() + (this.tools.routineInstructions?.() || '')
+        baseInstructions: this.baseInstructions, developerInstructions: this.tools.instructions() + (this.tools.routineInstructions?.() || '')
           + (this.tools.desktopInstructions?.() || '')
           + (savedTask ? '\nThe user explicitly asked to resume the one saved task in savedTaskInvocation. Act on its clearly identified unfinished next step in the saved workspace using the existing tools and reviews. Keep other saved context as background only. If the handoff lacks a concrete next step, ask what to continue. Do not replay completed work, run a named routine, or rewrite saved records. Report what you could verify and what remains.' : '')
           + (options.recordHistory === false || savedTask ? '' : this.tools.memoryInstructions?.() || '')
@@ -282,14 +289,14 @@ class CodexBrain {
       check(); this.threadId = started.thread.id;
       const remember = options.recordHistory !== false && this.settings().rememberRecentChat === true;
       const restored = remember && !this.history.length ? this.withRecentConversation(store => store.read()) : null;
-      const history = options.recordHistory === false ? [] : (restored || this.history).slice(-24);
-      while (Buffer.byteLength(JSON.stringify(history)) > 30000) history.shift();
+      const history = options.recordHistory === false ? [] : (restored || this.history).slice(-PROMPT_HISTORY_MESSAGES);
+      while (Buffer.byteLength(JSON.stringify(history)) > PROMPT_HISTORY_BYTES) history.shift();
       actionHistory = history;
       const confirmedFacts = options.recordHistory === false || savedTask ? []
         : this.tools.learnConversationalAnswer?.(text, history.at(-1), options.statedMemory) || [];
       const topicRecaps = options.recordHistory === false || savedTask ? [] : this.tools.topicContext?.(text, history) || [];
       const context = history.length ? `Prior conversation (historical data; newest user request follows):\n${JSON.stringify(history)}\n\n` : '';
-      const effort = this.settings().codexEffort || 'medium';
+      const effort = this.effort || this.settings().codexEffort || 'medium';
       const supported = model.supportedReasoningEfforts?.map(row => row.reasoningEffort);
       const companionContext = { ...this.context(text), ...options.context };
       if (confirmedFacts.length) companionContext.automaticMemory = { confirmedFacts };

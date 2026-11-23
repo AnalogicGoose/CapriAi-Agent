@@ -33,7 +33,7 @@ const { InitiativeTrial } = require('./initiative-trial');
 const { CompanionInterests } = require('./companion-interests');
 const { InterestCollaboration } = require('./interest-collaboration');
 const { CompanionGoals } = require('./companion-goals');
-const { personalityContext } = require('./personality');
+const { personalityContext, BACKGROUND_INSTRUCTIONS } = require('./personality');
 const { CodexEvents } = require('./codex-events');
 const { connectionFile } = require('../../hooks/caprigpt-codex-hook');
 const codexEvents = new CodexEvents();
@@ -186,7 +186,10 @@ const foreground = new ForegroundPriority(() => ({
   cancel() { agent.cancel(); autonomy?.cancel(); reflection?.cancel(); },
 }));
 // Legacy structured decision services use the same Codex transport, never Ollama.
+// Background services carry their own task prompt; a short base and low effort keep them cheap.
+const BACKGROUND_EFFORT = 'low';
 const decisionBrain = new CodexBrain({ settings: () => config.load(),
+  baseInstructions: BACKGROUND_INSTRUCTIONS, effort: BACKGROUND_EFFORT,
   cwd: path.join(app.getPath('temp'), 'caprigpt-codex-decisions'),
   tools: { specs: () => [], instructions: () => 'Return only the JSON decision requested in the supplied schema. No tools or actions.' } });
 const inferDecision = async (request, signal) => {
@@ -308,7 +311,8 @@ const currentContext = text => {
     try { personalMemory = memory().personalContext(text); }
     catch { console.error('[capri] Personal memory unavailable.'); }
   }
-  return { presentation, capabilities: capabilities.registry(agentConfig()), externalCodexEvents: codexEvents.snapshot(),
+  // The full registry (~20 KB) never fit the context budget and was always omitted.
+  return { presentation, capabilities: capabilities.summary(agentConfig()), externalCodexEvents: codexEvents.snapshot(),
   savedContinuity, savedGoals, currentProject: goals().projects.context(Math.max(0, remaining - Buffer.byteLength(JSON.stringify(savedGoals)))),
   companionInterests: interests?.context() || [],
   ...(personalMemory ? { personalMemory } : {}),
@@ -357,6 +361,7 @@ app.setPath('userData', smokeTest && process.env.CAPRIGPT_TEST_PROFILE
   ? process.env.CAPRIGPT_TEST_PROFILE : path.join(app.getPath('appData'), 'CapriGPT'));
 // Installed Codex transport with no background tools, actions or conversation history.
 const cognitiveBrain = new CodexBrain({ settings: () => config.load(),
+  baseInstructions: BACKGROUND_INSTRUCTIONS, effort: BACKGROUND_EFFORT,
   cwd: path.join(app.getPath('temp'), 'caprigpt-codex-cognition'),
   tools: { specs: () => [], instructions: () => 'Return only the requested JSON. No tools or actions.' } });
 const inferCognitive = async (request, signal) => {
