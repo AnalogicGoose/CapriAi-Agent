@@ -15,6 +15,7 @@
     "test:animations": "electron scripts/check-animations.js",
     "test:cels": "electron scripts/check-cel-animations.js",
     "test:desktop": "electron scripts/smoke-electron.js",
+    "test:windows-desktop": "electron scripts/check-windows-desktop.js",
     "test:memory": "electron scripts/smoke-electron.js --memory-only",
     "test:release": "electron scripts/smoke-electron.js --release-only",
     "diagnose:reply": "node scripts/diagnose-reply.js",
