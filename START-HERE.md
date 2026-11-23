@@ -2,7 +2,7 @@
 
 # Capri: Windows local prototype
 
-This is a local development branch of [mochiiwuff/capri-desktop](https://github.com/mochiiwuff/capri-desktop), based on upstream commit `79a016c` (0.3.1). The hosted fork is [Chocoyito1/capri-desktop](https://github.com/Chocoyito1/capri-desktop), with the prototype on branch `codex/caprigpt-local`. No changes have been pushed to the original upstream repository.
+CapriAi Agent builds on [mochiiwuff/capri-desktop](https://github.com/mochiiwuff/capri-desktop), starting from upstream commit `79a016c` (0.3.1). The project now lives at [AnalogicGoose/CapriAi-Agent](https://github.com/AnalogicGoose/CapriAi-Agent); the earlier prototype was hosted on the fork [Chocoyito1/capri-desktop](https://github.com/Chocoyito1/capri-desktop) (branch `codex/caprigpt-local`). No changes have been pushed to the original upstream repository.
 
 ## Start on this laptop
 
@@ -121,18 +121,10 @@ The code is MIT; preserve `LICENSE` and upstream attribution. **The character im
 
 See [CODEX-CONNECTION.md](CODEX-CONNECTION.md) to activate the installed local Codex notification hooks and use the previewed ChatGPT/Codex handoff. Ordinary ChatGPT conversations are not automatically observed. Optional paid OpenAI routing remains planned in `ROADMAP.md`.
 
-## GitHub fork
+## GitHub repository
 
-The hosted fork is [Chocoyito1/capri-desktop](https://github.com/Chocoyito1/capri-desktop). The local prototype branch tracks `origin/codex/caprigpt-local`. `upstream` points to the original mochiiwuff repository.
+The project lives at [AnalogicGoose/CapriAi-Agent](https://github.com/AnalogicGoose/CapriAi-Agent); shared work integrates on `development`. The earlier prototype fork, [Chocoyito1/capri-desktop](https://github.com/Chocoyito1/capri-desktop) (branch `codex/caprigpt-local`), is kept as history. The original project is [mochiiwuff/capri-desktop](https://github.com/mochiiwuff/capri-desktop).
 
-To obtain this prototype on another PC:
+To run Capri on another PC, follow [Run from source](README.md#run-from-source) in the README.
 
-```powershell
-git clone --branch codex/caprigpt-local https://github.com/Chocoyito1/capri-desktop.git Capri
-cd Capri
-npm.cmd ci
-ollama pull llama3.2:3b
-npm.cmd start
-```
-
-The fork retains upstream attribution and rights notices. No installer or release has been published.
+The repository retains upstream attribution and rights notices. No installer or release has been published.

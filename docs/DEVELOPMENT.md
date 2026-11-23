@@ -1,6 +1,6 @@
 # Branches and integration
 
-The canonical GitHub repository is [CapriAi Agent](https://github.com/Chocoyito1/CapriAi-Agent). The setup notes below record the earlier fork-based history.
+The canonical GitHub repository is [CapriAi Agent](https://github.com/AnalogicGoose/CapriAi-Agent). The setup notes below record the earlier fork-based history.
 
 ## Local transition completed (2026-11-07)
 
