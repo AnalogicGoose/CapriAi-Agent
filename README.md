@@ -18,7 +18,7 @@ CapriAi Agent is an independently maintained Windows desktop companion. Capri ca
 Use Windows x64, Git, Node.js 24, and a signed-in Codex CLI.
 
 ```powershell
-git clone https://github.com/Chocoyito1/CapriAi-Agent.git
+git clone https://github.com/AnalogicGoose/CapriAi-Agent.git
 cd CapriAi-Agent
 npm.cmd ci
 npm.cmd start
