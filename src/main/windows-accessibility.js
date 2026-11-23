@@ -88,7 +88,7 @@ class WindowsAccessibility {
 
   controlBounds(id) {
     const control = this.observation?.controls.get(id);
-    return control ? { bounds: control.bounds, window: this.observation.window } : null;
+    return control ? { bounds: control.bounds, window: this.observation.window, at: this.observation.at } : null;
   }
 
   async use(operation, id, value, { signal, check, text }) {

@@ -3,8 +3,13 @@
 const intersects = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 class GuideTargets {
-  constructor({ accessibility, screen, foreground }) {
-    Object.assign(this, { accessibility, screen, foreground });
+  constructor({ accessibility, screen, foreground, now = Date.now }) {
+    Object.assign(this, { accessibility, screen, foreground, now });
+  }
+
+  fresh(at) {
+    const now = this.now();
+    return Number.isFinite(at) && now >= at && now - at < 30000;
   }
 
   sameWindow(window) {
@@ -33,7 +38,7 @@ class GuideTargets {
 
   control({ id }) {
     const found = this.accessibility.controlBounds(id);
-    if (!found || !this.sameWindow(found.window)) return { ok: false, reason: 'stale' };
+    if (!found || !this.fresh(found.at) || !this.sameWindow(found.window)) return { ok: false, reason: 'stale' };
     return this.finish(found.bounds, found.window);
   }
 
@@ -51,7 +56,7 @@ class GuideTargets {
 
   snapshot({ snapshotId, x, y, width, height }) {
     const frame = this.screen.frames.get(snapshotId), window = this.foreground();
-    if (!frame || !window || window.id !== frame.foreground) return { ok: false, reason: 'stale' };
+    if (!frame || !window || window.id !== frame.foreground || !this.fresh(frame.at)) return { ok: false, reason: 'stale' };
     const display = this.screen.displays().find(d => String(d.id) === String(frame.display.id));
     if (!display || JSON.stringify(display.bounds) !== JSON.stringify(frame.display.bounds)) return { ok: false, reason: 'stale' };
     const { bounds: b } = display;
@@ -61,12 +66,14 @@ class GuideTargets {
   }
 
   async name({ name, role }, ctx) {
+    if (typeof name !== 'string' || !name.trim()) return { ok: false, reason: 'not-found' };
     const wanted = name.trim().toLowerCase();
     const { controls } = await this.accessibility.inspect(name, ctx);
-    const hit = (controls || []).find(c => typeof c.name === 'string' && c.name.trim().toLowerCase() === wanted &&
+    const hits = (controls || []).filter(c => typeof c.name === 'string' && c.name.trim().toLowerCase() === wanted &&
       (!role || String(c.role).toLowerCase() === role.toLowerCase()));
-    if (hit) {
-      const found = this.control({ id: hit.id });
+    if (hits.length > 1) return { ok: false, reason: 'ambiguous' };
+    if (hits.length === 1) {
+      const found = this.control({ id: hits[0].id });
       if (found.ok || found.reason !== 'stale') return found;
     }
     return this.text(name, undefined, ctx);

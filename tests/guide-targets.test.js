@@ -5,17 +5,17 @@ const { GuideTargets } = require('../src/main/guide-targets');
 
 function fixture({ matches = [], controls = [], inspected = [] } = {}) {
   const win = { id: 5, pid: 9, x: -1000, y: 0, width: 2000, height: 800 };
-  const state = { win, ocrQueries: [], inspectQueries: [] };
+  const state = { win, now: 1000, ocrQueries: [], inspectQueries: [] };
   const map = new Map(controls.map(c => [c.id, c]));
   const accessibility = {
-    controlBounds: id => map.has(id) ? { bounds: map.get(id).bounds, window: state.observedWindow || win } : null,
+    controlBounds: id => map.has(id) ? { bounds: map.get(id).bounds, window: state.observedWindow || win, at: 1000 } : null,
     inspect: async query => { state.inspectQueries.push(query); return { controls: inspected }; },
     readPixels: async (window, query) => { state.ocrQueries.push(query); return matches; },
   };
   const display = { id: 7, bounds: { x: -1000, y: 0, width: 1000, height: 800 } };
-  const frames = new Map([['snap', { display, width: 500, height: 400, foreground: 5, window: win }]]);
+  const frames = new Map([['snap', { display, width: 500, height: 400, foreground: 5, window: win, at: 1000 }]]);
   const screen = { frames, displays: () => [display], toNativePoint: p => p };
-  const service = new GuideTargets({ accessibility, screen, foreground: () => state.win });
+  const service = new GuideTargets({ accessibility, screen, foreground: () => state.win, now: () => state.now });
   return { service, state, controls: map, frames, display };
 }
 const ctx = { signal: undefined, check() {} };
@@ -64,4 +64,38 @@ test('name target prefers exact UIA name plus role, then falls back to OCR text'
 test('a target outside the foreground window bounds is reported as outside-window', async () => {
   const f = fixture({ controls: [{ id: 'far', bounds: box(2000, 2000, 10, 10) }] });
   assert.deepEqual(await f.service.resolve({ type: 'control', id: 'far' }, ctx), { ok: false, reason: 'outside-window' });
+});
+
+test('name target with duplicate exact matches is ambiguous; bad names are not-found', async () => {
+  const f = fixture({
+    controls: [{ id: 'a', bounds: box(1, 1, 5, 5) }, { id: 'b', bounds: box(50, 50, 5, 5) }],
+    inspected: [{ id: 'a', name: 'Save', role: 'Button' }, { id: 'b', name: 'SAVE', role: 'Button' }],
+  });
+  assert.deepEqual(await f.service.resolve({ type: 'name', name: 'Save' }, ctx), { ok: false, reason: 'ambiguous' });
+  assert.equal((await f.service.resolve({ type: 'name', name: 'Save', role: 'Edit' }, ctx)).reason, 'not-found');
+  assert.equal((await f.service.resolve({ type: 'name' }, ctx)).reason, 'not-found');
+});
+
+test('control and snapshot targets go stale after 30s or a clock rewind', async () => {
+  const f = fixture({ controls: [{ id: 'c1', bounds: box(10, 20, 30, 40) }] });
+  const snap = { type: 'snapshot', snapshotId: 'snap', x: 250, y: 100, width: 10, height: 10 };
+  f.state.now = 30999;
+  assert.equal((await f.service.resolve({ type: 'control', id: 'c1' }, ctx)).ok, true);
+  assert.equal((await f.service.resolve(snap, ctx)).ok, true);
+  for (const now of [31000, 999]) {
+    f.state.now = now;
+    assert.equal((await f.service.resolve({ type: 'control', id: 'c1' }, ctx)).reason, 'stale');
+    assert.equal((await f.service.resolve(snap, ctx)).reason, 'stale');
+  }
+});
+
+test('snapshot target is stale when the window or display geometry changed', async () => {
+  const snap = { type: 'snapshot', snapshotId: 'snap', x: 0, y: 0, width: 10, height: 10 };
+  const f = fixture();
+  f.state.win = { ...f.state.win, id: 6 };
+  assert.equal((await f.service.resolve(snap, ctx)).reason, 'stale');
+  const g = fixture();
+  g.display.bounds = { x: 0, y: 0, width: 1000, height: 800 };
+  g.frames.get('snap').display = { ...g.display, bounds: { x: -1000, y: 0, width: 1000, height: 800 } };
+  assert.equal((await g.service.resolve(snap, ctx)).reason, 'stale');
 });
