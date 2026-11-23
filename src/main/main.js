@@ -274,16 +274,18 @@ const externalForeground = () => {
   const window = require('./native-windows').foregroundBounds();
   return window?.pid === process.pid ? null : window;
 };
+// Hand focus back to the app behind her overlay before reading or drawing on it.
+const yieldOverlayFocus = async () => {
+  if (!overlay?.isFocused()) return;
+  overlay.blur();
+  await new Promise(resolve => setTimeout(resolve, 100));
+};
 const highlight = desktopHighlight({ BrowserWindow, screen, foreground: externalForeground,
   enabled: () => screenAccess.enabled() && config.load().visible !== false,
   onError: () => console.error('[capri] Could not keep the desktop highlight visible.') });
 const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
   settings: () => config.load(), foreground: externalForeground, highlight: highlight.show,
-  yieldFocus: async () => {
-    if (!overlay?.isFocused()) return;
-    overlay.blur();
-    await new Promise(resolve => setTimeout(resolve, 100));
-  },
+  yieldFocus: yieldOverlayFocus,
   confirm: async (message, detail) => (await dialog.showMessageBox({ type: 'question', title: 'Capri - Desktop action', message,
     detail, buttons: ['Cancel', 'Confirm'], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
   captureWindow: async ({ x, y, width, height }) => {
@@ -308,7 +310,8 @@ const guide = new GuideSession({
   layer: createGuideLayer({ BrowserWindow, screen, preload: path.join(__dirname, '..', 'guide-preload.js'),
     page: path.join(__dirname, '..', 'renderer', 'guide.html') }),
   layout: scene => layoutScene(scene, { displays: screen.getAllDisplays(), screenToDip: rect => screen.screenToDipRect(null, rect) }),
-  foreground: externalForeground,
+  // Raw foreground: her own windows (pid) keep the drawing instead of clearing it.
+  foreground: () => require('./native-windows').foregroundBounds(), ownPid: process.pid, yieldFocus: yieldOverlayFocus,
   // ScreenAccess reads agentConfig, which lifts Gaming mode only while a voice session is active.
   allowed: () => screenAccess.enabled(),
 });

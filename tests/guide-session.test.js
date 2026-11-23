@@ -9,7 +9,7 @@ const box = (x, y, width, height) => ({ x, y, width, height });
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const ctx = { check() {}, signal: undefined };
 
-function fixture({ allowed = () => true, render } = {}) {
+function fixture({ allowed = () => true, render, yieldFocus } = {}) {
   const state = { now: 0, win: { id: 5, pid: 9, ...box(0, 0, 800, 600) }, found: new Map(), reasons: new Map(),
     resolves: [], scenes: [], renders: [], clears: 0, interval: null };
   const targets = {
@@ -26,7 +26,7 @@ function fixture({ allowed = () => true, render } = {}) {
     clear: () => { state.clears += 1; },
   };
   const layout = scene => { state.scenes.push(scene); return new Map([[1, { marks: scene.marks, cards: scene.cards }]]); };
-  const session = new GuideSession({ targets, layer, layout, allowed,
+  const session = new GuideSession({ targets, layer, layout, allowed, ownPid: 77, yieldFocus,
     foreground: () => state.win, now: () => state.now,
     setInterval: (fn, ms) => { state.interval = { fn, ms }; return 'timer'; },
     clearInterval: token => { if (token === 'timer') state.interval = null; } });
@@ -209,4 +209,55 @@ test('tool descriptions for capri_draw stay within budget', async () => {
   assert.equal(calls[0][1].check, check);
   assert.equal(calls[0][1].signal, signal);
   await assert.rejects(tools.execute('capri_draw', { marks: [], cards: [] }, { check, signal }), /Invalid Capri tool arguments/);
+});
+
+test('a draw right after typing in her own window yields focus, then draws on the window behind', async () => {
+  const yields = [];
+  const f = fixture({ yieldFocus: async () => { yields.push(1); f.state.win = { id: 5, pid: 9, ...box(0, 0, 800, 600) }; } });
+  f.state.win = { id: 99, pid: 77, ...box(10, 10, 300, 400) };
+  f.state.found.set('Save', box(100, 100, 60, 20));
+  const result = await f.session.draw({ marks: [mark('a', 'ring', tgt('text', 'Save'))], cards: [], clear: false }, ctx);
+  assert.equal(yields.length, 1);
+  assert.equal(result.drawn, 1);
+  assert.deepEqual(f.scene().window, box(0, 0, 800, 600));
+  // Still her own window (or nothing) after yielding: fail plainly, draw nothing.
+  const g = fixture({ yieldFocus: async () => {} });
+  g.state.win = { id: 99, pid: 77, ...box(10, 10, 300, 400) };
+  await assert.rejects(g.session.draw({ marks: [mark('a', 'ring', tgt('text', 'Save'))], cards: [], clear: false }, ctx), /foreground window/);
+  assert.equal(g.state.resolves.length, 0);
+});
+
+test('her own window in front keeps the drawing; another external window clears it', async () => {
+  const f = fixture();
+  f.state.found.set('Save', box(100, 100, 60, 20));
+  await f.session.draw({ marks: [mark('a', 'ring', tgt('text', 'Save'))], cards: [], clear: false }, ctx);
+  const annotated = f.state.win;
+  f.state.win = { id: 99, pid: 77, ...box(10, 10, 300, 400) }; // her chat panel, overlay or the guide layer
+  await f.tick(1000);
+  assert.equal(f.state.clears, 0);
+  assert.equal(f.session.active, true);
+  assert.equal(f.state.renders.length, 1, 'not hidden either');
+  f.state.win = annotated;
+  await f.tick();
+  assert.equal(f.state.clears, 0);
+  f.state.win = { id: 6, pid: 10, ...box(0, 0, 800, 600) };
+  await f.tick();
+  assert.equal(f.state.clears, 1);
+});
+
+test('a native error in the lifetime check clears the drawing instead of throwing into the timer', async t => {
+  t.mock.method(console, 'error', () => {});
+  const f = fixture();
+  f.state.found.set('Save', box(100, 100, 60, 20));
+  await f.session.draw({ marks: [mark('a', 'ring', tgt('text', 'Save'))], cards: [], clear: false }, ctx);
+  f.session.foreground = () => { throw Error('native call failed'); };
+  assert.doesNotThrow(() => f.state.interval.fn());
+  assert.equal(f.state.clears, 1);
+  assert.equal(f.session.active, false);
+});
+
+test('user-facing errors use the display name', async () => {
+  const { DISPLAY_NAME } = require('../src/main/identity');
+  const f = fixture({ allowed: () => false });
+  await assert.rejects(f.session.draw({ marks: [], cards: [], clear: false }, ctx), err => err.message.includes(DISPLAY_NAME));
 });

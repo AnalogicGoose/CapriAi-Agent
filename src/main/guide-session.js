@@ -1,5 +1,6 @@
 'use strict';
 const { validateDraw } = require('./guide-schema');
+const { DISPLAY_NAME } = require('./identity');
 
 // One drawing at a time, owned by the window it annotates. Pure apart from the injected
 // targets, layer, layout, foreground and timers, so lifetime rules are testable with fakes.
@@ -33,8 +34,9 @@ function fromTool(args) {
 
 class GuideSession {
   constructor({ targets, layer, layout, foreground, now = Date.now, setInterval: every = setInterval,
-    clearInterval: stopEvery = clearInterval, allowed = () => true }) {
-    Object.assign(this, { targets, layer, layout, foreground, now, every, stopEvery, allowed });
+    clearInterval: stopEvery = clearInterval, allowed = () => true, ownPid = process.pid, yieldFocus = async () => {} }) {
+    // foreground is the raw foreground window; windows of ownPid (her overlay, chat panel, guide layer) never own a drawing.
+    Object.assign(this, { targets, layer, layout, foreground, now, every, stopEvery, allowed, ownPid, yieldFocus });
     this.marks = new Map(); // id -> { id, kind, target, to?, text?, bounds, toBounds? }
     this.cards = [];
     this.window = null;     // the annotated window, native px, as last seen
@@ -45,6 +47,8 @@ class GuideSession {
     this.generation = 0;
     this.queue = Promise.resolve();
   }
+
+  own(w) { return Boolean(w && w.pid === this.ownPid); }
 
   get active() { return Boolean(this.window && (this.marks.size || this.cards.length)); }
 
@@ -57,12 +61,18 @@ class GuideSession {
 
   async drawNow(args, ctx) {
     ctx.check?.();
-    if (!this.allowed()) throw Error('Screen awareness is off or paused, so Capri can’t draw on screen.');
+    if (!this.allowed()) throw Error(`Screen awareness is off or paused, so ${DISPLAY_NAME} can’t draw on screen.`);
     const drawing = validateDraw(fromTool(args));
     const wanted = new Map(drawing.marks.map(m => [m.id, m])); // a repeated id: the later mark wins
     if (drawing.clear) this.clear('redraw');
-    const win = this.foreground();
-    if (!win) throw Error('There is no foreground window to explain.');
+    let win = this.foreground();
+    if (!win || this.own(win)) {
+      // Typed in her chat panel: step aside once so the window behind it is in front again.
+      await this.yieldFocus();
+      ctx.check?.();
+      win = this.foreground();
+    }
+    if (!win || this.own(win)) throw Error('There is no foreground window to explain.');
     if (this.window && this.window.id !== win.id) this.clear('new-window');
     const generation = this.generation;
     const failed = [], placed = [];
@@ -146,11 +156,20 @@ class GuideSession {
     this.timer = null;
   }
 
+  // Runs inside setInterval: never throws; a failure (e.g. a native call) clears the drawing.
   check() {
+    try { this.checkNow(); } catch {
+      console.error('[capri] The on-screen guide check failed; clearing it.');
+      this.clear('error');
+    }
+  }
+
+  checkNow() {
     if (!this.active || this.replacing) return;
     if (!this.allowed()) return this.clear('not-allowed');
     if (this.now() - this.lastActivity >= IDLE_MS) return this.clear('idle');
     const current = this.foreground();
+    if (this.own(current)) return; // her own window in front: keep the drawing as it is
     if (!current || current.id !== this.window.id) return this.clear('foreground');
     if (!sameRect(current, this.window)) {
       if (!this.hidden) { this.hidden = true; this.hide(); this.moved = { from: rect(this.window) }; }
@@ -184,8 +203,8 @@ class GuideSession {
       this.marks = new Map(next.map(m => [m.id, m]));
       if (!this.active) return this.clear('lost-targets');
       const current = this.foreground();
-      if (!current || current.id !== this.window.id) return this.clear('foreground');
-      if (!sameRect(current, this.window)) {
+      if (!this.own(current) && (!current || current.id !== this.window.id)) return this.clear('foreground');
+      if (!this.own(current) && !sameRect(current, this.window)) {
         // It moved again while re-reading: stay hidden and wait for stillness from the new spot.
         this.moved = { from: to };
         this.window = { ...current };
