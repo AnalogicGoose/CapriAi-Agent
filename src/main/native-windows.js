@@ -6,8 +6,8 @@ const path = require('node:path');
 const { friendlyName } = require('./app-names');
 let cached;
 function api() {
-  if (process.platform !== 'win32') throw Error('Windows context is unavailable.');
   if (cached) return cached;
+  if (process.platform !== 'win32') throw Error('Windows context is unavailable.');
   const ffi = require('koffi');
   const library = name => ffi.load(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', name));
   const kernel = library('kernel32.dll'), user = library('user32.dll'), dwm = library('dwmapi.dll');
@@ -33,6 +33,8 @@ function api() {
     style: bind(user, 'GetWindowLongW', 'int32', ['uintptr_t', 'int32']),
     attribute: bind(dwm, 'DwmGetWindowAttribute', 'int32', ['uintptr_t', 'uint32', 'void *', 'uint32']),
     post: bind(user, 'PostMessageW', 'int32', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t']),
+    keyState: bind(user, 'GetAsyncKeyState', 'int16', ['int32']),
+    cursorPos: bind(user, 'GetCursorPos', 'int32', ['void *']),
   };
   return cached;
 }
@@ -174,6 +176,16 @@ function consoleWindows() {
   return result;
 }
 
+// Polled, never hooked: reads the left button and cursor once and keeps nothing.
+function pointerState() {
+  const a = api(), point = Buffer.alloc(8);
+  const down = Boolean(a.keyState(0x01) & 0x8000);
+  if (!a.cursorPos(point)) throw Error('Pointer position unavailable.');
+  return { down, x: point.readInt32LE(0), y: point.readInt32LE(4) };
+}
+// Test seam: replaces (or with undefined clears) the cached native api.
+function _setApiForTests(fake) { cached = fake; }
+
 function requestClose(handles) { for (const hwnd of handles) api().post(hwnd, 0x10, 0, 0); }
 function forceClose(ids, expectedName) {
   const current = new Map(processRows().map(row => [row.id, row.name]));
@@ -185,4 +197,4 @@ function forceClose(ids, expectedName) {
   }
 }
 
-module.exports = { context, desktopApps, processRows, geometry, foregroundBounds, consoleWindows, requestClose, forceClose };
+module.exports = { context, desktopApps, processRows, geometry, foregroundBounds, consoleWindows, requestClose, forceClose, pointerState, _setApiForTests };
