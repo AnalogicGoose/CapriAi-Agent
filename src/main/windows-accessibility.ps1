@@ -74,7 +74,7 @@ try {
     $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
     Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
     $handle = [IntPtr]::new([long]$request.windowId)
-    $root = [Windows.Automation.AutomationElement]::FromHandle($handle)
+    try { $root = [Windows.Automation.AutomationElement]::FromHandle($handle) } catch { throw 'The observed window closed or changed.' }
     if (!$root -or $root.Current.ProcessId -ne $request.pid) { throw 'The observed window closed or changed.' }
     $walker = [Windows.Automation.TreeWalker]::ControlViewWalker
     $pending = [Collections.Generic.Queue[Windows.Automation.AutomationElement]]::new()
