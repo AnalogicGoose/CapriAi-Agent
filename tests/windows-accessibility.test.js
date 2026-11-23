@@ -112,8 +112,8 @@ test('the marker and caption fit secondary-monitor edges and the caption stays o
   assert.throws(() => markerLayout({ x: 1, y: 20, width: 40, height: 20 }, display, 'Outside'), /outside/);
 });
 
-// Real Windows OCR: renders text with GDI+, so it only runs on Windows with an OCR language installed.
-test('Windows OCR finds words next to punctuation and small text, with scaled bounds', { skip: process.platform !== 'win32' }, async t => {
+// Real Windows OCR: renders text with GDI+. Opt-in (CAPRI_REAL_OCR=1) because it depends on the machine's fonts, DPI and installed OCR language.
+test('Windows OCR finds words next to punctuation and small text, with scaled bounds', { skip: process.platform !== 'win32' || process.env.CAPRI_REAL_OCR !== '1' }, async t => {
   const file = path.join(os.tmpdir(), `capri-ocr-${process.pid}.png`);
   const script = `Add-Type -AssemblyName System.Drawing; $b=New-Object Drawing.Bitmap 600,120; $g=[Drawing.Graphics]::FromImage($b); $g.Clear([Drawing.Color]::White); ` +
     `$f=New-Object Drawing.Font 'Segoe UI',8; $g.DrawString('Save changes   Cancel: Scale',$f,[Drawing.Brushes]::Black,20,30); $b.Save('${file}',[Drawing.Imaging.ImageFormat]::Png)`;

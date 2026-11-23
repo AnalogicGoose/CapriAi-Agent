@@ -25,3 +25,6 @@ Status legend: **U** = automated unit test (mocked), **W** = real Windows run (h
 - The password-control exclusion and real invoke/set-value paths still need a manual pass.
 - `npm run test:desktop` (Electron smoke) was not run.
 - Native-resolution capture was reasoned from the Electron API and verified only by unit tests plus the OCR helper; run Capri on the desktop to confirm.
+
+## Running the real-OCR test
+`$env:CAPRI_REAL_OCR='1'; npm test` (PowerShell). It is skipped by default: the first CI run of it failed on the GitHub runner (log not available to diagnose), so it is opt-in until it can be made deterministic there.
