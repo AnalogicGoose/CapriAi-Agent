@@ -23,6 +23,8 @@ const { SpeechOutput } = require('./tts');
 const { CodexBrain } = require('./codex-brain');
 const { CodexTools } = require('./codex-tools');
 const { ScreenAccess } = require('./screen-access');
+const { WindowsAccessibility } = require('./windows-accessibility');
+const { desktopHighlight } = require('./desktop-highlight');
 const { CognitiveFoundation } = require('./cognitive-foundation');
 const { GroundedCuriosity } = require('./grounded-curiosity');
 const { ReflectionEngine } = require('./cognitive-reflection');
@@ -243,6 +245,13 @@ const personal = new PersonalAssistant({
   },
 });
 
+async function captureDisplay(displayId) {
+  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1600, height: 1000 }, fetchWindowIcons: false });
+  const source = sources.find(row => row.display_id === String(displayId));
+  if (!source || source.thumbnail.isEmpty()) throw Error('Windows did not provide a screen image.');
+  return source.thumbnail;
+}
+
 const screenAccess = new ScreenAccess({ settings: agentConfig,
   displays: () => {
     const fg = require('./native-windows').foregroundBounds();
@@ -253,13 +262,41 @@ const screenAccess = new ScreenAccess({ settings: agentConfig,
   toNativePoint: point => screen.dipToScreenPoint(point), input: require('./desktop-input').perform,
   confirm: confirmMemory,
   capture: async display => {
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1600, height: 1000 }, fetchWindowIcons: false });
-    const source = sources.find(row => row.display_id === String(display.id));
-    if (!source || source.thumbnail.isEmpty()) throw Error('Windows did not provide a screen image.');
-    const size = source.thumbnail.getSize();
-    return { url: `data:image/jpeg;base64,${source.thumbnail.toJPEG(65).toString('base64')}`, ...size };
+    const image = await captureDisplay(display.id);
+    return { url: `data:image/jpeg;base64,${image.toJPEG(65).toString('base64')}`, ...image.getSize() };
   },
 });
+const externalForeground = () => {
+  const window = require('./native-windows').foregroundBounds();
+  return window?.pid === process.pid ? null : window;
+};
+const highlight = desktopHighlight({ BrowserWindow, screen, foreground: externalForeground,
+  enabled: () => screenAccess.enabled() && config.load().visible !== false,
+  onError: () => console.error('[capri] Could not keep the desktop highlight visible.') });
+const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
+  settings: () => config.load(), foreground: externalForeground, highlight: highlight.show,
+  yieldFocus: async () => {
+    if (!overlay?.isFocused()) return;
+    overlay.blur();
+    await new Promise(resolve => setTimeout(resolve, 100));
+  },
+  confirm: async (message, detail) => (await dialog.showMessageBox({ type: 'question', title: 'Capri - Desktop action', message,
+    detail, buttons: ['Cancel', 'Confirm'], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
+  captureWindow: async ({ x, y, width, height }) => {
+    const display = screen.getDisplayMatching(screen.screenToDipRect(null, { x, y, width, height }));
+    const area = screen.dipToScreenRect(null, display.bounds);
+    const image = await captureDisplay(display.id);
+    const size = image.getSize();
+    const scaleX = area.width / size.width, scaleY = area.height / size.height;
+    const left = Math.max(0, Math.ceil((x - area.x) / scaleX)), top = Math.max(0, Math.ceil((y - area.y) / scaleY));
+    const right = Math.min(size.width, Math.floor((x + width - area.x) / scaleX));
+    const bottom = Math.min(size.height, Math.floor((y + height - area.y) / scaleY));
+    if (right <= left || bottom <= top) throw Error('The foreground window is outside the captured display.');
+    const cropped = image.crop({ x: left, y: top, width: right - left, height: bottom - top });
+    return { image: cropped.toJPEG(90).toString('base64'), x: area.x + left * scaleX, y: area.y + top * scaleY, scaleX, scaleY };
+  },
+}) : null;
+app.on('before-quit', highlight.clear);
 const currentContext = text => {
   const p = permissions(agentConfig().privacy);
   const savedContinuity = goals().continuity.context();
@@ -276,7 +313,8 @@ const currentContext = text => {
   ...(personalMemory ? { personalMemory } : {}),
   recentTasks: actions.grounding({ includeApps: false }) };
 };
-const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: resolveLang, context: pcContext, screen: screenAccess, closeApp: closeRequestedApp,
+const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: resolveLang, context: pcContext,
+  screen: screenAccess, accessibility, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
   body: (action, { check, signal }) => new Promise((resolve, reject) => {
     check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Capri’s body is unavailable.'));
     const id = randomBytes(12).toString('hex');
@@ -288,6 +326,7 @@ const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: reso
   }),
   actions, store: memory, goals, curiosity: () => curiosity, state: settingsState, patch: updateConfig, confirm: confirmMemory });
 const brain = new CodexBrain({ settings: agentConfig, recentConversation,
+  warmIdleMs: 3 * 60 * 1000, canKeepWarm: () => !config.load().gamingMode && sessionAvailable,
   cwd: path.join(app.getPath('temp'), 'caprigpt-codex-brain'), tools: brainTools,
   systemTools: () => config.load().systemAccess === true, workspace: () => goals().projects.workspace() || app.getPath('home'), context: currentContext,
   onOutcome: receipt => {
@@ -1277,6 +1316,7 @@ function main() {
       sessionAvailable = event === 'resume' || event === 'unlock-screen';
       autonomy.observeIdle(null); autonomy.touch(); reflection.cancel();
       if (!sessionAvailable) {
+        brain.dropWarmClient();
         checkInDeadline = 0; tts.cancel();
         interestCollaboration.cancel();
         if (speech.current?.checkIn) { speech.cancel(); endVoiceSession(); }

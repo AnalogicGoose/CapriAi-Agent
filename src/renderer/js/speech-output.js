@@ -1,11 +1,25 @@
 // Audio stays in the overlay; the local worker streams signed 16-bit PCM.
 // Change the silence between phrases while playing each generated sample as-is.
 const PHRASE_PAUSES = { neutral: 0.06, playful: 0.02, comforting: 0.19, pleased: 0.12, curious: 0.04 };
+const SENTENCE_PUNCTUATION = /([.!?]+)["'\u2019\u201d)\]]*(?=\s|$)/g;
+const ABBREVIATION = /(?:\b(?:mr|mrs|ms|dr|prof|sr|sra|jr|st|vs|etc|fig|no|e\.g|i\.e)\.|\b(?:[a-z]\.){2,})$/i;
+
+function sentenceEnd(text) {
+  for (const match of text.matchAll(SENTENCE_PUNCTUATION)) {
+    const end = match.index + match[0].length;
+    if (match[1] === '.') {
+      const prefix = text.slice(0, match.index + 1);
+      if (ABBREVIATION.test(prefix) || /\b[A-Z]\.$/.test(prefix) || (end === text.length && /\d\.$/.test(prefix))) continue;
+    }
+    if (text.slice(0, end).trim()) return end;
+  }
+  return 0;
+}
 
 export class SpeechPlayer {
   constructor({ host, voice, onLevel = () => {}, onError = () => {}, onPlayback = () => {} }) {
     Object.assign(this, { host, voice, onLevel, onError, onPlayback });
-    this.epoch = 0; this.serial = 0; this.sources = new Set(); this.chunkChain = Promise.resolve();
+    this.epoch = 0; this.serial = 0; this.sources = new Map(); this.chunkChain = Promise.resolve();
     host.onTtsState?.(event => {
       if (event.type === 'stopped') this.stop(false);
       else if (event.type === 'preview') {
@@ -25,16 +39,23 @@ export class SpeechPlayer {
   }
   get enabled() { return Boolean(this.config?.ttsEnabled && !this.config.muted); }
   get inputHeld() { return this.inputHold?.ctx.state === 'suspended'; }
+  get lastPlayedText() {
+    for (const [source, phrase] of this.sources) {
+      if (source.context.currentTime >= phrase.start && source.context.currentTime < phrase.end) return phrase.text;
+    }
+    return this.lastEndedText || '';
+  }
   configure(cfg) { this.config = cfg; this.stop(); }
   stop(notify = true) {
     clearTimeout(this.proactiveTimer); this.proactive = null;
     this.epoch++; this.pending = null; this.response = null; this.responseMood = undefined; this.nextTime = 0; this.responseSuppressed = true;
     cancelAnimationFrame(this.raf);
-    for (const source of this.sources) { source.onended = null; try { source.stop(); } catch {} source.disconnect(); }
+    for (const source of this.sources.keys()) { source.onended = null; try { source.stop(); } catch {} source.disconnect(); }
     this.sources.clear(); this.source = null; this.analyser?.disconnect(); this.analyser = null;
     this.releaseInputHold();
     this.onLevel(0);
     this.playing = false; this.onPlayback(false);
+    this.lastEndedText = '';
     if (notify) this.host.ttsCancel?.();
   }
   async context(epoch) {
@@ -82,14 +103,15 @@ export class SpeechPlayer {
       frame();
     }
     const source = this.source = ctx.createBufferSource();
-    this.lastPlayedText = utterance?.text || '';
-    source.buffer = buffer; source.connect(this.analyser); this.sources.add(source);
+    source.buffer = buffer; source.connect(this.analyser);
     const pause = utterance && !utterance.started && this.nextTime
       ? (Object.hasOwn(PHRASE_PAUSES, utterance.mood) ? PHRASE_PAUSES[utterance.mood] : PHRASE_PAUSES.neutral) : 0;
     const at = Math.max(this.nextTime + pause, ctx.currentTime + 0.06);
     if (utterance) utterance.started = true;
     this.nextTime = at + buffer.duration;
-    source.onended = () => { this.sources.delete(source); source.disconnect(); this.finishIfIdle(); };
+    const text = utterance?.text || '';
+    this.sources.set(source, { text, start: at, end: this.nextTime });
+    source.onended = () => { this.lastEndedText = text; this.sources.delete(source); source.disconnect(); this.finishIfIdle(); };
     source.start(at);
   }
   async pcm(event, epoch) {
@@ -103,7 +125,13 @@ export class SpeechPlayer {
     this.schedule(ctx, buffer);
   }
   finishIfIdle() {
-    if (!this.sources.size && !this.pending && (!this.response || (this.response.done && !this.response.busy && !this.response.queue.length))) this.stop(false);
+    if (this.sources.size) return;
+    if (!this.pending && (!this.response || (this.response.done && !this.response.busy && !this.response.queue.length))) this.stop(false);
+    else if (this.playing) {
+      this.source = null;
+      this.playing = false;
+      this.onPlayback(false);
+    }
   }
   async speak(text, mood) { this.stop(); if (this.enabled) await this.play(text, mood); }
   speakProactive(text, deadline, available, mood) {
@@ -147,7 +175,7 @@ export class SpeechPlayer {
     this.stop();
     this.responseMood = mood;
     this.responseSuppressed = false;
-    if (!this.enabled || this.config.ttsEngine !== 'qwen') return false;
+    if (!this.enabled || !['qwen', 'windows'].includes(this.config.ttsEngine)) return false;
     this.response = { consumed: '', queue: [], done: false, busy: false };
     return true;
   }
@@ -164,15 +192,8 @@ export class SpeechPlayer {
     if (!plain.startsWith(response.consumed)) { this.stop(); return; }
     let remaining = plain.slice(response.consumed.length);
     while (remaining.trim()) {
-      const match = /[.!?]["'”’]?(?=\s)/.exec(remaining);
-      let end = match ? match.index + match[0].length : done ? remaining.length : 0;
-      if (!done && end < 35) {
-        const next = /[.!?]["'”’]?(?=\s)/g; next.lastIndex = Math.max(end, 1);
-        const later = next.exec(remaining); end = later ? later.index + later[0].length : 0;
-      }
-      if (!end && remaining.length > 350) end = remaining.lastIndexOf(' ', 300);
+      const end = sentenceEnd(remaining) || (done ? remaining.length : 0);
       if (!end) break;
-      if (end > 350) end = remaining.lastIndexOf(' ', 300) || end;
       const part = remaining.slice(0, end);
       response.consumed += part; response.queue.push(part.trim());
       remaining = remaining.slice(end);

@@ -49,20 +49,43 @@ test('system-mode CLI enables command, file/image and web capability without for
   c.close();
 });
 function fixture(mode = 'reply') {
-  let client; const calls = []; const toolRuns = [];
+  let client; let threadNumber = 0; const calls = []; const toolRuns = [];
   const tools = { specs: () => [], instructions: () => '', run: async (...args) => { toolRuns.push(args); return { completed: true }; }, cancel: () => {} };
   const factory = () => client = {
-    start: async () => {}, close() { calls.push(['close']); this.closed = true; }, respond(...args) { calls.push(['respond', ...args]); },
+    start: async () => { calls.push(['initialize']); }, close() { calls.push(['close']); this.closed = true; }, respond(...args) { calls.push(['respond', ...args]); },
     async request(method, params) {
       calls.push([method, params]);
       if (method === 'account/read') return { account: { type: 'chatgpt' } };
       if (method === 'model/list') return { data: [{ id: 'test', model: 'test', isDefault: true }] };
       if (method === 'config/read') return { config: { mcp_servers: { existing: {} } } };
-      if (method === 'thread/start') return { thread: { id: 'thread' } };
+      if (method === 'thread/start') return { thread: { id: mode === 'warm' ? `thread-${++threadNumber}` : 'thread' } };
+      if (method === 'thread/unsubscribe') return { status: 'unsubscribed' };
       if (method === 'turn/start') {
+        if (mode === 'warm') {
+          const { threadId } = params, turn = { id: 'turn', status: 'completed' };
+          this.onNotification('turn/started', { threadId, turn });
+          setImmediate(() => {
+            this.onNotification('item/agentMessage/delta', { threadId: 'thread-older', turnId: turn.id, delta: 'Stale.' });
+            this.onNotification('item/agentMessage/delta', { threadId, turnId: turn.id, delta: 'Hello' });
+            this.onNotification('turn/completed', { threadId, turn });
+          });
+          return { turn };
+        }
         this.onNotification('turn/started', { threadId: 'thread', turn: { id: 'turn' } });
         if (mode === 'wait') return { turn: { id: 'turn' } };
         setImmediate(async () => {
+          if (mode === 'phased') {
+            const context = { threadId: 'thread', turnId: 'turn' };
+            for (const item of [
+              { id: 'first', phase: 'partial_answer', text: '[[voice: curious]]\nI see it.' },
+              { id: 'last', phase: 'final_answer', text: 'The value is 75.' },
+            ]) {
+              this.onNotification('item/agentMessage/delta', { ...context, itemId: item.id, delta: item.text });
+              this.onNotification('item/completed', { ...context, item: { ...item, type: 'agentMessage' } });
+            }
+            this.onNotification('turn/completed', { ...context, turn: { id: 'turn', status: 'completed' } });
+            return;
+          }
           if (mode === 'verification') {
             const item = { id: 'test-command', type: 'commandExecution', command: 'npm test', cwd: path.join(os.tmpdir(), 'selected-project'), status: 'completed', exitCode: 0 };
             this.onNotification('item/completed', { threadId: 'old-thread', turnId: 'turn', item: { ...item, id: 'stale' } });
@@ -84,6 +107,12 @@ function fixture(mode = 'reply') {
             if (mode === 'tool') await this.onRequest({ ...request, id: 32, params: { ...request.params, turnId: 'old' } });
           }
           const pieces = mode === 'delivery' ? ['[[vo', 'ice: com', 'forting]]\n', 'I’m right here.'] : ['Hello'];
+          if (mode === 'delivery') {
+            const item = { id: 'commentary', type: 'agentMessage', phase: 'commentary', text: 'Checking.' };
+            this.onNotification('item/started', { threadId: 'thread', turnId: 'turn', item });
+            this.onNotification('item/agentMessage/delta', { threadId: 'thread', turnId: 'turn', itemId: item.id, delta: item.text });
+            this.onNotification('item/completed', { threadId: 'thread', turnId: 'turn', item });
+          }
           for (const delta of pieces) this.onNotification('item/agentMessage/delta', { threadId: 'thread', turnId: 'turn', delta });
           this.onNotification('item/completed', { threadId: 'thread', turnId: 'turn', item: { type: 'agentMessage', text: pieces.join('') } });
           this.onNotification('turn/completed', { threadId: 'thread', turn: { id: 'turn', status: 'completed' } });
@@ -95,6 +124,51 @@ function fixture(mode = 'reply') {
   const brain = new CodexBrain({ settings: () => ({}), cwd: path.join(os.tmpdir(), 'capri-brain-unit'), tools, clientFactory: factory, locate: () => 'codex' });
   return { brain, calls, toolRuns, client: () => client };
 }
+test('warm foreground requests reuse the process, isolate threads and release the process in gaming mode', async () => {
+  const f = fixture('warm');
+  f.brain.warmIdleMs = 180000;
+  let gamingMode = false;
+  f.brain.settings = () => ({ gamingMode });
+  f.brain.canKeepWarm = () => !gamingMode;
+  try {
+    await f.brain.chat('First');
+    const proc = f.client(), deltas = [];
+    assert.equal(proc.closed, undefined);
+    assert.equal(await f.brain.chat('Second', text => deltas.push(text)), 'Hello');
+    assert.equal(f.client(), proc);
+    assert.deepEqual(deltas, ['Hello']);
+    assert.equal(f.calls.filter(([method]) => method === 'initialize').length, 1);
+    assert.deepEqual(f.calls.filter(([method]) => method === 'thread/unsubscribe').map(([, arg]) => arg.threadId), ['thread-1', 'thread-2']);
+    gamingMode = true; f.brain.cancel();
+    assert.equal(proc.closed, true);
+    await assert.rejects(f.brain.chat('Third'), /Gaming mode/);
+  } finally { f.brain.cancel(); }
+});
+
+test('the warm server closes at its idle deadline and on an unsupported thread release', async () => {
+  const f = fixture('warm');
+  f.brain.warmIdleMs = 15;
+  try {
+    await f.brain.chat('First');
+    const proc = f.client();
+    await new Promise(resolve => setTimeout(resolve, 35));
+    assert.equal(proc.closed, true);
+    const factory = f.brain.clientFactory;
+    f.brain.clientFactory = options => {
+      const client = factory(options), request = client.request.bind(client);
+      client.request = async (method, params) => {
+        if (method === 'thread/unsubscribe') throw Error('Unsupported method');
+        return request(method, params);
+      };
+      return client;
+    };
+    assert.equal(await f.brain.chat('Second'), 'Hello');
+    assert.notEqual(f.client(), proc);
+    assert.equal(f.client().closed, true);
+    assert.equal(f.brain.warmClient, null);
+  } finally { f.brain.cancel(); }
+});
+
 test('brain streams, preserves history, isolates threads and disables inherited MCP servers', async () => {
   const f = fixture(); const deltas = [];
   assert.equal(await f.brain.chat('Hi', d => deltas.push(d)), 'Hello');
@@ -118,6 +192,14 @@ test('spoken delivery arrives before streamed text and stays out of replies and 
   const { readDeliveryPrefix } = require('../src/main/voice-delivery');
   assert.deepEqual(readDeliveryPrefix('[[voice: unsupported]] Hello', true), { style: 'neutral', text: 'Hello' });
   assert.deepEqual(readDeliveryPrefix('Hello'), { style: 'neutral', text: 'Hello' });
+});
+
+test('stable partial answers and their continuation are streamed in order and retained once', async () => {
+  const { brain } = fixture('phased');
+  const chunks = [];
+  const answer = await brain.chat('Can you read it?', text => chunks.push(text), undefined, { voice: true, onDelivery: () => {} });
+  assert.deepEqual(chunks, ['I see it.', '\n\nThe value is 75.']);
+  assert.equal(answer, chunks.join(''));
 });
 
 test('opted-in voice chat survives a new brain and can be cleared', async t => {

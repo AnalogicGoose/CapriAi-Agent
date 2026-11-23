@@ -14,8 +14,8 @@ const clean = (text, max = 1000) => {
 const SETTINGS = ['muted', 'volume', 'scale', 'lang', 'wander', 'possess', 'windowTracking', 'idleAnimations',
   'cursorInteractions', 'personality', 'dailyRoutine', 'surpriseAnimations', 'ttsEnabled'];
 const ACTIONS = ['app', 'url', 'setting', 'command', 'task'];
-const EFFECTS = ['capri_body', 'capri_input', 'capri_settings_change', 'capri_desktop_step', 'capri_close_app'];
-const READS = ['capri_screen', 'capri_context', 'capri_apps', 'capri_settings_read', 'capri_approval'];
+const EFFECTS = ['capri_body', 'capri_input', 'capri_settings_change', 'capri_desktop_step', 'capri_close_app', 'capri_control'];
+const READS = ['capri_screen', 'capri_context', 'capri_apps', 'capri_settings_read', 'capri_approval', 'capri_window_controls'];
 function steps(value) {
   if (!Array.isArray(value) || !value.length || value.length > 8) throw Error('A routine needs one to eight ordered steps.');
   const result = value.map(step => {
@@ -281,7 +281,8 @@ class RoutineSession {
   }
   observeTool(name, result) {
     if (!this.active || ![...EFFECTS, 'capri_screen', 'capri_context'].includes(name)) return;
-    const failed = result?.completed === false || result?.changed === false || result?.ok === false;
+    const failed = result?.completed === false || result?.changed === false || result?.ok === false ||
+      (name === 'capri_control' && result?.dispatched !== true);
     if (failed) {
       this.failStep(result.text || result.reason); return;
     }

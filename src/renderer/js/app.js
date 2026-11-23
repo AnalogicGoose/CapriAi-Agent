@@ -248,6 +248,7 @@ async function boot() {
   let restoreStowed = false;
   voiceCall = new VoiceCall({ host, speaker: voice.spoken, history: chat,
     indicator: document.getElementById('voice-indicator'),
+    onThinking: on => capri.setChatThinking(on),
     onStart: async checkIn => {
       if (!voice.spoken.enabled) throw Error('Enable spoken replies in Sound settings first.');
       if (checkIn) {

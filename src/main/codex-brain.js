@@ -5,6 +5,9 @@ const { executable } = require('./codex-runtime');
 const { PERSONA } = require('./personality');
 const { readDeliveryPrefix, INSTRUCTIONS: VOICE_DELIVERY } = require('./voice-delivery');
 
+const MAX_WARM_TURNS = 24;
+const THREAD_RELEASE_TIMEOUT = 400;
+
 function packContext(data, budget = 16000) {
   const packed = Object.create(null), omitted = [];
   const priority = ['namedRoutineInvocation', 'savedTaskInvocation', 'automaticMemory', 'topicRecaps', 'currentProject', 'savedContinuity', 'savedGoals', 'personalMemory', 'companionInterests', 'presentation', 'capabilities'];
@@ -30,13 +33,27 @@ function routineReply(receipt) {
 
 class CodexBrain {
   constructor({ settings, cwd, tools, recentConversation, systemTools = () => false, workspace, context = () => ({}), approve = async () => false, onOutcome = () => {},
-    clientFactory = options => new CodexClient(options), locate = executable }) {
-    Object.assign(this, { settings, cwd, tools, recentConversation, clientFactory, locate, systemTools, workspace, context, approve, onOutcome });
+    clientFactory = options => new CodexClient(options), locate = executable, warmIdleMs = 0, canKeepWarm = () => true }) {
+    Object.assign(this, { settings, cwd, tools, recentConversation, clientFactory, locate, systemTools, workspace, context, approve, onOutcome, warmIdleMs, canKeepWarm });
     this.history = []; this.epoch = 0; this.busy = false; this.lastStatus = null;
   }
-  createClient(nativeTools = this.systemTools()) {
+  createClient(nativeTools = this.systemTools(), warmThreads = false) {
     fs.mkdirSync(this.cwd, { recursive: true });
-    return this.clientFactory({ executable: this.locate(this.settings().codexExecutable), cwd: this.cwd, nativeTools });
+    return this.clientFactory({ executable: this.locate(this.settings().codexExecutable), cwd: this.cwd, nativeTools, warmThreads });
+  }
+  dropWarmClient() {
+    const parked = this.warmClient;
+    if (!parked) return;
+    this.warmClient = null;
+    clearTimeout(parked.timer);
+    parked.client.close();
+  }
+  parkClient(client, key, turns) {
+    const parked = { client, key, turns, expires: Date.now() + this.warmIdleMs };
+    this.warmClient = parked;
+    parked.timer = setTimeout(() => this.dropWarmClient(), this.warmIdleMs);
+    parked.timer.unref?.();
+    client.onFailure = () => { if (this.warmClient === parked) this.dropWarmClient(); };
   }
   withRecentConversation(use, create = false) {
     try {
@@ -55,6 +72,7 @@ class CodexBrain {
   }
   cancel() {
     this.epoch++;
+    this.dropWarmClient();
     if (this.client && this.threadId && this.turnId) {
       // Interrupt before closing stdio so Codex can cancel owned commands too.
       this.stopping = Promise.race([
@@ -100,7 +118,15 @@ class CodexBrain {
     let resolveSavedTask = () => this.tools.resumeTask?.(text);
     const nativeTools = this.systemTools() && !this.tools.teachingOnly?.(text);
     const workspace = nativeTools ? (typeof this.workspace === 'function' ? this.workspace() : this.workspace) : null;
-    const client = this.createClient(nativeTools);
+    const retainClient = this.warmIdleMs > 0 && this.canKeepWarm();
+    const clientKey = JSON.stringify([this.settings().codexExecutable || '', nativeTools, workspace]);
+    let parked = this.warmClient;
+    if (parked && (!retainClient || parked.key !== clientKey || parked.client.closed || Date.now() >= parked.expires)) {
+      this.dropWarmClient(); parked = null;
+    }
+    if (parked) { clearTimeout(parked.timer); this.warmClient = null; }
+    const client = parked?.client || this.createClient(nativeTools, retainClient);
+    let completed = false;
     this.stopping = null;
     this.busy = true; const epoch = ++this.epoch;
     this.abort = new AbortController(); const signal = this.abort.signal;
@@ -108,7 +134,9 @@ class CodexBrain {
     const diagnostics = this.lastDiagnostics = { calls: 0, completed: 0, errors: [], rejectedMethods: [] };
     const nativeItems = new Map();
     const completedCommands = new Map();
-    let finish, fail, textOut = '', completedText = '', toolQueue = Promise.resolve(), calls = 0, routineTurn = false;
+    const commentaryItems = new Set();
+    let finish, fail, textOut = '', completedText = '', streamItemId, toolQueue = Promise.resolve(), calls = 0, routineTurn = false;
+    const partialAnswers = [];
     const useDelivery = typeof options.onDelivery === 'function' && !options.outputSchema;
     let voicePrefix = '', streamedDelivery;
     const stream = delta => {
@@ -145,7 +173,7 @@ class CodexBrain {
     this.threadId = this.turnId = null;
     client.onFailure = fail;
     client.onNotification = (method, params) => {
-      if (epoch !== this.epoch || params.threadId !== this.threadId) return;
+      if (epoch !== this.epoch || !this.threadId || params.threadId !== this.threadId) return;
       if (method === 'turn/started') { this.turnId = params.turn.id; return; }
       if (params.turnId && params.turnId !== this.turnId) return;
       if (nativeTools && params.item?.id && (method === 'item/started' || method === 'item/completed')) nativeItems.set(params.item.id, params.item);
@@ -156,9 +184,18 @@ class CodexBrain {
           if (stopped) { nativeRoutineFailure = true; fail(Error(stopped)); this.cancel(); return; }
         } catch (error) { fail(error); this.cancel(); return; }
       }
+      if (method === 'item/started' && params.item?.type === 'agentMessage' && params.item.phase === 'commentary') commentaryItems.add(params.item.id);
       if (method === 'item/agentMessage/delta') {
-        if (typeof params.delta === 'string') { textOut += params.delta; if (textOut.length > 100000) return this.cancel(); stream(params.delta); }
-      } else if (method === 'item/completed' && params.item?.type === 'agentMessage') completedText = params.item.text || completedText;
+        if (typeof params.delta === 'string' && !commentaryItems.has(params.itemId)) {
+          const separator = params.itemId && streamItemId && params.itemId !== streamItemId && partialAnswers.length ? '\n\n' : '';
+          streamItemId = params.itemId;
+          const delta = separator + params.delta;
+          textOut += delta; if (textOut.length > 100000) return this.cancel(); stream(delta);
+        }
+      } else if (method === 'item/completed' && params.item?.type === 'agentMessage' && params.item.phase !== 'commentary') {
+        if (params.item.phase === 'partial_answer' && params.item.text && !options.outputSchema) partialAnswers.push(params.item.text);
+        else completedText = params.item.text || completedText;
+      }
       else if (method === 'item/started' && params.item?.type === 'dynamicToolCall') onProgress(`Using ${params.item.tool}.`);
       else if (method === 'item/started' && ['commandExecution', 'fileChange', 'mcpToolCall', 'webSearch', 'imageView', 'collabAgentToolCall'].includes(params.item?.type)) {
         if (!nativeTools) { fail(Error('Codex attempted a tool outside Capri’s configured tool boundary. Request stopped.')); this.cancel(); }
@@ -228,17 +265,19 @@ class CodexBrain {
       const namedRoutineInvocation = savedTask ? null : this.tools.beginTurn?.(text);
       if (namedRoutineInvocation?.message) return namedRoutineInvocation.message;
       trackRoutine(namedRoutineInvocation);
-      await client.start(); check();
+      if (!parked) await client.start();
+      check();
       const { model, modelName } = await this.inspect(client); check();
       const effective = await client.request('config/read', { includeLayers: false }); check();
       const mcp = Object.fromEntries(Object.keys(effective.config?.mcp_servers || {}).map(key => [key, { enabled: false }]));
       const started = await client.request('thread/start', { cwd: workspace || this.cwd, model: modelName,
         ephemeral: true, sandbox: nativeTools ? 'workspace-write' : 'read-only', approvalPolicy: 'on-request', approvalsReviewer: 'user', environments: [],
         baseInstructions: PERSONA, developerInstructions: this.tools.instructions() + (this.tools.routineInstructions?.() || '')
+          + (this.tools.desktopInstructions?.() || '')
           + (savedTask ? '\nThe user explicitly asked to resume the one saved task in savedTaskInvocation. Act on its clearly identified unfinished next step in the saved workspace using the existing tools and reviews. Keep other saved context as background only. If the handoff lacks a concrete next step, ask what to continue. Do not replay completed work, run a named routine, or rewrite saved records. Report what you could verify and what remains.' : '')
           + (options.recordHistory === false || savedTask ? '' : this.tools.memoryInstructions?.() || '')
           + (useDelivery ? VOICE_DELIVERY : '')
-          + (options.voice ? '\nThis turn is a spoken voice conversation. Answer naturally in conversational prose, usually a few sentences. Keep your warmth and personality. Avoid markdown, tables, URLs, stage directions and long lists unless requested. Give enough detail to answer accurately. The user may interrupt. Consequential actions still require the existing confirmation mechanisms.' : ''), dynamicTools: this.tools.specs(),
+          + (options.voice ? '\nThis turn is a spoken voice conversation. Answer naturally in conversational prose, usually a few sentences. Open with a short, complete sentence when it fits. Keep your warmth and personality. Avoid markdown, tables, URLs, stage directions and long lists unless requested. Give enough detail to answer accurately. The user may interrupt. Consequential actions still require the existing confirmation mechanisms.' : ''), dynamicTools: this.tools.specs(),
         config: nativeTools ? { web_search: 'live' } : { mcp_servers: mcp, skills: { config: [] } } });
       check(); this.threadId = started.thread.id;
       const remember = options.recordHistory !== false && this.settings().rememberRecentChat === true;
@@ -266,7 +305,7 @@ class CodexBrain {
         ...(!supported || supported.includes(effort) ? { effort } : {}) });
       check(); this.turnId ||= turn.turn.id;
       await result; await toolQueue; check();
-      let answer = completedText || textOut;
+      let answer = completedText ? [...partialAnswers, completedText].join('\n\n') : textOut || partialAnswers.join('\n\n');
       if (useDelivery) {
         const parsed = readDeliveryPrefix(answer, true);
         if (!streamedDelivery || parsed.style !== 'neutral' && parsed.style !== streamedDelivery) options.onDelivery(parsed.style);
@@ -291,6 +330,7 @@ class CodexBrain {
         try { await this.onOutcome({ workspace, cwd: item.cwd, command: item.command, exitCode: item.exitCode }); }
         catch { /* A journal failure must not turn a completed task into a failed task. */ }
       }
+      completed = true;
       return answer;
     } catch (error) {
       if (routineTurn && (nativeRoutineFailure || !signal.aborted)) {
@@ -303,9 +343,22 @@ class CodexBrain {
       if (this.tools.consumeHistoryReset?.()) this.discardHistory();
       clearTimeout(timer); signal.removeEventListener('abort', stop);
       await this.stopping;
-      client.onFailure = () => {}; client.close();
+      const threadId = this.threadId;
+      this.threadId = this.turnId = null;
+      client.onFailure = client.onNotification = () => {};
+      client.onRequest = ({ id }) => client.respond(id, null, { code: -32603, message: 'No Capri turn is active.' });
+      const turns = (parked?.turns || 0) + 1;
+      let released = false;
+      if (completed && threadId && retainClient && this.canKeepWarm() && epoch === this.epoch && !client.closed && turns < MAX_WARM_TURNS) {
+        try {
+          const result = await client.request('thread/unsubscribe', { threadId }, THREAD_RELEASE_TIMEOUT);
+          released = ['unsubscribed', 'notLoaded', 'notSubscribed'].includes(result?.status);
+        } catch { /* Older servers and unhealthy connections fall back to a fresh process. */ }
+      }
+      if (released && epoch === this.epoch && this.canKeepWarm() && !client.closed) this.parkClient(client, clientKey, turns);
+      else client.close();
       this.tools.endTurn?.(); this.client = null; this.busy = false;
-      this.threadId = this.turnId = this.stopping = null;
+      this.stopping = this.abort = null;
     }
   }
 }

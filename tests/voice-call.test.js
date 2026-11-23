@@ -24,6 +24,7 @@ async function controller(now) {
     speechAudio() {}, wakeEndSession() {events.push('end-session');}, chatStop: id=>events.push({stopTurn:id}),
     personalRoute: async () => ({handled:false}), chatSend: async () => ({ok:true,text:'I am here, sweetheart.'}) };
   const call = new VoiceCall({host,speaker,indicator,history,now,captureFactory:()=>capture,
+    onThinking: on => events.push({ thinking: on }),
     detectorFactory: async config => { callbacks.detector=config;return detector; }});
   return {call,host,speaker,capture,detector,events,callbacks,indicator,history};
 }
@@ -54,6 +55,31 @@ test('unmuting during a voice turn enables its spoken confirmation', async () =>
     assert.equal(f.events.filter(event => event === 'begin-reply').length, 2);
     assert.ok(f.speaker.response);
     assert.ok(f.events.some(event => event.spoken === 'I’m unmuted.' && event.done));
+  } finally { f.call.end(); }
+});
+
+test('processing starts after a complete utterance and gives way to speech before the reply is done', async () => {
+  const f = await controller();
+  let finish;
+  f.host.chatSend = () => new Promise(resolve => { finish = resolve; });
+  try {
+    await f.call.start({ id: 'early-voice', capture: f.capture, text: 'Can you', complete: false });
+    assert.equal(f.indicator.dataset.state, 'listening');
+    f.callbacks.speech({ id: f.call.id, type: 'final', text: 'help me?', complete: true });
+    assert.equal(f.indicator.dataset.state, 'thinking');
+    assert.ok(f.events.some(event => event.thinking === true));
+    await tick();
+    f.callbacks.delta({ id: f.call.turn, text: 'Of course.' });
+    assert.ok(f.events.some(event => event.spoken === 'Of course.' && !event.done));
+    f.call.playback(true);
+    assert.equal(f.indicator.dataset.state, 'speaking');
+    assert.ok(f.events.some(event => event.thinking === false));
+    f.call.playback(false);
+    assert.equal(f.indicator.dataset.state, 'thinking');
+    finish({ ok: true, text: 'Of course. What do you need?' });
+    await tick();
+    f.call.playback(false);
+    assert.equal(f.indicator.dataset.state, 'listening');
   } finally { f.call.end(); }
 });
 

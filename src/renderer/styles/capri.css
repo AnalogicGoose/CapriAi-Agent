@@ -917,7 +917,12 @@ body {
 .voice-indicator[hidden] { display:none; }
 .voice-indicator svg { width:16px; height:16px; }
 .voice-indicator[data-state='listening'] { color:#64e9ae; border-color:#64e9ae; }
-.voice-indicator[data-state='thinking'], .voice-indicator[data-state='starting'] { opacity:.65; }
+.voice-indicator[data-state='starting'] { opacity:.65; }
+.voice-indicator[data-state='thinking'] { color:var(--paper); border-color:#b088e1; box-shadow:2px 2px 0 var(--violet); }
+.voice-indicator[data-state='thinking']::after { content:''; position:absolute; inset:-3px; border:1px solid #b088e1;
+  border-radius:inherit; pointer-events:none; animation:voice-processing 1.25s var(--ease-out) infinite; }
+@keyframes voice-processing { from { opacity:.9; transform:scale(.94); } to { opacity:0; transform:scale(1.24); } }
+@media (prefers-reduced-motion:reduce) { .voice-indicator[data-state='thinking']::after { animation:none; opacity:.45; } }
 .voice-indicator[data-state='speaking'] { color:#ddc6ff; border-color:#b088e1; }
 .voice-indicator:focus-visible { outline:2px solid #64e9ae; outline-offset:3px; }
 

@@ -19,9 +19,10 @@ function isEcho(reply, line) {
 // Voice turns share Capri's backend/history, but never create a chat surface.
 export class VoiceCall {
   constructor({ host, speaker, indicator, history, onStart = async () => {}, onEnd = () => {}, onPromote = () => {},
+    onThinking = () => {},
     detectorFactory = speechDetector, captureFactory = () => new MicrophoneCapture(),
     idleMs = 60000, now = () => performance.now() }) {
-    Object.assign(this, { host, speaker, indicator, history, onStart, onEnd, onPromote, detectorFactory, captureFactory, idleMs, now });
+    Object.assign(this, { host, speaker, indicator, history, onStart, onEnd, onPromote, onThinking, detectorFactory, captureFactory, idleMs, now });
     this.revision = 0; this.lastTurn = 0;
     host.onSpeechState(event => this.receive(event));
     host.onChatDelta(({ id, text, delivery }) => {
@@ -37,6 +38,7 @@ export class VoiceCall {
   }
   get active() { return Boolean(this.id); }
   state(value, message = '') {
+    if (this.phase !== value && (this.phase === 'thinking' || value === 'thinking')) this.onThinking(value === 'thinking');
     this.phase = value; this.indicator.hidden = !this.active;
     this.indicator.dataset.state = value;
     this.indicator.setAttribute('aria-label', message || ({ listening: 'Capri is listening. Click to end voice conversation.',
@@ -262,7 +264,8 @@ export class VoiceCall {
       else if (result.delivery) this.speaker.setResponseMood?.(result.delivery);
       this.turn = null; this.speaker.updateResponse(clean(result.text), true);
       this.history?.history.push({ role: 'user', content: text }, { role: 'assistant', content: clean(result.text) });
-      this.history?.trimHistory(); this.state('speaking');
+      this.history?.trimHistory();
+      if (!this.audioPlaying && !this.speaker.pending && !this.speaker.response) this.state('listening');
     };
     this.inFlight = run().catch(async () => {
       if (this.id === session && generation === this.generation) {
@@ -289,7 +292,8 @@ export class VoiceCall {
         this.audioPlaying = false; this.echoTailAt = this.now(); this.clearProbe();
         this.probeSpeech(false);
       }
-      if (!this.turn) { this.state('listening'); this.keepAlive(); }
+      if (this.turn) this.state('thinking');
+      else { this.state('listening'); this.keepAlive(); }
     }
   }
   end(notify = true, { fallback = false } = {}) {
