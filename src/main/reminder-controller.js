@@ -22,18 +22,23 @@ function snoozeUntil(minutes, nowMs) {
 const COPY = {
   en: { done: 'Done', snooze10: 'Snooze 10 min', snooze: 'Snooze…', m15: '15 min', h1: '1 h', tomorrow: 'Tomorrow 9:00',
     ackDone: 'Done, nice work.', ackSnooze: 'Okay, I’ll remind you again at {time}.',
+    stale: 'That one already moved on to its next time, so there was nothing to mark done.', failed: 'Sorry, I couldn’t do that. Try again?',
     more: '…and {n} more reminders. Ask me for your reminders to see them all.' },
   es: { done: 'Hecho', snooze10: 'Posponer 10 min', snooze: 'Posponer…', m15: '15 min', h1: '1 h', tomorrow: 'Mañana 9:00',
     ackDone: 'Hecho, muy bien.', ackSnooze: 'Vale, te lo recuerdo otra vez a las {time}.',
+    stale: 'Ese ya pasó a su siguiente hora, así que no había nada que marcar como hecho.', failed: 'Perdona, no pude hacerlo. ¿Lo intentas otra vez?',
     more: '…y {n} recordatorios más. Pregúntame por tus recordatorios para verlos todos.' },
   fr: { done: 'Fait', snooze10: 'Reporter 10 min', snooze: 'Reporter…', m15: '15 min', h1: '1 h', tomorrow: 'Demain 9:00',
     ackDone: 'C’est fait, bravo.', ackSnooze: 'D’accord, je te le rappelle à {time}.',
+    stale: 'Celui-ci est déjà passé à sa prochaine heure, il n’y avait rien à terminer.', failed: 'Désolée, je n’ai pas pu. Tu réessaies ?',
     more: '…et {n} autres rappels. Demande-moi tes rappels pour tous les voir.' },
   pt: { done: 'Feito', snooze10: 'Adiar 10 min', snooze: 'Adiar…', m15: '15 min', h1: '1 h', tomorrow: 'Amanhã 9:00',
     ackDone: 'Feito, muito bem.', ackSnooze: 'Certo, te lembro de novo às {time}.',
+    stale: 'Esse já passou para o próximo horário, então não havia nada para marcar como feito.', failed: 'Desculpa, não consegui fazer isso. Tenta de novo?',
     more: '…e mais {n} lembretes. Pergunte pelos seus lembretes para ver todos.' },
   ru: { done: 'Готово', snooze10: 'Отложить на 10 мин', snooze: 'Отложить…', m15: '15 мин', h1: '1 ч', tomorrow: 'Завтра в 9:00',
     ackDone: 'Готово, молодец.', ackSnooze: 'Хорошо, напомню снова в {time}.',
+    stale: 'Это напоминание уже перешло на следующее время, так что отмечать нечего.', failed: 'Прости, не получилось. Попробуешь ещё раз?',
     more: '…и ещё напоминаний: {n}. Спроси про напоминания, чтобы увидеть все.' },
 };
 const copy = lang => COPY[String(lang || '').toLowerCase().split(/[-_]/)[0]] || COPY.en;
@@ -78,7 +83,7 @@ class ReminderController {
     const grant = speak ? this._grant(line) : undefined;
     this.send({ type: 'card', id: entry.id, firedDue: entry.firedDue, line,
       actions: [{ id: 'done', label: t.done }, { id: 'snooze10', label: t.snooze10 }, { id: 'snooze', label: t.snooze }],
-      snooze: [{ minutes: 15, label: t.m15 }, { minutes: 60, label: t.h1 }, { minutes: 'tomorrow', label: t.tomorrow }],
+      snooze: [{ minutes: 15, label: t.m15 }, { minutes: 60, label: t.h1 }, { minutes: 'tomorrow', label: t.tomorrow }], failed: t.failed,
       ...(grant ? { speak: true, grant } : {}) });
   }
 
@@ -131,7 +136,15 @@ class ReminderController {
     let text;
     try {
       if (action === 'done') {
-        if (!this.store.complete(id, firedDue)) return { ok: false, error: 'Reminder not found.' };
+        const row = this.store.get(id);
+        if (!row) return { ok: false, error: 'Reminder not found.' };
+        // A repeating card whose occurrence was already superseded (a newer one fired, or it was completed elsewhere):
+        // nothing to complete, so say so honestly; the card is obsolete.
+        if (row.schedule.kind !== 'once' && row.fired_due !== firedDue) {
+          this._forget(key);
+          return { ok: false, gone: true, text: t.stale };
+        }
+        this.store.complete(id, firedDue);
         text = t.ackDone;
       } else {
         const until = snoozeUntil(minutes, this.now());
@@ -141,19 +154,23 @@ class ReminderController {
         text = t.ackSnooze.replace('{time}', clock(until));
       }
     } catch { return { ok: false, error: 'Reminder storage is unavailable.' }; }
-    this.sent.delete(key);
-    if (this.last && keyOf(this.last.id, this.last.firedDue) === key) this.last = null;
+    this._forget(key);
     return { ok: true, text };
   }
 
+  _forget(key) {
+    this.sent.delete(key);
+    if (this.last && keyOf(this.last.id, this.last.firedDue) === key) this.last = null;
+  }
+
   // Commands-only listening: "done" / "snooze [N | tomorrow]" go to the most recently shown card within WINDOW_MS.
-  // Returns true when the command was meant for a reminder (even if the snooze value was rejected).
+  // A superseded card is resolved with the honest line. Returns true when the command was meant for a reminder (even if the snooze value was rejected).
   voice({ command, minutes } = {}) {
     if (command !== 'done' && command !== 'snooze') return false;
     const last = this.last;
     if (!last || this.now() - last.at > WINDOW_MS) return false;
     const result = this.act(last.id, command, last.firedDue, command === 'snooze' ? (minutes ?? 10) : undefined);
-    if (result.ok) this.send({ type: 'resolved', id: last.id, firedDue: last.firedDue, line: result.text });
+    if (result.ok || result.gone) this.send({ type: 'resolved', id: last.id, firedDue: last.firedDue, line: result.text });
     return true;
   }
 }

@@ -18,6 +18,7 @@ import { CommandListener } from './command-listener.js';
 import { VoiceCall } from './voice-call.js';
 import { LINES } from './lines.js';
 import { pick } from './util.js';
+import { ReminderCards } from './reminder-cards.js';
 
 const host = window.host;
 
@@ -235,61 +236,6 @@ async function boot() {
     while (busy() && Date.now() < until) { await new Promise(resolve => setTimeout(resolve, 250)); if (mine !== guideSay) return; }
     if (mine === guideSay) voice.spoken.speak(text, undefined, typeof message.grant === 'string' ? message.grant : undefined);
   });
-  // Reminders from main (reminder-controller.js). A line may carry a one-time voice grant (spoken even while she is hidden
-  // in a fullscreen game; never with voice off or muted). Cards queue and show one at a time; each card actually shown is
-  // reported, so main opens the 30 s window for the voice replies "done" / "snooze".
-  const reminderQueue = [];
-  let reminderOpen = null, reminderRetry = 0;
-  const sayReminder = async (line, grant) => {
-    const until = Date.now() + 20000, busy = () => voice.spoken.pending || voice.spoken.playing || voice.spoken.response;
-    while (busy() && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 250));
-    voice.spoken.speak(line, undefined, grant);
-  };
-  const sameCard = (a, b) => Boolean(a && b && a.id === b.id && a.firedDue === b.firedDue);
-  const reminderMessage = card => {
-    const onLeave = () => { if (reminderOpen === card) reminderOpen = null; setTimeout(showReminder, 400); };
-    if (card.type === 'more') return { kind: 'alert', line: card.line, hold: 15000, onLeave };
-    const act = async (action, minutes) => {
-      const result = await host.reminderAction(card.id, action, card.firedDue, minutes).catch(() => null);
-      if (panel.current?.reminder === card) panel.hide();
-      if (result?.ok && typeof result.text === 'string' && !reminderQueue.length) panel.say({ kind: 'info', line: result.text, hold: 2500 });
-    };
-    return { kind: 'alert', line: card.line, hold: 120000, reminder: card, onLeave,
-      actions: card.actions.map(({ id, label }) => ({ id, label, primary: id === 'done' })),
-      onAction: id => {
-        if (id === 'done') return act('done');
-        if (id === 'snooze10') return act('snooze', 10);
-        if (id === 'snooze') panel.setActions(card.snooze.map(({ label }, i) => ({ id: `s${i}`, label })),
-          choice => act('snooze', card.snooze[Number(choice.slice(1))]?.minutes));
-      } };
-  };
-  function showReminder() {
-    clearTimeout(reminderRetry);
-    if (reminderOpen && panel.visible && panel.current?.reminder === reminderOpen) return;
-    const next = reminderQueue[0];
-    if (!next) return;
-    if (!panel.say(reminderMessage(next))) { reminderRetry = setTimeout(showReminder, 3000); return; }
-    reminderQueue.shift();
-    if (next.type === 'card') { reminderOpen = next; host.reminderShown?.(next.id, next.firedDue); }
-  }
-  host.onReminderDue?.(message => {
-    if (!message || typeof message.line !== 'string' || !message.line || message.line.length > 400) return;
-    if (message.type === 'speak') { if (typeof message.grant === 'string') void sayReminder(message.line, message.grant); return; }
-    if (message.type === 'resolved') { // acted on by voice
-      const queued = reminderQueue.findIndex(card => sameCard(card, message));
-      if (queued >= 0) reminderQueue.splice(queued, 1);
-      if (sameCard(panel.current?.reminder, message)) panel.hide();
-      if (!reminderQueue.length) panel.say({ kind: 'info', line: message.line, hold: 2500 });
-      return;
-    }
-    if (message.type === 'card') {
-      if (!Number.isSafeInteger(message.id) || !Number.isFinite(message.firedDue) || !Array.isArray(message.actions) || !Array.isArray(message.snooze)) return;
-      if (message.speak && typeof message.grant === 'string') void sayReminder(message.line, message.grant);
-    } else if (message.type !== 'more') return;
-    reminderQueue.push(message);
-    showReminder();
-  });
-  host.reminderReady?.();
   host.onFullscreenState(state => {
     if (!state.active) return;
     if (voiceCall?.checkIn) voiceCall.end();
@@ -362,6 +308,19 @@ async function boot() {
   chat.onClose = () => { if (!voiceCall.active && !panel.leaving && !wakeListener.transferring) wakeListener.endSession(); };
   panel.onHidden = () => { if (!voiceCall.active && !chat.open && !wakeListener.transferring) wakeListener.endSession(); };
   wakeListener.configure(config);
+  // Reminders from main (reminder-controller.js): cards queue in ReminderCards (reminder-cards.js) and wait while a
+  // chat, voice call, permission prompt or her menu has your attention. A line may carry a one-time voice grant (spoken
+  // even while she is hidden in a fullscreen game; never with voice off or muted).
+  const sayReminder = async (line, grant) => {
+    const until = Date.now() + 20000, busy = () => voice.spoken.pending || voice.spoken.playing || voice.spoken.response;
+    while (busy() && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 250));
+    voice.spoken.speak(line, undefined, grant);
+  };
+  const reminderCards = new ReminderCards({ panel, host, speak: (line, grant) => void sayReminder(line, grant),
+    blocked: () => Boolean(chat?.open || voiceCall?.active || talkMenu?.visible || wakeListener?.session
+      || [...brain.sessions.values()].some(s => s.waiting)) });
+  host.onReminderDue?.(message => reminderCards.receive(message));
+  host.reminderReady?.();
   if (config.wakeWordEnabled || (config.proactiveVoice && config.checkInReplies)) voiceCall.prepare().catch(() => {});
   // The demo's second half, after its fake Claude session: everything she does on her own, one
   // after the other, a line before each.

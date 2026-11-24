@@ -144,6 +144,30 @@ test('voice done applies to the last shown card only within 30 s', () => {
   assert.equal(r.controller.voice({ command: 'done' }), false, 'acted on once');
 });
 
+test('Done on a repeating card whose occurrence was superseded replies honestly', () => {
+  const r = rig();
+  const daily = r.store.add({ text: 'water', schedule: { kind: 'daily', at: '09:00' } });
+  r.tick(60000);
+  r.controller.fire(daily, { missed: false, firedDue: at(23, 9) });
+  r.store.markFired(daily.id, at(23, 9));
+  const old = r.sent.at(-1);
+  assert.equal(old.failed, 'Sorry, I couldn’t do that. Try again?');
+  r.store.markFired(daily.id, at(24, 9)); // a newer occurrence fired meanwhile
+  const result = r.controller.ipcAction(OVERLAY, daily.id, 'done', old.firedDue);
+  assert.equal(result.ok, false);
+  assert.equal(result.gone, true);
+  assert.match(result.text, /nothing to mark done/);
+  assert.ok(!/nice work/i.test(result.text));
+  assert.equal(r.store.get(daily.id).fired_due, at(24, 9), 'the newer occurrence is untouched');
+  // by voice: resolved with the honest line
+  r.controller.fire(r.store.get(daily.id), { missed: false, firedDue: at(25, 9) });
+  r.controller.shown(OVERLAY, daily.id, at(25, 9));
+  r.store.markFired(daily.id, at(26, 9));
+  assert.equal(r.controller.voice({ command: 'done' }), true);
+  assert.equal(r.sent.at(-1).type, 'resolved');
+  assert.match(r.sent.at(-1).line, /nothing to mark done/);
+});
+
 test('voice snooze defaults to 10 minutes and accepts tomorrow; invalid minutes are rejected', () => {
   const r = rig();
   const row = fireOnce(r);
