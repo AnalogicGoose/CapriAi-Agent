@@ -39,9 +39,12 @@ class ReminderStore {
   }
 
   // Registers fn to run after any mutation (add/update/cancel/snooze/markFired/complete).
-  onChange(fn) { this._listeners.push(fn); }
+  onChange(fn) {
+    this._listeners.push(fn);
+    return () => { this._listeners = this._listeners.filter(l => l !== fn); };
+  }
 
-  _changed() { for (const fn of this._listeners) fn(); }
+  _changed() { for (const fn of [...this._listeners]) fn(); }
 
   // Validate and normalize; an interval without a start is anchored to the injected clock, once, here.
   _schedule(input) {

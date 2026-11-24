@@ -147,3 +147,54 @@ test('resume checks due reminders and re-arms', () => {
   assert.equal(live().length, 1);
   store.close();
 });
+
+test('an old snooze on a repeating reminder fires once, then schedules the next future slot', () => {
+  const { store, clock, sched, fired } = make();
+  const r = store.add({ text: 'a', schedule: daily });
+  store.snooze(r.id, at(1, 9, 10));
+  clock.t = at(4, 12);
+  sched.check();
+  assert.equal(fired.length, 1);
+  assert.equal(fired[0].firedDue, at(4, 9));
+  assert.equal(store.get(r.id).next_due, at(5, 9));
+  sched.check();
+  assert.equal(fired.length, 1);
+  store.close();
+});
+
+test('an old snooze on an interval reminder fires once', () => {
+  const { store, clock, sched, fired } = make();
+  const r = store.add({ text: 'a', schedule: { kind: 'interval', every_minutes: 60, start: new Date(at(1, 8)).toISOString() } });
+  store.snooze(r.id, at(1, 9, 10));
+  clock.t = at(4, 12, 30);
+  sched.check();
+  sched.check();
+  assert.equal(fired.length, 1);
+  assert.equal(fired[0].firedDue, at(4, 12));
+  store.close();
+});
+
+test('stop clears the timer and unsubscribes from the store', () => {
+  const { store, sched, live } = make();
+  store.add({ text: 'a', schedule: daily });
+  assert.equal(live().length, 1);
+  sched.stop();
+  assert.equal(live().length, 0);
+  store.add({ text: 'b', schedule: daily });
+  assert.equal(live().length, 0);
+  store.close();
+});
+
+test('check skips a reminder cancelled earlier in the same loop', () => {
+  const { store, clock } = make();
+  clock.t = at(1, 9);
+  store.add({ text: 'a', schedule: daily });
+  store.add({ text: 'b', schedule: daily });
+  const seen = [];
+  new ReminderScheduler({
+    store, now: () => new Date(clock.t), setTimer: () => ({}), clearTimer() {},
+    fire: r => { seen.push(r.id); store.cancel(2); },
+  }).check();
+  assert.deepEqual(seen, [1]);
+  store.close();
+});
