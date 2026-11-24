@@ -1119,7 +1119,7 @@ function registerIpc() {
       // A running walkthrough keeps the guide layer: a command runs locally, anything else pauses it until answered; only "stop" or a new walkthrough ends it.
       const walkReply = walkthroughs.route(text);
       if (walkReply) return walkReply;
-      if (!walkthroughs.active) guide.clear('new-request');
+      // A new request leaves an explanation drawing up (asking about it must not erase it); see GuideSession's lifetime.
       if (projectRouting) return { handled: true, text: 'Finish choosing your project before sending a request.' };
       const trialReply = initiativeCommand(text);
       if (trialReply) return trialReply;
@@ -1240,7 +1240,6 @@ function registerIpc() {
     if (!Number.isSafeInteger(id) || current?.role !== 'user' || typeof current.content !== 'string') return { ok: false, error: 'Invalid chat request.' };
     if (projectRouting) return { ok: false, error: 'Finish choosing your project before sending a request.' };
     if (chats.size || brain.busy || actions.busy) return { ok: false, error: 'One Capri request at a time.' };
-    if (!walkthroughs.active) guide.clear('new-request');
     if (config.load().speakTypedReplies && tts.allowed()) tts.warm();
     const abort = new AbortController();
     let finish;

@@ -79,7 +79,7 @@ The idea comes from Jarvis (a fork of KenKaiii/Roamies). That project is AGPL-3.
 - **Lifetime:** drawings belong to the window they annotate.
   - If that window loses the foreground, they clear.
   - If it moves or resizes, marks hide and are re-placed once it stops.
-  - "Clear", "stop", a new request, or 2 minutes without interaction also clear them.
+  - A new drawing that replaces them (`capri_draw` with `clear: true`, or one on another window), 2 minutes without interaction, Gaming mode turning on, a locked or suspended session, or quitting also clear them. A new request does not: asking about a drawing must not erase it. *(Clarified after review.)*
   - Walkthrough steps keep their mark until the step ends.
 - **Fullscreen and games:** the guide layer may show while a fullscreen window is in front **only** for an explanation or walkthrough you explicitly asked for in the current request.
   - Her body and panel stay hidden.

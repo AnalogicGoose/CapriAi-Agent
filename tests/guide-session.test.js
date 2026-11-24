@@ -268,3 +268,9 @@ test('user-facing errors use the display name', async () => {
   const f = fixture({ allowed: () => false });
   await assert.rejects(f.session.draw({ marks: [], cards: [], clear: false }, ctx), err => err.message.includes(DISPLAY_NAME));
 });
+
+test('main never clears a drawing just because a new request arrives', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/main/main.js'), 'utf8');
+  const reasons = [...src.matchAll(/guide\.clear\('([^']+)'\)/g)].map(m => m[1]).sort();
+  assert.deepEqual([...new Set(reasons)], ['locked', 'paused', 'quit'], 'lifetime: lock/suspend, Gaming mode or screen awareness off, quit');
+});
