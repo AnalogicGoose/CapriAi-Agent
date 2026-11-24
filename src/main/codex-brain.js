@@ -238,7 +238,7 @@ class CodexBrain {
             diagnostics.calls++;
             onProgress(`Using ${p.tool}.`);
             const value = await this.tools.run(p.tool, p.arguments, {
-              text, history: actionHistory, savedTask, activateSavedTask, signal, check, progress: onProgress });
+              text, history: actionHistory, savedTask, activateSavedTask, signal, check, progress: onProgress, turn: options.turn });
             trackRoutine(this.tools.routineSession);
             check(); receipt = { fingerprint, value }; dedupe.set(p.callId, receipt);
             diagnostics.completed++;

@@ -185,7 +185,7 @@ class CodexTools {
       session?.observeTool(name, result); return result;
     } catch (error) { if (session && ROUTINE_EFFECTS.includes(name)) session.failStep(error.message); throw error; }
   }
-  async execute(name, args, { text, history = [], signal, check, progress, interpreted, activateSavedTask, savedTask }) {
+  async execute(name, args, { text, history = [], signal, check, progress, interpreted, activateSavedTask, savedTask, turn }) {
     check();
     if (!TOOLS.some(row => row[0] === name)) throw Error('Unknown Capri tool.');
     if (name === 'capri_routines_lookup') {
@@ -257,7 +257,7 @@ class CodexTools {
     if (name === 'capri_walkthrough') {
       shape(args, ['title', 'steps']);
       if (!this.walkthroughs) throw Error('Walkthroughs are unavailable.');
-      return this.walkthroughs.start(args, { request: text });
+      return this.walkthroughs.start(args, { request: text, turn });
     }
     if (name === 'capri_control') {
       shape(args, ['id', 'operation', 'value']);

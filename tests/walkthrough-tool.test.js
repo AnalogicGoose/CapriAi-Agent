@@ -197,9 +197,13 @@ test('a question pauses and the answer resumes; a new task or stop ends it', asy
   await f.advance(1000);
   assert.equal(w.index, 1);
 
-  // A different task ends it and still goes to Codex.
+  // Any other request also only pauses it and goes on to Codex; the answer resumes it.
   assert.equal(f.ctl.route('abre spotify y pon música relajante'), null);
-  assert.equal(w.state, 'ended');
+  assert.equal(w.state, 'paused');
+  f.ctl.answered();
+  await f.advance(0);
+  assert.equal(w.state, 'waiting');
+  f.ctl.stop();
   assert.equal(f.ctl.active, false);
   assert.equal(f.ctl.route('¿qué hora es?'), null); // nothing running: untouched
 
@@ -266,17 +270,81 @@ test('combined new tool descriptions stay under 1500 bytes', () => {
   assert.ok(total < 1500, `${total} bytes`);
 });
 
-test('a short task ends the walkthrough; a one-word aside only pauses it', async () => {
+test('in-task remarks pause and resume; polite commands work; only a stop command ends it', async () => {
   const f = fixture();
   f.ctl.start(PLAN, {});
   await f.advance(0);
-  assert.equal(f.ctl.route('thanks'), null);
-  assert.equal(f.ctl.current.state, 'paused');
+  const w = f.ctl.current;
+  for (const remark of ['I can\'t find it', 'no lo veo', 'I clicked it', 'thanks', 'open spotify', 'je ne le vois pas']) {
+    assert.equal(f.ctl.route(remark), null, remark);
+    assert.equal(w.state, 'paused', remark);
+    f.ctl.answered();
+    await f.advance(0);
+    assert.equal(w.state, 'waiting', remark);
+    assert.equal(f.ctl.current, w, remark);
+  }
+  // A remark while paused for another window must not resume it when answered.
+  f.s.fg = { id: 44, pid: 12, ...box(0, 0, 500, 500) };
+  await f.advance(WATCH_MS * 2);
+  assert.equal(w.pauseCause, 'window');
+  f.ctl.route('where did it go');
   f.ctl.answered();
   await f.advance(0);
-  assert.equal(f.ctl.current.state, 'waiting');
-  assert.equal(f.ctl.route('open spotify'), null);
+  assert.equal(w.state, 'paused');
+  assert.equal(w.pauseCause, 'window');
+  f.s.fg = { id: 5, pid: 9, ...box(0, 0, 800, 600) };
+  await f.advance(WATCH_MS * 2);
+  assert.equal(w.state, 'waiting');
+
+  assert.deepEqual(['next please', 'Next step, please!', 'siguiente por favor', 'el siguiente paso', 'por favor, siguiente',
+    'suivant s\'il te plaît', 'Suivant, s’il vous plaît', 'próximo, por favor', 'дальше, пожалуйста', 'следующий шаг',
+    'go back please', 'repite por favor', 'stop please', 'para, por favor', 'arrête s\'il te plaît', 'стоп пожалуйста']
+    .map(walkthroughCommand), ['next', 'next', 'next', 'next', 'next', 'next', 'next', 'next', 'next', 'next',
+    'back', 'repeat', 'stop', 'stop', 'stop', 'stop']);
+  for (const remark of ['I can\'t find it', 'no lo veo', 'I clicked it', 'please', 'next time remind me']) assert.equal(walkthroughCommand(remark), null, remark);
+
+  assert.equal(f.ctl.route('siguiente por favor').handled, true);
+  await f.advance(1000);
+  assert.equal(w.index, 1);
+  assert.equal(f.ctl.route('Stop, please.').handled, true);
   assert.equal(f.ctl.active, false);
+});
+
+test('a rejected replacement plan leaves the paused walkthrough in place', async () => {
+  const f = fixture();
+  f.ctl.start(PLAN, {});
+  await f.advance(0);
+  const w = f.ctl.current;
+  f.ctl.route('how do I do the other thing?');
+  assert.throws(() => f.ctl.start({ title: 'bad', steps: [] }, {}), /steps/);
+  assert.equal(f.ctl.current, w);
+  f.ctl.allowed = () => false;
+  assert.throws(() => f.ctl.start(PLAN, {}), /Screen awareness/);
+  assert.equal(f.ctl.current, w);
+  f.ctl.answered();
+  await f.advance(0);
+  assert.equal(w.state, 'waiting');
+});
+
+test('chat:stop for the turn that started it leaves the walkthrough running; any other stop ends it', async () => {
+  const f = fixture();
+  const t = tools(f.ctl);
+  assert.deepEqual(await t.execute('capri_walkthrough', PLAN, { ...ctx(), turn: 41 }), { started: true, steps: 2 });
+  await f.advance(0);
+  f.ctl.chatStopped(41);
+  assert.equal(f.ctl.active, true);
+  f.ctl.chatStopped(42);
+  assert.equal(f.ctl.active, false);
+  f.ctl.start(PLAN, { turn: 50 });
+  f.ctl.chatStopped(undefined);
+  assert.equal(f.ctl.active, false);
+});
+
+test('the decision brain follows agentConfig, so a voice session lifts Gaming mode for re-plans', () => {
+  // Re-plans call decisionBrain.chat, which refuses while settings().gamingMode; main gives it agentConfig.
+  const main = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src', 'main', 'main.js'), 'utf8');
+  assert.match(main, /const agentConfig = \(\) => voiceSession \? \{ \.\.\.config\.load\(\), gamingMode: false \}/);
+  assert.match(main, /const decisionBrain = new CodexBrain\(\{ settings: agentConfig,/);
 });
 
 test('personal:route results resume a question pause unless the request goes on to chat', async () => {

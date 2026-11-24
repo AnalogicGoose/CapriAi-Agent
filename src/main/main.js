@@ -191,7 +191,8 @@ const foreground = new ForegroundPriority(() => ({
   cancel() { agent.cancel(); autonomy?.cancel(); reflection?.cancel(); },
 }));
 // Legacy structured decision services use the same Codex transport, never Ollama.
-const decisionBrain = new CodexBrain({ settings: () => config.load(),
+// agentConfig: a voice session lifts Gaming mode, so a voice-started walkthrough can still re-plan (spec §8, decision 2).
+const decisionBrain = new CodexBrain({ settings: agentConfig,
   cwd: path.join(app.getPath('temp'), 'caprigpt-codex-decisions'),
   tools: { specs: () => [], instructions: () => 'Return only the JSON decision requested in the supplied schema. No tools or actions.' } });
 const inferDecision = async (request, signal) => {
@@ -995,7 +996,7 @@ function registerIpc() {
     try {
       if (event.sender !== overlay?.webContents) throw Error('Overlay required.');
       if (typeof text !== 'string' || text.length > 12000) throw Error('Invalid message.');
-      // A running walkthrough keeps the guide layer: a question pauses it, "stop" or a new task ends it.
+      // A running walkthrough keeps the guide layer: a command runs locally, anything else pauses it until answered; only "stop" or a new walkthrough ends it.
       const walkReply = walkthroughs.route(text);
       if (walkReply) return walkReply;
       if (!walkthroughs.active) guide.clear('new-request');
@@ -1144,7 +1145,7 @@ function registerIpc() {
       }
       const text = await brain.chat(current.content,
         text => overlay?.webContents.send('chat:delta', { id, text }),
-        text => overlay?.webContents.send('task:progress', { id, text }), { voice, statedMemory, onDelivery });
+        text => overlay?.webContents.send('task:progress', { id, text }), { voice, statedMemory, onDelivery, turn: id });
       if (projectFeedbackAnchor === feedbackAnchorAtStart) projectFeedbackAnchor = null;
       return { ok: true, text, closeViaTools: true, delivery };
     } catch (error) { projectFeedbackAnchor = null; return { ok: false, error: abort.signal.aborted ? 'stopped' : error.message }; }
@@ -1153,7 +1154,7 @@ function registerIpc() {
   ipcMain.on('chat:stop', (event, id) => {
     if (event.sender !== overlay?.webContents) return;
     interestCollaboration.cancel(id);
-    chats.get(id)?.abort.abort(); brain.cancel(); decisionBrain.cancel(); walkthroughs.stop();
+    chats.get(id)?.abort.abort(); brain.cancel(); decisionBrain.cancel(); walkthroughs.chatStopped(id);
     settingsRequests.cancel(); agent.cancel(); requests.cancel(); memoryRequests.cancel();
   });
   // closing an app you asked her to close, once you've clicked to confirm (apps.js)
