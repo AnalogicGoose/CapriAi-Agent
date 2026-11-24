@@ -266,10 +266,12 @@ test('every walkthrough ending speaks a guideLine in the user\'s language', asyn
 });
 
 test('combined new tool descriptions stay under 1500 bytes', () => {
-  const specs = tools(fixture().ctl).specs();
+  const t = tools(fixture().ctl);
+  t.reminders = { list: () => [] };
+  const specs = t.specs();
   const names = ['capri_draw', 'capri_walkthrough', 'capri_reminder'];
   const total = specs.filter(row => names.includes(row.name)).reduce((sum, row) => sum + Buffer.byteLength(row.description), 0);
-  assert.ok(specs.some(row => row.name === 'capri_draw') && specs.some(row => row.name === 'capri_walkthrough'));
+  assert.ok(specs.some(row => row.name === 'capri_draw') && specs.some(row => row.name === 'capri_walkthrough') && specs.some(row => row.name === 'capri_reminder'));
   assert.ok(total < 1500, `${total} bytes`);
 });
 
