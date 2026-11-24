@@ -1,7 +1,7 @@
 'use strict';
 const path=require('node:path'),fs=require('node:fs'),net=require('node:net'),crypto=require('node:crypto');
 const {spawn}=require('node:child_process');
-const {ensureRuntime}=require('./speech-runtime');
+const {ensureRuntime,installed}=require('./speech-runtime');
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function freePort(){return new Promise((resolve,reject)=>{
   const server=net.createServer();server.once('error',reject);
@@ -14,14 +14,24 @@ function wave(pcm){
   return Buffer.concat([header,pcm]);
 }
 class WhisperEngine {
-  constructor({runtimeDir,launch=spawn}={}){
+  constructor({runtimeDir,launch=spawn,ensure=ensureRuntime,probe=installed}={}){
     this.runtimeDir=runtimeDir||path.resolve(__dirname,'../../.caprigpt-local/speech-runtime');this.launch=launch;this.epoch=0;
+    this.ensure=ensure;this.probe=probe;this.probed=null;
   }
-  async start(onProgress=()=>{}){
+  // Is the runtime already on disk? Checked often (every commands-mode audio chunk), so cached briefly.
+  installed(){
+    const now=Date.now();
+    if(this.probed&&now<this.probed.until)return this.probed.ok;
+    let ok=false;try{ok=Boolean(this.probe(this.runtimeDir));}catch{}
+    this.probed={ok,until:now+(ok?60000:5000)};return ok;
+  }
+  // download:false (commands-only listening) uses an installed runtime or fails; it never fetches anything.
+  async start(onProgress=()=>{},{download=true}={}){
     if(this.child&&this.url&&this.child.exitCode===null)return;
     const epoch=++this.epoch;
     const gpu=process.platform==='win32'&&fs.existsSync(path.join(process.env.SystemRoot||'C:\\Windows','System32','nvidia-smi.exe'));
-    const runtime=await ensureRuntime(this.runtimeDir,onProgress,{gpu});
+    const runtime=download?await this.ensure(this.runtimeDir,onProgress,{gpu}):this.probe(this.runtimeDir);
+    if(!runtime)throw Error('speech-unavailable');
     if(epoch!==this.epoch)throw Error('speech-cancelled');
     for(const server of [...new Set([runtime.server,runtime.cpuServer])]){
       const port=await freePort(),prefix='/'+crypto.randomBytes(16).toString('hex');

@@ -496,6 +496,7 @@ const wakeAllowed = () => Boolean(overlay && !overlay.isDestroyed() && config.lo
   && (!smokeTest || process.argv.includes('--wake-live')));
 // Commands-only listening (spec decision 1): open while a walkthrough runs or a reminder's command window is open,
 // in fullscreen and Gaming mode too. Only the fixed local commands are acted on; speech.js drops every other transcript.
+// speech.commandsReady() adds the user's voice opt-in (wake word on) and an already installed runtime: never a download.
 let commandWindowUntil = 0, commandWindowTimer = null, commandsOn = false, commandsListeningId = null;
 const commandsAllowed = () => Boolean(sessionAvailable && overlay && !overlay.isDestroyed()
   && (walkthroughs.active || Date.now() < commandWindowUntil));
@@ -509,7 +510,7 @@ function openCommandWindow(ms) {
   syncCommands();
 }
 function syncCommands(force = false) {
-  const on = commandsAllowed();
+  const on = speech.commandsReady();
   if (!on && speech.current?.mode === 'commands') speech.cancel();
   if (on === commandsOn && !force) return;
   commandsOn = on;
@@ -529,6 +530,7 @@ const speech = new SpeechInput({
     && !config.load().gamingMode && !fullscreenState.active))),
   wakeAllowed,
   commandsAllowed,
+  wakeEnabled: () => config.load().wakeWordEnabled === true,
   notify: state => {
     if (state.type === 'command') { routeSpeechCommand(state); return; } // handled here, never forwarded
     // The walkthrough card's mic badge follows the commands microphone (her overlay may be hidden in a game).
@@ -855,6 +857,7 @@ function updateConfig(patch) {
     speech.cancel(); endVoiceSession();
   }
   if (patch.wakeWordEnabled === false) { speech.cancel(); endVoiceSession(); }
+  if (changes('wakeWordEnabled')) syncCommands();
   if (Object.hasOwn(patch, 'displayId')) fitOverlay();
   pcContext.eventSnapshot(); // discard event fields when permissions are revoked
   if (!config.load().windowTracking) {
@@ -1065,7 +1068,7 @@ function registerIpc() {
     return updateConfig({ wakeWordEnabled: enabled });
   });
   ipcMain.on('wake:end-session', event => { if (speechCaller(event)) endVoiceSession(); });
-  ipcMain.handle('speech:commands-state', event => ({ on: speechCaller(event) ? commandsAllowed() : false }));
+  ipcMain.handle('speech:commands-state', event => ({ on: speechCaller(event) ? speech.commandsReady() : false }));
   ipcMain.handle('speech:stop', (event, request) => {
     if (!speechCaller(event)) return { ok: false, error: 'speech-unavailable' };
     return speech.stop(request?.id);

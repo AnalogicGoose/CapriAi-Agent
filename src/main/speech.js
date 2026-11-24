@@ -5,8 +5,8 @@ const {wakePhrase}=require('./wake-phrase');
 const {commandPhrase}=require('./command-phrases');
 const CHECK_IN_LIMIT_MS=40_000;
 class SpeechInput {
-  constructor({allowed,notify,engine,runtimeDir,wakeAllowed=()=>false,commandsAllowed=()=>false}){
-    Object.assign(this,{allowed,notify,wakeAllowed,commandsAllowed});this.engine=engine||new WhisperEngine({runtimeDir});this.current=null;
+  constructor({allowed,notify,engine,runtimeDir,wakeAllowed=()=>false,commandsAllowed=()=>false,wakeEnabled=()=>false}){
+    Object.assign(this,{allowed,notify,wakeAllowed,commandsAllowed,wakeEnabled});this.engine=engine||new WhisperEngine({runtimeDir});this.current=null;
   }
   start(request={}){
     if(!request||typeof request.id!=='string'||!/^[a-zA-Z0-9-]{8,80}$/.test(request.id))return {ok:false,error:'invalid-request'};
@@ -18,7 +18,7 @@ class SpeechInput {
       phase:'starting',queue:[],running:false,total:0,revision:0,recent:[],abort:new AbortController()};
     this.current=slot;slot.segmenter=new SpeechSegmenter((pcm,meta)=>this.enqueue(slot,pcm,meta),{maxSamples:mode==='wake'||mode==='commands'?5*16000:20*16000});
     if(slot.checkIn)slot.timeout=setTimeout(()=>{if(this.current===slot)this.cancel();},CHECK_IN_LIMIT_MS);
-    this.engine.start(progress=>this.emit(slot,{type:'setup',percent:progress.percent})).then(()=>{
+    this.engine.start(progress=>this.emit(slot,{type:'setup',percent:progress.percent}),mode==='commands'?{download:false}:undefined).then(()=>{
       if(this.current!==slot)return;
       if(!this.permitted(slot)){this.cancel();return;}
       slot.phase='listening';if(mode==='dictation')slot.timeout=setTimeout(()=>this.cancel(),95000);
@@ -31,7 +31,9 @@ class SpeechInput {
   }
   emit(slot,event){if(this.current===slot)this.notify({id:slot.id,...event});}
   // Commands-only listening has its own rule (a walkthrough or reminder window), which holds in fullscreen and Gaming mode.
-  permitted(slot){return slot.mode==='commands'?this.commandsAllowed():slot.mode==='wake'||slot.wakeActivated?this.wakeAllowed():this.allowed();}
+  // It also needs the user's own opt-in to voice (the wake word) and an already installed runtime: it never downloads.
+  commandsReady(){return Boolean(this.commandsAllowed()&&this.wakeEnabled()&&this.engine.installed?.());}
+  permitted(slot){return slot.mode==='commands'?this.commandsReady():slot.mode==='wake'||slot.wakeActivated?this.wakeAllowed():this.allowed();}
   audio({id,samples}={}){
     const slot=this.current;
     if(!slot||slot.id!==id||slot.phase!=='listening')return;
@@ -104,7 +106,7 @@ class SpeechInput {
   finish(slot,cancelled=false){
     if(this.current!==slot)return;
     clearTimeout(slot.timeout);this.current=null;slot.queue=[];slot.segmenter.reset();
-    if(!(this.wakeAllowed()||this.commandsAllowed())||slot.phase==='starting')this.engine.stop();
+    if(!(this.wakeAllowed()||this.commandsReady())||slot.phase==='starting')this.engine.stop();
     this.notify({id:slot.id,type:'stopped',cancelled});
   }
   cancel(cold=false){const slot=this.current;if(!slot){this.engine.stop();return;}slot.abort.abort();this.finish(slot,true);if(cold)this.engine.stop();}
