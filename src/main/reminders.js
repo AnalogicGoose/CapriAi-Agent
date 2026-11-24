@@ -21,6 +21,7 @@ const EFFECTIVE = 'COALESCE(snoozed_until, next_due)';
 class ReminderStore {
   constructor(file, { now = () => new Date() } = {}) {
     this.now = now;
+    this._listeners = [];
     this.db = new DatabaseSync(file);
     this.db.exec(`PRAGMA secure_delete=ON;
       CREATE TABLE IF NOT EXISTS reminders (
@@ -36,6 +37,11 @@ class ReminderStore {
         language TEXT NOT NULL DEFAULT 'en'
       );`);
   }
+
+  // Registers fn to run after any mutation (add/update/cancel/snooze/markFired/complete).
+  onChange(fn) { this._listeners.push(fn); }
+
+  _changed() { for (const fn of this._listeners) fn(); }
 
   // Validate and normalize; an interval without a start is anchored to the injected clock, once, here.
   _schedule(input) {
@@ -57,6 +63,7 @@ class ReminderStore {
     const info = this.db.prepare(
       'INSERT INTO reminders(text, schedule, next_due, created_at, language) VALUES(?, ?, ?, ?, ?)'
     ).run(clean, JSON.stringify(normalized), next, this.now().getTime(), typeof language === 'string' && language ? language : 'en');
+    this._changed();
     return this.get(Number(info.lastInsertRowid));
   }
 
@@ -83,11 +90,14 @@ class ReminderStore {
     }
     this.db.prepare('UPDATE reminders SET text = ?, schedule = ?, next_due = ?, snoozed_until = ? WHERE id = ?')
       .run(newText, JSON.stringify(newSchedule), next, snoozed, id);
+    this._changed();
     return this.get(id);
   }
 
   cancel(id) {
-    return this.db.prepare("UPDATE reminders SET status = 'cancelled' WHERE id = ? AND status = 'active'").run(id).changes > 0;
+    const changed = this.db.prepare("UPDATE reminders SET status = 'cancelled' WHERE id = ? AND status = 'active'").run(id).changes > 0;
+    if (changed) this._changed();
+    return changed;
   }
 
   due(at) {
@@ -114,6 +124,7 @@ class ReminderStore {
           .run(firedDue, now, id);
       }
     }
+    this._changed();
     return this.get(id);
   }
 
@@ -125,11 +136,13 @@ class ReminderStore {
     } else if (r.fired_due === firedDue) {
       this.db.prepare('UPDATE reminders SET fired_due = NULL, snoozed_until = NULL WHERE id = ?').run(id);
     }
+    this._changed();
     return this.get(id);
   }
 
   snooze(id, until) {
     this.db.prepare("UPDATE reminders SET snoozed_until = ? WHERE id = ? AND status = 'active'").run(until, id);
+    this._changed();
     return this.get(id);
   }
 
