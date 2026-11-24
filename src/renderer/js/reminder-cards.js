@@ -94,7 +94,10 @@ export class ReminderCards {
       card.handled = true;
       Promise.resolve().then(() => this.host.reminderAction(card.id, 'dismiss', card.firedDue)).catch(() => {});
     }
-    if (!card.handled && !USER_GONE.has(reason) && !this.queue.includes(card)) {
+    // The "and N more" summary is informational and has a hold: its timeout ends it. Re-queuing it would loop
+    // forever and keep newer cards waiting behind it.
+    const summaryDone = card.type === 'more' && reason === 'timeout';
+    if (!card.handled && !summaryDone && !USER_GONE.has(reason) && !this.queue.includes(card)) {
       card.requeued = true;
       this.queue.unshift(card);
     }

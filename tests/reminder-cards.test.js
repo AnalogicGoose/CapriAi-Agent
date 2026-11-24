@@ -139,3 +139,15 @@ test('a voice reply resolves the open card and shows her acknowledgement', async
   r.cards.receive({ type: 'card', id: 3, firedDue: 1, line: 'x'.repeat(401), actions: [], snooze: [] });
   assert.equal(r.cards.queue.length, 0);
 });
+
+test('the "and N more" summary leaves on timeout and never blocks newer cards', async () => {
+  const r = await rig();
+  r.cards.receive({ type: 'more', line: '…and 3 more reminders.' });
+  assert.equal(r.panel.current.line, '…and 3 more reminders.');
+  r.panel.hide('timeout');
+  r.runTimers();
+  assert.equal(r.panel.current, null, 'a timed-out summary is gone, not re-queued');
+  assert.equal(r.cards.queue.length, 0);
+  r.cards.receive(card(7));
+  assert.equal(r.panel.current.reminder.id, 7, 'a newer card shows right away');
+});
