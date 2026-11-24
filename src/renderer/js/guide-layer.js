@@ -160,6 +160,16 @@ function cardBody(card) {
   return el('p', 'guide-note', card.text ?? '');
 }
 
+// Her microphone, on the card's corner while commands-only listening is open (her overlay may be hidden in a game).
+function micBadge() {
+  const badge = el('span', 'guide-card__mic');
+  badge.setAttribute('aria-hidden', 'true');
+  const icon = svg('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.2 });
+  icon.append(svg('rect', { x: 9, y: 3, width: 6, height: 12, rx: 3 }), svg('path', { d: 'M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8' }));
+  badge.append(icon);
+  return badge;
+}
+
 function drawCard(card) {
   if (!validBox(card.box)) return;
   const wrap = place(el('section', 'guide-card'), card.box.x, card.box.y, card.box.width);
@@ -180,6 +190,7 @@ function drawCard(card) {
     plate.append(actions);
   }
   wrap.append(plate);
+  if (card.listening === true) wrap.append(micBadge());
   cardsLayer.append(wrap);
 }
 

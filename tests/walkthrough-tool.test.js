@@ -19,7 +19,7 @@ function fixture({ lang = 'en', busy = () => false, infer = async () => null, sn
   const s = {
     now: 0, timers: new Map(), nextId: 1, spoken: [], renders: [], interactive: [], cleared: [], rows: 0,
     fg: { id: 5, pid: 9, ...box(0, 0, 800, 600) }, pointer: { down: false, x: -5000, y: -5000 }, cursor: { x: -5000, y: -5000 },
-    hover: null, infers: [], snapshots: 0,
+    hover: null, infers: [], snapshots: 0, active: [],
   };
   const setTimer = (fn, ms) => { const id = s.nextId++; s.timers.set(id, { fn, at: s.now + ms }); return id; };
   const ctl = new WalkthroughController({
@@ -32,7 +32,7 @@ function fixture({ lang = 'en', busy = () => false, infer = async () => null, sn
     speak: text => s.spoken.push(text), lang: () => lang,
     snapshot: snapshot || (async () => { s.snapshots += 1; return { image: SHOT, snapshotId: 'snap-1', width: 1600, height: 900 }; }),
     infer: async request => { s.infers.push(request); return infer(request); },
-    busy, guide: { clear: reason => s.cleared.push(reason) }, ownPid: 77,
+    busy, guide: { clear: reason => s.cleared.push(reason) }, ownPid: 77, onActive: on => s.active.push(on),
     now: () => s.now, setTimer, clearTimer: id => { s.timers.delete(id); },
     sleep: async ms => { s.now += ms; },
     every: fn => { s.hover = fn; return 'hover'; }, stopEvery: () => { s.hover = null; },
@@ -361,4 +361,30 @@ test('personal:route results resume a question pause unless the request goes on 
   f.ctl.afterRoute({ handled: true, text: 'local' });
   await f.advance(0);
   assert.equal(f.ctl.current.state, 'waiting');
+});
+
+test('the card carries the listening flag while commands listening is open, and a replacement keeps listening on', async () => {
+  const f = fixture();
+  const cardOf = scene => [...scene.values()].flatMap(v => v.cards || [])[0];
+  f.ctl.start(PLAN, {});
+  await f.advance(0);
+  assert.deepEqual(f.s.active, [true]);
+  assert.equal(cardOf(f.s.renders.at(-1)).listening, undefined);
+  f.ctl.setListening(true); await flush();
+  assert.equal(cardOf(f.s.renders.at(-1)).listening, true, 'mic badge while the commands microphone is open');
+  await f.advance(WATCH_MS * 2);
+  assert.equal(cardOf(f.s.renders.at(-1)).listening, true, 'later redraws keep it');
+  f.ctl.setListening(false); await flush();
+  assert.equal(cardOf(f.s.renders.at(-1)).listening, undefined, 'dropped when listening stops');
+  f.ctl.setListening(true);
+
+  // A request during the walkthrough becomes a new walkthrough: listening must not flap off and on.
+  f.ctl.route('what does that do?');
+  f.ctl.start(PLAN, { request: 'again' });
+  await f.advance(0);
+  assert.deepEqual(f.s.active, [true, true], 'no onActive(false) during the replacement');
+  assert.equal(cardOf(f.s.renders.at(-1)).listening, true);
+  f.ctl.stop();
+  assert.deepEqual(f.s.active, [true, true, false]);
+  assert.equal(f.ctl.voiceCommand('next'), false, 'no walkthrough, no command');
 });

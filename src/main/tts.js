@@ -20,7 +20,7 @@ class SpeechOutput {
   constructor({ root, config, allowed, grantAllowed = () => false, notify = () => {}, launch = spawn, now = Date.now }) {
     Object.assign(this, { root, config, allowed, grantAllowed, notify, launch, now });
     this.epoch = 0;
-    this.grants = new Map(); // token -> expiry
+    this.grants = new Map(); // token -> { until, line }
     this.qwen = new QwenVoice({ root, notify, launch });
   }
   cancel(notify = true) {
@@ -30,29 +30,31 @@ class SpeechOutput {
     this.qwen.cancel();
     if (notify) this.notify({ type: 'stopped' });
   }
-  // A one-time token main issues for a guide line or reminder it sends to the renderer: single use, 60 s.
-  grant(purpose) {
-    if (!GRANT_PURPOSES.has(purpose)) throw Error('Invalid voice grant.');
+  // A one-time token main issues for one guide line or reminder it sends to the renderer: single use, 60 s, and only
+  // for that exact line (compared in its spoken form).
+  grant(purpose, text) {
+    const line = typeof text === 'string' ? spokenText(text) : '';
+    if (!GRANT_PURPOSES.has(purpose) || !line) throw Error('Invalid voice grant.');
     const now = this.now();
-    for (const [token, until] of this.grants) if (until <= now) this.grants.delete(token);
+    for (const [token, entry] of this.grants) if (entry.until <= now) this.grants.delete(token);
     while (this.grants.size >= 16) this.grants.delete(this.grants.keys().next().value);
     const token = randomUUID();
-    this.grants.set(token, now + GRANT_MS);
+    this.grants.set(token, { until: now + GRANT_MS, line });
     return token;
   }
-  // Consumes the grant whether or not the line is then spoken.
-  redeem(token) {
+  // Consumes the grant whether or not the line is then spoken (or matches).
+  redeem(token, line) {
     if (typeof token !== 'string' || !this.grants.has(token)) return false;
-    const until = this.grants.get(token);
+    const entry = this.grants.get(token);
     this.grants.delete(token);
-    return until > this.now();
+    return entry.until > this.now() && Boolean(line) && entry.line === line;
   }
   async speak(request) {
     this.cancel(false);
     const epoch = this.epoch, cfg = this.config();
-    const granted = this.redeem(request?.grant);
-    const allowed = granted ? () => this.grantAllowed() : () => this.allowed();
     const text = typeof request?.text === 'string' ? spokenText(request.text) : '';
+    const granted = this.redeem(request?.grant, text);
+    const allowed = granted ? () => this.grantAllowed() : () => this.allowed();
     if (!cfg.ttsEnabled || cfg.muted || !allowed() || !text) return { ok: false, error: 'speech-output-paused' };
     if (cfg.ttsEngine === 'qwen') {
       if (typeof request.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(request.id)) return { ok: false, error: 'Invalid voice request.' };

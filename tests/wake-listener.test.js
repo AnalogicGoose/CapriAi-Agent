@@ -92,8 +92,8 @@ test('commands listener opens the microphone only while main allows commands and
     .replace("import { MicrophoneCapture } from './microphone.js';", 'class MicrophoneCapture {}');
   const { CommandListener } = await import(uri(code));
   const calls = [], captures = []; let receive, commands, blocked = false, owns = true;
-  const indicator = { hidden: true, setAttribute() {}, getAttribute() { return ''; }, dataset: {} };
-  const listener = new CommandListener({ indicator, blocked: () => blocked, ownsIndicator: () => owns,
+  const indicator = { hidden: true, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; }, dataset: {} };
+  const listener = new CommandListener({ indicator, name: () => 'Nova', blocked: () => blocked, ownsIndicator: () => owns,
     host: { onSpeechState: fn => { receive = fn; }, onSpeechCommands: fn => { commands = fn; },
       speechStart: async request => { calls.push(request); return { ok: true }; },
       speechCancel: request => calls.push({ cancel: request.id }), speechAudio: request => calls.push({ audio: request.id }) },
@@ -104,6 +104,7 @@ test('commands listener opens the microphone only while main allows commands and
     assert.equal(listener.active, true); assert.equal(calls[0].mode, 'commands');
     await receive({ id, type: 'ready' });
     assert.equal(indicator.hidden, false); assert.equal(indicator.dataset.state, 'listening');
+    assert.equal(indicator.attrs['aria-label'], 'Nova is listening for guide commands.', 'built from the display name');
     captures[0].send(new ArrayBuffer(4)); assert.equal(calls.at(-1).audio, id);
     blocked = true; owns = false; listener.tick();
     assert.equal(captures[0].cancelled, true); assert.equal(indicator.hidden, false, 'a voice call that took over keeps its indicator');

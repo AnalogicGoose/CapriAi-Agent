@@ -103,6 +103,21 @@
   animation: guide-card-in 170ms steps(3, jump-end) both;
 }
 
+.guide-card__mic {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  background: var(--ink);
+  color: #64e9ae;
+  border: 1px solid #64e9ae;
+  box-shadow: 2px 2px 0 var(--violet);
+}
+.guide-card__mic svg { width: 13px; height: 13px; }
+
 .guide-card__plate {
   flex: 1;
   padding: 12px 16px;

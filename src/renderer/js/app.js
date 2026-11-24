@@ -295,7 +295,7 @@ async function boot() {
     } });
   brain.onTalk = () => { voiceCall.end(); talkMenu.hide({ keepFocus: true }); return chat.start(); };
   // Commands-only listening (walkthrough / reminder window, opened by main): the local commands, no wake word needed.
-  commandListener = new CommandListener({ host, indicator: document.getElementById('voice-indicator'),
+  commandListener = new CommandListener({ host, indicator: document.getElementById('voice-indicator'), name: () => config.displayName,
     blocked: () => Boolean(voiceCall.active || dictation.id), ownsIndicator: () => !voiceCall.active,
     place: () => voiceCall.place(capri.head(), capri.view), beforeStart: () => wakeListener?.pause() });
   wakeListener = new WakeListener({ host, indicator: document.getElementById('wake-indicator'),

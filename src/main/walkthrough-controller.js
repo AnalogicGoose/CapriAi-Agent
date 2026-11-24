@@ -38,6 +38,9 @@ class WalkthroughController {
     this.hoverTimer = null;
     this.interactive = null; // displayId whose guide window currently takes the mouse
     this.apps = new Map();   // pid -> process name, for this walkthrough only
+    this.listening = false;  // commands-only listening is open: the card shows a mic badge (seen over fullscreen games)
+    this.lastDraw = null;    // [marks, card] last drawn, to redraw the badge
+    this.replacing = false;
   }
 
   get active() { return Boolean(this.current); }
@@ -47,7 +50,8 @@ class WalkthroughController {
     if (!this.allowed()) throw Error('Screen awareness is off or paused, so on-screen guides are unavailable.');
     const plan = validateWalkthrough(walkthroughFromTool(args));
     // Only once the new plan is accepted: the request made during the walkthrough became a new one, which replaces it.
-    if (this.current) this.stop();
+    // Listening stays open across the replacement (no off/on flap that would close and cold-restart Whisper).
+    if (this.current) { this.replacing = true; try { this.stop(); } finally { this.replacing = false; } }
     this.guide?.clear('walkthrough'); // the walkthrough owns the guide layer while it runs
     const walk = new Walkthrough({ plan, request, targets: this.targets, ownPid: this.ownPid,
       render: (marks, card, extra) => this.render(marks, card, extra),
@@ -70,9 +74,17 @@ class WalkthroughController {
     if (this.hoverTimer !== null) this.stopEvery(this.hoverTimer);
     this.hoverTimer = null;
     this.setInteractive(null);
-    Object.assign(this, { current: null, awaiting: false, turn: null, window: null, card: null });
+    Object.assign(this, { current: null, awaiting: false, turn: null, window: null, card: null, lastDraw: null });
     this.apps.clear();
-    this.notifyActive(false);
+    if (!this.replacing) this.notifyActive(false);
+  }
+
+  // Main: the commands-only microphone opened or closed. Redraws the current card with or without its mic badge.
+  setListening(on) {
+    on = on === true;
+    if (on === this.listening) return;
+    this.listening = on;
+    if (this.current && this.lastDraw) this.render(...this.lastDraw).catch(() => {});
   }
 
   notifyActive(active) { try { this.onActive(active); } catch { /* listening state is best effort */ } }
@@ -131,12 +143,14 @@ class WalkthroughController {
 
   async render(marks, card, extra = {}) {
     const lang = this.lang();
+    this.lastDraw = [marks, card];
     if (extra?.window && ['x', 'y', 'width', 'height'].every(k => Number.isFinite(extra.window[k]))) this.window = { ...extra.window };
     else if (card && !this.window) {
       const fg = this.foreground();
       if (fg && fg.pid !== this.ownPid) this.window = { ...fg };
     }
-    const cards = card ? [{ ...card, buttons: (card.buttons || []).map(b => ({ id: b.id, label: guideButton(b.id, lang) })) }] : [];
+    const cards = card ? [{ ...card, buttons: (card.buttons || []).map(b => ({ id: b.id, label: guideButton(b.id, lang) })),
+      ...(this.listening ? { listening: true } : {}) }] : [];
     const displays = this.displays();
     const win = this.window && (marks.length || cards.length)
       ? { x: this.window.x, y: this.window.y, width: this.window.width, height: this.window.height } : undefined;

@@ -4,9 +4,9 @@ import { MicrophoneCapture } from './microphone.js';
 // Main matches the fixed local commands and discards every other transcript; nothing heard comes back here.
 // Mirrors WakeListener's microphone lifecycle, and shows her voice indicator the whole time it listens.
 export class CommandListener {
-  constructor({ host, indicator, blocked = () => false, ownsIndicator = () => true, place = () => {}, beforeStart = () => {},
-    captureFactory = () => new MicrophoneCapture(), now = Date.now }) {
-    Object.assign(this, { host, indicator, blocked, ownsIndicator, place, beforeStart, captureFactory, now });
+  constructor({ host, indicator, name = () => '', blocked = () => false, ownsIndicator = () => true, place = () => {},
+    beforeStart = () => {}, captureFactory = () => new MicrophoneCapture(), now = Date.now }) {
+    Object.assign(this, { host, indicator, name, blocked, ownsIndicator, place, beforeStart, captureFactory, now });
     this.enabled = false; this.retryAt = 0; this.listening = false; this.shown = false;
     host.onSpeechState(event => this.receive(event));
     host.onSpeechCommands?.(message => this.configure(message?.on === true));
@@ -27,7 +27,8 @@ export class CommandListener {
     if (show) {
       this.place();
       this.indicator.hidden = false; this.indicator.dataset.state = 'listening';
-      this.indicator.setAttribute('aria-label', 'Capri is listening for guide commands.');
+      const who = typeof this.name() === 'string' ? this.name().trim() : '';
+      this.indicator.setAttribute('aria-label', who ? `${who} is listening for guide commands.` : 'Listening for guide commands.');
       this.indicator.title = this.indicator.getAttribute('aria-label');
       this.shown = true;
     } else if (this.shown) {

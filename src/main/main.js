@@ -10,6 +10,7 @@ const {
 } = require('electron');
 
 const config = require('./config');
+const { DISPLAY_NAME } = require('./identity');
 const { LANGS } = require('./labels');
 const { createSettingsWindow } = require('./settings-window');
 const { installChatSpelling } = require('./chat-spelling');
@@ -327,7 +328,7 @@ const walkthroughs = new WalkthroughController({ targets: guideTargets, layer: g
   foreground: () => require('./native-windows').foregroundBounds(), pointer: () => require('./native-windows').pointerState(),
   processRows: () => require('./native-windows').processRows(), allowed: () => screenAccess.enabled(),
   lang: () => resolveLang(config.load().lang), busy: () => brain.busy || decisionBrain.busy,
-  speak: text => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('guide:say', { text, grant: tts.grant('guide') }); },
+  speak: text => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('guide:say', { text, grant: tts.grant('guide', text) }); },
   onActive: () => syncCommands(),
   snapshot: () => screenAccess.snapshot(),
   infer: async request => {
@@ -475,7 +476,7 @@ const wakeAllowed = () => Boolean(overlay && !overlay.isDestroyed() && config.lo
   && (!smokeTest || process.argv.includes('--wake-live')));
 // Commands-only listening (spec decision 1): open while a walkthrough runs or a reminder's command window is open,
 // in fullscreen and Gaming mode too. Only the fixed local commands are acted on; speech.js drops every other transcript.
-let commandWindowUntil = 0, commandWindowTimer = null, commandsOn = false;
+let commandWindowUntil = 0, commandWindowTimer = null, commandsOn = false, commandsListeningId = null;
 const commandsAllowed = () => Boolean(sessionAvailable && overlay && !overlay.isDestroyed()
   && (walkthroughs.active || Date.now() < commandWindowUntil));
 // For the reminders plan: open the window for ms (30 s after a reminder fires or is shown).
@@ -510,6 +511,9 @@ const speech = new SpeechInput({
   commandsAllowed,
   notify: state => {
     if (state.type === 'command') { routeSpeechCommand(state); return; } // handled here, never forwarded
+    // The walkthrough card's mic badge follows the commands microphone (her overlay may be hidden in a game).
+    if (state.type === 'ready' && state.mode === 'commands') { commandsListeningId = state.id; walkthroughs.setListening(true); }
+    else if (state.type === 'stopped' && state.id === commandsListeningId) { commandsListeningId = null; walkthroughs.setListening(false); }
     if (!overlay || overlay.isDestroyed()) return;
     if (state.type === 'wake' || (state.type === 'ready' && state.mode === 'conversation')) {
       voiceSession = true; autonomy.cancel(); tts.cancel(); tts.warm();
@@ -766,7 +770,7 @@ function resolveLang(setting) {
 function rendererConfig() {
   const cfg = config.load();
   return { ...cfg, wakeWordEnabled: smokeTest && !process.argv.includes('--wake-live') ? false : cfg.wakeWordEnabled,
-    lang: resolveLang(cfg.lang), langSetting: cfg.lang };
+    lang: resolveLang(cfg.lang), langSetting: cfg.lang, displayName: DISPLAY_NAME };
 }
 
 function updateConfig(patch) {
