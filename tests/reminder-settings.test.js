@@ -44,6 +44,12 @@ test('reminderRows lists active reminders with local next time and repeat label'
   const r = store.add({ text: '<b>Pills</b>', schedule: { kind: 'daily', at: '09:00' } });
   const gone = store.add({ text: 'Old', schedule: { kind: 'daily', at: '10:00' } });
   store.cancel(gone.id);
-  assert.deepEqual(reminderRows(store, 'en'), [{ id: r.id, text: '<b>Pills</b>', next: '2026-06-01 09:00', repeat: 'Daily at 09:00' }]);
+  assert.deepEqual(reminderRows(store, 'en'), [{ id: r.id, text: '<b>Pills</b>', next: '2026-06-01 09:00', repeat: 'Daily at 09:00', movable: true }]);
   assert.deepEqual(reminderRows(null, 'en'), []);
+  // An interval reminder has no time of day: the Control room offers no Move for it.
+  store.add({ text: 'Stretch', schedule: { kind: 'interval', every_minutes: 60 } });
+  assert.equal(reminderRows(store, 'en').find(row => row.text === 'Stretch').movable, false);
+  const fs = require('node:fs'), path = require('node:path');
+  const ui = fs.readFileSync(path.join(__dirname, '../src/renderer/js/settings.js'), 'utf8');
+  assert.match(ui, /item\.movable \?/, 'the Move button and time field render only for movable rows');
 });

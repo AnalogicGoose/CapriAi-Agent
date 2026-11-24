@@ -56,8 +56,8 @@ function render() {
     const list = state.reminders || [], name = esc(c.displayName || 'Your companion');
     content.innerHTML = heading('NEVER FORGET', 'Reminders', `${name} will speak up when these are due. Ask her to add one, or manage them here.`) + section('UPCOMING') +
       (list.length ? card(...list.map(item => row(esc(item.text), `Next: ${esc(item.next)} · ${esc(item.repeat)}`,
-        `<div class="actions"><input type="time" data-reminder-time="${esc(item.id)}" value="${esc(item.next.slice(11, 16))}" aria-label="New time for ${esc(item.text)}">` +
-        `<button class="button" data-reminder-move="${esc(item.id)}" data-date="${esc(item.next.slice(0, 10))}">Move</button>` +
+        `<div class="actions">` + (item.movable ? `<input type="time" data-reminder-time="${esc(item.id)}" value="${esc(item.next.slice(11, 16))}" aria-label="New time for ${esc(item.text)}">` +
+        `<button class="button" data-reminder-move="${esc(item.id)}" data-date="${esc(item.next.slice(0, 10))}">Move</button>` : '') +
         `<button class="button" data-reminder-cancel="${esc(item.id)}">Cancel</button></div>`))) :
         card(row('No reminders yet', `Tell ${name} what to remind you about and when, and it shows up here.`)));
   }

@@ -54,7 +54,7 @@ test('cards wait while a chat, call or permission prompt has her attention', asy
   assert.deepEqual(r.shown, [[1, 1001]]);
 });
 
-test('a displaced or cleared card comes back and is reported shown again; dismissed or timed out it does not', async () => {
+test('a displaced, cleared or timed-out card comes back and is reported shown again; dismissed it does not', async () => {
   const r = await rig();
   r.cards.receive(card(1));
   r.panel.say({ kind: 'alert', line: 'Permission needed' }); // displaces it
@@ -68,13 +68,27 @@ test('a displaced or cleared card comes back and is reported shown again; dismis
   r.panel.hide('cleared'); // clearKind('alert') after a prompt is answered
   r.runTimers();
   assert.equal(r.panel.current.reminder.id, 1, 're-shown after clearKind');
-  r.panel.hide('user');
-  r.runTimers();
-  assert.equal(r.panel.current, null, 'dismissed by the user: gone');
-  r.cards.receive(card(2));
+  assert.equal(r.panel.current.hold, null, 'a reminder card has no timeout');
   r.panel.hide('timeout');
   r.runTimers();
-  assert.equal(r.panel.current, null, 'timed out: gone');
+  assert.equal(r.panel.current.reminder.id, 1, 'a timeout never drops it: shown again');
+  r.panel.hide('user');
+  await Promise.resolve(); await Promise.resolve();
+  r.runTimers();
+  assert.equal(r.panel.current, null, 'dismissed by the user: gone');
+  assert.deepEqual(r.actions, [[1, 'dismiss', 1001]], 'main is told, so it is no longer pending');
+  assert.equal(r.cards.queue.length, 0);
+});
+
+test('a permanent action error resolves the card as gone; a resolved message may carry no line', async () => {
+  const r = await rig();
+  r.cards.receive(card(1)); r.cards.receive(card(2));
+  r.reply({ ok: false, gone: true, error: 'That reminder card is no longer open.' });
+  await r.panel.current.onAction('done');
+  assert.equal(r.panel.current.reminder.id, 2, 'card 1 is gone, not stuck on try again');
+  r.cards.receive({ type: 'resolved', id: 2, firedDue: 1002 });
+  r.runTimers();
+  assert.equal(r.panel.current, null);
   assert.equal(r.cards.queue.length, 0);
 });
 

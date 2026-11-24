@@ -31,7 +31,8 @@ function validateReminderAction(name, value) {
   throw Error('Unknown action.');
 }
 
-const reminderRows = (store, lang) => (store ? store.list().map(row => summary(row, lang)) : []);
+// movable: false for interval reminders (no time of day, so Move would always fail).
+const reminderRows = (store, lang) => (store ? store.list().map(row => ({ ...summary(row, lang), movable: row.schedule.kind !== 'interval' })) : []);
 
 // Once: new date (kept if omitted) and time. Repeating with a time of day: only `at` changes. Interval has no time of day.
 function moveReminder(store, { id, at, date }) {

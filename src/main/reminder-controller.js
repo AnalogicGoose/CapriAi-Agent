@@ -1,6 +1,8 @@
 'use strict';
 // Fired reminder -> delivery plan -> spoken line (with a one-time voice grant) and/or her reminder card, or held until
-// fullscreen / Gaming mode ends. Card buttons and the voice commands "done" / "snooze N" act on it. Pure: main.js
+// fullscreen / Gaming mode / a locked session ends. A fired occurrence stays pending in the store (pending_due) until the
+// user acts on it (Done, Snooze, or dismissing the card); redeliver() shows pending ones again, once, as missed, after a
+// restart, a resume/unlock or a renderer reload. Card buttons and the voice commands "done" / "snooze N" act on it. Pure: main.js
 // injects the overlay sender, TTS grant and command window, so this runs in tests without Electron.
 const { deliveryPlan, reminderLine, HeldReminders } = require('./reminder-delivery');
 
@@ -46,7 +48,7 @@ const clock = ms => { const d = new Date(ms); return `${String(d.getHours()).pad
 const keyOf = (id, firedDue) => `${id}:${firedDue}`;
 
 class ReminderController {
-  // state(): { fullscreen, gaming, overlayAvailable, voiceOn }; send(payload) to the overlay ('reminder:due');
+  // state(): { fullscreen, gaming, overlayAvailable, voiceOn, locked }; send(payload) to the overlay ('reminder:due');
   // grant(line) -> one-time TTS token; openWindow(ms) opens commands-only listening; isOverlay(sender).
   constructor({ store, state, lang = () => 'en', send, grant, openWindow = () => {}, isOverlay = () => false, now = Date.now }) {
     Object.assign(this, { store, state, lang, send, grant, openWindow, isOverlay, now });
@@ -57,20 +59,22 @@ class ReminderController {
   }
 
   // The renderer is (re)loaded and listening, or went away.
+  // A reloaded renderer lost its cards: the pending ones are delivered again once it is ready.
   setReady(on) {
     this.ready = Boolean(on);
-    if (!this.ready) { this.last = null; return; }
-    this.flush();
+    if (!this.ready) { this.last = null; this.sent.clear(); return; }
+    this.redeliver();
   }
 
   _state() {
     const s = this.state() || {};
-    return { fullscreen: Boolean(s.fullscreen), gaming: Boolean(s.gaming), voiceOn: Boolean(s.voiceOn),
+    return { fullscreen: Boolean(s.fullscreen), gaming: Boolean(s.gaming), voiceOn: Boolean(s.voiceOn), locked: Boolean(s.locked),
       overlayAvailable: this.ready && Boolean(s.overlayAvailable) };
   }
 
   _line(entry) {
-    return reminderLine({ text: entry.text, fired_due: entry.firedDue }, { missed: entry.missed, lang: this.lang(), firedDue: entry.firedDue });
+    return reminderLine({ text: entry.text, fired_due: entry.firedDue },
+      { missed: entry.missed, lang: this.lang(), firedDue: entry.firedDue, now: this.now() });
   }
 
   _grant(line) { try { return this.grant(line); } catch { return undefined; } }
@@ -92,8 +96,8 @@ class ReminderController {
     const s = this._state();
     const plan = deliveryPlan(s);
     const entry = { id: reminder.id, text: reminder.text, missed: Boolean(missed), firedDue: firedDue ?? reminder.fired_due ?? reminder.next_due };
-    // Her voice goes through the overlay renderer: without it, the line is spoken when the held card is shown.
-    const speakNow = plan.speak && s.overlayAvailable;
+    // Her voice goes through the overlay renderer: without it (or while locked), the line is spoken when the held card is shown.
+    const speakNow = plan.speak && s.overlayAvailable && !s.locked;
     if (plan.card === 'now') { this._card(entry, speakNow); return; }
     if (speakNow) {
       const line = this._line(entry), grant = this._grant(line);
@@ -102,10 +106,25 @@ class ReminderController {
     this.held.add({ ...entry, unspoken: plan.speak && !speakNow });
   }
 
-  // Shows held cards once nothing holds them (fullscreen ended, Gaming mode off, renderer ready).
+  // Start, resume/unlock and renderer reload: every occurrence still pending in the store that is not already on its
+  // way (held or sent) is delivered again, once, as missed. One per reminder (the store keeps only its latest), held
+  // and flushed together so more than five collapse into the summary card (no burst).
+  redeliver() {
+    let rows = [];
+    try { rows = this.store.pending(); } catch { return; }
+    const s = this._state();
+    for (const row of rows) {
+      const firedDue = row.pending_due;
+      if (this.sent.has(keyOf(row.id, firedDue)) || this.held.has(row.id, firedDue)) continue;
+      this.held.add({ id: row.id, text: row.text, missed: true, firedDue, unspoken: s.voiceOn });
+    }
+    this.flush();
+  }
+
+  // Shows held cards once nothing holds them (fullscreen ended, Gaming mode off, session unlocked, renderer ready).
   flush() {
     const s = this._state();
-    if (!s.overlayAvailable || s.fullscreen || s.gaming) return;
+    if (!s.overlayAvailable || s.fullscreen || s.gaming || s.locked) return;
     this.held.flush(({ reminders, more }) => {
       for (const entry of reminders) this._card(entry, entry.unspoken && s.voiceOn);
       if (more > 0) this.send({ type: 'more', line: copy(this.lang()).more.replace('{n}', String(more)) });
@@ -120,24 +139,31 @@ class ReminderController {
     return true;
   }
 
-  // 'reminder:action' from the overlay: (id, 'done'|'snooze', firedDue, minutes number | 'tomorrow').
+  // 'reminder:action' from the overlay: (id, 'done'|'snooze'|'dismiss', firedDue, minutes number | 'tomorrow').
+  // 'dismiss': the user clicked the card away; the occurrence is acknowledged (no longer pending).
   ipcAction(sender, id, action, firedDue, minutes) {
     if (!this.isOverlay(sender)) return { ok: false, error: 'Overlay required.' };
     return this.act(id, action, firedDue, minutes);
   }
 
   act(id, action, firedDue, minutes) {
-    if (!Number.isSafeInteger(id) || id < 1 || !Number.isFinite(firedDue) || !['done', 'snooze'].includes(action)) {
+    if (!Number.isSafeInteger(id) || id < 1 || !Number.isFinite(firedDue) || !['done', 'snooze', 'dismiss'].includes(action)) {
       return { ok: false, error: 'Invalid reminder action.' };
     }
     const key = keyOf(id, firedDue);
-    if (!this.sent.has(key)) return { ok: false, error: 'That reminder card is no longer open.' };
+    // Permanent failures resolve the card as gone (gone: true) instead of leaving it stuck on "try again".
+    if (!this.sent.has(key)) return { ok: false, gone: true, error: 'That reminder card is no longer open.' };
     const t = copy(this.lang());
     let text;
     try {
+      if (action === 'dismiss') {
+        this.store.acknowledge(id, firedDue);
+        this._forget(key);
+        return { ok: true };
+      }
       if (action === 'done') {
         const row = this.store.get(id);
-        if (!row) return { ok: false, error: 'Reminder not found.' };
+        if (!row) { this._forget(key); return { ok: false, gone: true, error: 'Reminder not found.' }; }
         // A repeating card whose occurrence was already superseded (a newer one fired, or it was completed elsewhere):
         // nothing to complete, so say so honestly; the card is obsolete.
         if (row.schedule.kind !== 'once' && row.fired_due !== firedDue) {
@@ -150,7 +176,10 @@ class ReminderController {
         const until = snoozeUntil(minutes, this.now());
         if (until === null) return { ok: false, error: 'Invalid snooze time.' };
         const row = this.store.snooze(id, until, firedDue);
-        if (!row || row.status !== 'active' || row.snoozed_until !== until) return { ok: false, error: 'That reminder can no longer be snoozed.' };
+        if (!row || row.status !== 'active' || row.snoozed_until !== until) {
+          this._forget(key);
+          return { ok: false, gone: true, error: 'That reminder can no longer be snoozed.' };
+        }
         text = t.ackSnooze.replace('{time}', clock(until));
       }
     } catch { return { ok: false, error: 'Reminder storage is unavailable.' }; }

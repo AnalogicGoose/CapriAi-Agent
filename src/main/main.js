@@ -660,13 +660,21 @@ function startReminders() {
     reminderStore = new ReminderStore(path.join(app.getPath('userData'), 'reminders.sqlite'));
     reminders = new ReminderController({ store: reminderStore, lang: () => resolveLang(config.load().lang),
       state: () => { const cfg = config.load(); return { fullscreen: fullscreenState.active, gaming: cfg.gamingMode === true,
-        overlayAvailable: Boolean(overlay && !overlay.isDestroyed()), voiceOn: Boolean(cfg.ttsEnabled) && !cfg.muted }; },
+        overlayAvailable: Boolean(overlay && !overlay.isDestroyed()), voiceOn: Boolean(cfg.ttsEnabled) && !cfg.muted,
+        locked: !sessionAvailable }; },
       send: payload => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('reminder:due', payload); },
       grant: line => tts.grant('reminder', line), openWindow: openCommandWindow,
       isOverlay: sender => Boolean(overlay && !overlay.isDestroyed() && sender === overlay.webContents) });
     reminderScheduler = new ReminderScheduler({ store: reminderStore, fire: (reminder, info) => reminders.fire(reminder, info) });
     brainTools.reminders = reminderStore;
     reminderScheduler.resume();
+    reminders.redeliver(); // occurrences still waiting from before the restart, once, as missed
+    // Done / cancelled reminders are kept 30 days; the Control room follows changes made by voice or Codex too.
+    const prune = () => { try { reminderStore?.prune(); } catch { /* best effort */ } };
+    prune();
+    const pruneTimer = setInterval(prune, 24 * 3600000); pruneTimer.unref();
+    let roomTimer = null;
+    reminderStore.onChange(() => { clearTimeout(roomTimer); roomTimer = setTimeout(() => settingsRoom?.update(), 250); roomTimer.unref?.(); });
   } catch (error) {
     console.error('[capri] Reminders unavailable:', error.message);
     reminderScheduler?.stop(); reminderStore?.close();
@@ -1471,7 +1479,7 @@ function main() {
         interestCollaboration.cancel();
         if (speech.current?.checkIn) { speech.cancel(); endVoiceSession(); }
         commandWindowUntil = 0;
-      } else reminderScheduler?.resume();
+      } else { reminderScheduler?.resume(); reminders?.redeliver(); } // held while locked: shown now, missed ones once
       syncCommands();
     });
     const presenceTimer = setInterval(() => {

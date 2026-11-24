@@ -10,10 +10,10 @@ const { DISPLAY_NAME } = require('../src/main/identity');
 const at = (d, h = 9, m = 0) => new Date(2026, 10, d, h, m).getTime();
 const OVERLAY = { id: 'overlay' };
 
-function rig({ fullscreen = false, gaming = false, voiceOn = true, overlayAvailable = true, ready = true } = {}) {
+function rig({ fullscreen = false, gaming = false, voiceOn = true, overlayAvailable = true, ready = true, locked = false, file = ':memory:', store: given } = {}) {
   let clock = at(23, 9);
-  const store = new ReminderStore(':memory:', { now: () => new Date(clock) });
-  const state = { fullscreen, gaming, voiceOn, overlayAvailable };
+  const store = given || new ReminderStore(file, { now: () => new Date(clock) });
+  const state = { fullscreen, gaming, voiceOn, overlayAvailable, locked };
   const sent = [], grants = [], windows = [];
   const controller = new ReminderController({ store, lang: () => 'en', state: () => ({ ...state }),
     send: payload => sent.push(payload), grant: text => { grants.push(text); return `grant-${grants.length}`; },
@@ -209,4 +209,92 @@ test('capri_reminder update/cancel on a non-active reminder returns an error', a
   assert.match((await call({ operation: 'update', id: row.id, schedule: JSON.stringify({ kind: 'daily', at: '11:00' }) })).error, /active/);
   assert.match((await call({ operation: 'cancel', id: row.id })).error, /active/);
   assert.equal(store.get(row.id).status, 'cancelled');
+});
+
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+
+test('a reminder firing while the session is locked is held, silent, and shown with its voice on unlock', () => {
+  const r = rig({ locked: true });
+  const row = fireOnce(r);
+  assert.deepEqual(r.sent, [], 'nothing is spoken or shown to an empty room');
+  r.controller.flush();
+  assert.deepEqual(r.sent, [], 'still locked');
+  r.state.locked = false;
+  r.controller.redeliver(); // main calls this on unlock / resume
+  assert.equal(r.sent.length, 1);
+  assert.equal(r.sent[0].type, 'card');
+  assert.equal(r.sent[0].id, row.id);
+  assert.equal(r.sent[0].speak, true, 'spoken now that someone is there');
+  assert.equal(r.store.get(row.id).pending_due, at(23, 9));
+  r.controller.redeliver();
+  assert.equal(r.sent.length, 1, 'not delivered twice');
+});
+
+test('a pending occurrence survives a restart and is re-delivered once, as missed, until Done or Snooze', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-reminder-wiring-'));
+  const file = path.join(dir, 'reminders.sqlite');
+  try {
+    let r = rig({ file });
+    const daily = r.store.add({ text: 'water', schedule: { kind: 'daily', at: '09:00' } });
+    const once = fireOnce(r, 'stretch', at(23, 9, 1));
+    r.controller.fire(daily, { missed: false, firedDue: at(23, 9) });
+    r.store.markFired(daily.id, at(23, 9));
+    // the cards were shown but never acted on (the user was away); then the app quits
+    r.store.close();
+    const store = new ReminderStore(file, { now: () => new Date(at(23, 18)) });
+    r = rig({ store, ready: false });
+    r.tick(9 * 3600000);
+    r.controller.redeliver(); // startReminders: overlay not ready yet, so held
+    assert.deepEqual(r.sent, []);
+    r.controller.setReady(true);
+    const cards = r.sent.filter(p => p.type === 'card');
+    assert.deepEqual(cards.map(c => [c.id, c.firedDue]), [[daily.id, at(23, 9)], [once.id, at(23, 9, 1)]]);
+    assert.match(cards[0].line, /^You missed this one, love: water, at 09:00$/);
+    r.controller.redeliver();
+    assert.equal(r.sent.filter(p => p.type === 'card').length, 2, 're-delivered once');
+    assert.equal(r.controller.ipcAction(OVERLAY, daily.id, 'done', at(23, 9)).ok, true);
+    assert.equal(r.controller.ipcAction(OVERLAY, once.id, 'snooze', at(23, 9, 1), 10).ok, true);
+    assert.deepEqual(r.store.pending(), [], 'Done and Snooze clear pending');
+    // a renderer reload re-delivers only what is still pending
+    r.controller.setReady(false);
+    r.controller.setReady(true);
+    assert.equal(r.sent.filter(p => p.type === 'card').length, 2);
+    r.store.close();
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a dismissed card is acknowledged; a missed occurrence from another day says the day', () => {
+  const r = rig();
+  const row = fireOnce(r);
+  assert.equal(r.controller.ipcAction(OVERLAY, row.id, 'dismiss', at(23, 9)).ok, true);
+  assert.deepEqual(r.store.pending(), []);
+  const late = r.store.add({ text: 'pills', schedule: { kind: 'once', date: '2026-11-23', at: '10:00' } });
+  r.tick(26 * 3600000);
+  r.controller.fire(late, { missed: true, firedDue: at(23, 10) });
+  assert.match(r.sent.at(-1).line, /^You missed this one, love: pills, on Nov 23 at 10:00$/);
+});
+
+test('only the latest occurrence of a reminder is held while away (no burst)', () => {
+  const r = rig({ locked: true });
+  const daily = r.store.add({ text: 'water', schedule: { kind: 'interval', every_minutes: 60 } });
+  for (let i = 0; i < 3; i++) {
+    const due = at(23, 9) + i * 3600000;
+    r.controller.fire(r.store.get(daily.id), { missed: false, firedDue: due });
+    r.store.markFired(daily.id, due);
+  }
+  r.state.locked = false;
+  r.controller.redeliver();
+  assert.deepEqual(r.sent.map(p => [p.type, p.firedDue]), [['card', at(23, 11)]]);
+});
+
+test('permanent action errors say the card is gone', () => {
+  const r = rig();
+  assert.equal(r.controller.ipcAction(OVERLAY, 5, 'done', at(23, 9)).gone, true, 'never sent / no longer open');
+  const row = r.store.add({ text: 'water', schedule: { kind: 'daily', at: '09:00' } });
+  r.controller.fire(row, { missed: false, firedDue: at(23, 9) });
+  r.store.markFired(row.id, at(23, 9));
+  r.store.cancel(row.id);
+  const snooze = r.controller.ipcAction(OVERLAY, row.id, 'snooze', at(23, 9), 10);
+  assert.equal(snooze.ok, false);
+  assert.equal(snooze.gone, true);
 });

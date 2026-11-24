@@ -148,3 +148,82 @@ test('retention: reminders survive a MemoryStore prune (no dependency on MemoryS
   assert.equal(store.get(r.id).text, 'keep');
   store.close();
 });
+
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+const { DatabaseSync } = require('node:sqlite');
+const { SCHEMA_VERSION } = require('../src/main/reminders');
+const tempDb = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-reminders-')); return { dir, file: path.join(dir, 'reminders.sqlite') }; };
+
+test('an existing version-0 reminders.sqlite is upgraded in place and keeps its rows', () => {
+  const { dir, file } = tempDb();
+  try {
+    const old = new DatabaseSync(file);
+    old.exec(`CREATE TABLE reminders (id INTEGER PRIMARY KEY, text TEXT NOT NULL, schedule TEXT NOT NULL, next_due INTEGER NOT NULL,
+      fired_due INTEGER, snoozed_until INTEGER, created_at INTEGER NOT NULL, last_fired INTEGER,
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','done','cancelled')), language TEXT NOT NULL DEFAULT 'en');`);
+    old.prepare('INSERT INTO reminders(text, schedule, next_due, created_at) VALUES(?, ?, ?, ?)').run('water', JSON.stringify(daily), at(1), at(1, 8));
+    assert.equal(old.prepare('PRAGMA user_version').get().user_version, 0);
+    old.close();
+    const store = new ReminderStore(file, { now: () => new Date(at(1, 8)) });
+    assert.equal(store.db.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
+    const row = store.list()[0];
+    assert.equal(row.text, 'water');
+    assert.equal(row.pending_due, null);
+    assert.equal(row.ended_at, null);
+    store.close();
+    // Opening again is a no-op.
+    const again = new ReminderStore(file);
+    assert.equal(again.list().length, 1);
+    again.close();
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a fired occurrence stays pending across a reopen until Done, Snooze or a dismiss', () => {
+  const { dir, file } = tempDb();
+  try {
+    let t = at(1, 8);
+    let store = new ReminderStore(file, { now: () => new Date(t) });
+    const r = store.add({ text: 'water', schedule: daily });
+    const once = store.add({ text: 'call', schedule: { kind: 'once', date: '2026-06-01', at: '09:30' } });
+    t = at(1, 10);
+    store.markFired(r.id, at(1));
+    store.markFired(once.id, at(1, 9, 30));
+    store.close();
+    store = new ReminderStore(file, { now: () => new Date(t) });
+    assert.deepEqual(store.pending().map(p => [p.id, p.pending_due]), [[r.id, at(1)], [once.id, at(1, 9, 30)]]);
+    // Only the latest occurrence of a repeating reminder is pending.
+    store.markFired(r.id, at(2));
+    assert.deepEqual(store.pending().map(p => [p.id, p.pending_due]), [[once.id, at(1, 9, 30)], [r.id, at(2)]]);
+    store.complete(r.id, at(2));
+    store.snooze(once.id, at(1, 10, 30), at(1, 9, 30));
+    assert.deepEqual(store.pending(), []);
+    store.markFired(once.id, at(1, 10, 30));
+    assert.equal(store.acknowledge(once.id, at(1, 10, 29)), false, 'another occurrence is not acknowledged');
+    assert.equal(store.acknowledge(once.id, at(1, 10, 30)), true);
+    assert.deepEqual(store.pending(), []);
+    store.close();
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('cancel clears pending; prune deletes only ended reminders older than 30 days', () => {
+  const { store, clock } = make();
+  const a = store.add({ text: 'a', schedule: daily });
+  const b = store.add({ text: 'b', schedule: { kind: 'once', date: '2026-06-01', at: '09:30' } });
+  const c = store.add({ text: 'c', schedule: daily });
+  const d = store.add({ text: 'd', schedule: { kind: 'once', date: '2026-06-01', at: '09:40' } });
+  clock.t = at(1, 10);
+  store.markFired(a.id, at(1));
+  store.cancel(a.id);
+  assert.equal(store.get(a.id).pending_due, null);
+  store.markFired(b.id, at(1, 9, 30));
+  store.complete(b.id, at(1, 9, 30));
+  store.markFired(d.id, at(1, 9, 40)); // done, but still waiting for the user
+  clock.t = at(30, 10);
+  assert.equal(store.prune(), 0, 'not 30 days yet');
+  clock.t = at(1, 10) + 31 * 24 * 3600000;
+  assert.equal(store.prune(), 2);
+  assert.equal(store.get(a.id), null);
+  assert.equal(store.get(b.id), null);
+  assert.equal(store.get(c.id).status, 'active');
+  assert.equal(store.get(d.id).status, 'done', 'a pending one is kept');
+});

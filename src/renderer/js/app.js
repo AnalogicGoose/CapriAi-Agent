@@ -199,7 +199,7 @@ async function boot() {
   capri.onGaze = () => host.companionEvent?.('idle');
   capri.onClick = () => {
     voiceCall?.end();
-    if (panel.visible) panel.hide();
+    if (panel.visible) panel.hide('user'); // the user clicked it away (a reminder card is dismissed, not re-queued)
     talkMenu?.show();
   };
   panel.onChar = (kind) => {

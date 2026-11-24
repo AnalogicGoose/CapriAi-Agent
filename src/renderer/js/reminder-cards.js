@@ -1,9 +1,9 @@
-// Her reminder cards from main (reminder-controller.js), one at a time. A card stays in this queue until it is acted on
-// (Done / Snooze, by button or voice) or the user dismisses it / lets it time out. If anything else takes it off the
-// panel (another message, a permission prompt clearing alerts), it goes back to the front of the queue and shows again
-// once the panel is free. Each time a card is actually shown, main is told (reminderShown), which opens the 30 s
-// window for the voice replies "done" / "snooze".
-const USER_GONE = new Set(['user', 'timeout']);
+// Her reminder cards from main (reminder-controller.js), one at a time. A card has no timeout: it stays until it is
+// acted on (Done / Snooze, by button or voice) or the user dismisses it (main is told, so the occurrence is no longer
+// pending). If anything else takes it off the panel (another message, a permission prompt clearing alerts, a
+// timeout), it goes back to the front of the queue and shows again once the panel is free. Each time a card is
+// actually shown, main is told (reminderShown), which opens the 30 s window for the voice replies "done" / "snooze".
+const USER_GONE = new Set(['user']);
 
 export class ReminderCards {
   // panel: Panel; host: preload bridge; blocked(): a chat, voice call, permission prompt or menu owns her attention;
@@ -16,9 +16,9 @@ export class ReminderCards {
   }
 
   receive(message) {
+    if (message?.type === 'resolved') { this.resolved(message, typeof message.line === 'string' ? message.line : ''); return; }
     if (!message || typeof message.line !== 'string' || !message.line || message.line.length > 400) return;
     if (message.type === 'speak') { if (typeof message.grant === 'string') this.speak(message.line, message.grant); return; }
-    if (message.type === 'resolved') { this.resolved(message, message.line); return; }
     if (message.type === 'card') {
       if (!Number.isSafeInteger(message.id) || !Number.isFinite(message.firedDue) || !Array.isArray(message.actions) || !Array.isArray(message.snooze)) return;
       if (this.queue.some(card => same(card, message)) || same(this.open, message)) return;
@@ -51,7 +51,7 @@ export class ReminderCards {
   message(card) {
     const onLeave = reason => this.left(card, reason);
     if (card.type === 'more') return { kind: 'alert', line: card.line, hold: 15000, reminder: card, onLeave };
-    return { kind: 'alert', line: card.line, hold: 120000, reminder: card, onLeave,
+    return { kind: 'alert', line: card.line, hold: null, reminder: card, onLeave,
       actions: this.mainActions(card), onAction: id => this.action(card, id) };
   }
 
@@ -90,6 +90,10 @@ export class ReminderCards {
 
   left(card, reason) {
     if (this.open === card) this.open = null;
+    if (!card.handled && USER_GONE.has(reason) && card.type === 'card') {
+      card.handled = true;
+      Promise.resolve().then(() => this.host.reminderAction(card.id, 'dismiss', card.firedDue)).catch(() => {});
+    }
     if (!card.handled && !USER_GONE.has(reason) && !this.queue.includes(card)) {
       card.requeued = true;
       this.queue.unshift(card);
