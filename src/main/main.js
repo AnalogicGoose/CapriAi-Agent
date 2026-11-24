@@ -67,6 +67,7 @@ const { ReminderStore } = require('./reminders');
 const { ReminderScheduler } = require('./reminder-scheduler');
 const { ReminderController } = require('./reminder-controller');
 const { routeReminderCommand } = require('./reminder-commands');
+const { reminderRows, moveReminder } = require('./reminder-settings');
 // Reminders (reminder-controller.js): created after app ready; card actions and voice replies go through `reminders`.
 let reminderStore = null, reminderScheduler = null, reminders = null;
 let memoryStore, recentChatStore, goalStore, autonomy, reflection, curiosity, interests;
@@ -873,6 +874,7 @@ function settingsState() {
     initiative: initiativeTrial.status(),
     runtime: runtime(), integration: codexEvents.snapshot(),
     project: goals().projects.selected(),
+    reminders: (() => { try { return reminderRows(reminderStore, resolveLang(config.load().lang)); } catch { return []; } })(),
     startup: app.getLoginItemSettings(loginItemOptions()).openAtLogin,
     displays: screen.getAllDisplays().map(d => ({ id: d.id, width: d.size.width, height: d.size.height })) };
 }
@@ -956,6 +958,13 @@ async function projectCommand(text) {
 
 async function settingsAction(name, value) {
   switch (name) {
+    case 'reminder-cancel': case 'reminder-move': {
+      if (!reminderStore) return 'Reminders are unavailable right now.';
+      let message;
+      if (name === 'reminder-cancel') message = reminderStore.cancel(value) ? 'Reminder cancelled.' : 'That reminder is already gone.';
+      else { moveReminder(reminderStore, value); message = 'Reminder moved.'; }
+      settingsRoom?.update(); return message;
+    }
     case 'gaming': await setGamingMode(value); break;
     case 'visibility': toggleVisible(value); break;
     case 'startup': app.setLoginItemSettings({ ...loginItemOptions(), openAtLogin: value }); break;
