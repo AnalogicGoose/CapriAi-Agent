@@ -187,9 +187,9 @@ test('stop clears the timer and unsubscribes from the store', () => {
 
 test('check skips a reminder cancelled earlier in the same loop', () => {
   const { store, clock } = make();
-  clock.t = at(1, 9);
   store.add({ text: 'a', schedule: daily });
   store.add({ text: 'b', schedule: daily });
+  clock.t = at(1, 9);
   const seen = [];
   new ReminderScheduler({
     store, now: () => new Date(clock.t), setTimer: () => ({}), clearTimer() {},
