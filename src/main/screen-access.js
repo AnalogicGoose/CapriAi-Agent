@@ -1,19 +1,21 @@
 'use strict';
 const { randomUUID } = require('node:crypto');
 class ScreenAccess {
-  constructor({ settings, capture, displays, foreground, toNativePoint, input, confirm, now = Date.now }) {
-    Object.assign(this, { settings, capture, displays, foreground, toNativePoint, input, confirm, now }); this.frames = new Map();
+  // readLift(): as in WindowsAccessibility, a walkthrough's re-plan snapshot ({ lifted: true }) may read in Gaming mode
+  // while a guide the user started is active. point() and act() are never lifted.
+  constructor({ settings, capture, displays, foreground, toNativePoint, input, confirm, now = Date.now, readLift = () => false }) {
+    Object.assign(this, { settings, capture, displays, foreground, toNativePoint, input, confirm, now, readLift }); this.frames = new Map();
   }
-  enabled() { const c = this.settings(); return c.screenAwareness !== false && !c.gamingMode; }
+  enabled(lifted = false) { const c = this.settings(); return c.screenAwareness !== false && (!c.gamingMode || (lifted === true && this.readLift())); }
   clear() { this.frames.clear(); }
-  async snapshot(displayId = '', check = () => {}) {
-    check(); if (!this.enabled()) throw Error('Screen awareness is paused.');
+  async snapshot(displayId = '', check = () => {}, { lifted = false } = {}) {
+    check(); if (!this.enabled(lifted)) throw Error('Screen awareness is paused.');
     const displays = this.displays(), display = displayId ? displays.find(d => String(d.id) === String(displayId)) : displays.find(d => d.active) || displays.find(d => d.primary) || displays[0];
     if (!display) throw Error('No display is available.');
     const window = this.foreground();
     const foreground = window?.id ?? null;
     const image = await this.capture(display); check();
-    if (!this.enabled()) throw Error('Screen awareness was revoked.');
+    if (!this.enabled(lifted)) throw Error('Screen awareness was revoked.');
     if ((this.foreground()?.id ?? null) !== foreground) throw Error('The foreground changed during capture. Observe again.');
     if (!image || !/^data:image\/(?:jpeg|png);base64,/.test(image.url) || image.url.length > 3000000
         || !Number.isInteger(image.width) || !Number.isInteger(image.height) || image.width < 1 || image.height < 1) throw Error('Screen capture unavailable.');

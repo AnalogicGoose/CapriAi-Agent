@@ -34,9 +34,11 @@ function fromTool(args) {
 
 class GuideSession {
   constructor({ targets, layer, layout, foreground, now = Date.now, setInterval: every = setInterval,
-    clearInterval: stopEvery = clearInterval, allowed = () => true, ownPid = process.pid, yieldFocus = async () => {}, gate = null }) {
+    clearInterval: stopEvery = clearInterval, allowed = () => true, keep = allowed, ownPid = process.pid, yieldFocus = async () => {}, gate = null }) {
     // foreground is the raw foreground window; windows of ownPid (her overlay, chat panel, guide layer) never own a drawing.
-    Object.assign(this, { targets, layer, layout, foreground, now, every, stopEvery, allowed, ownPid, yieldFocus, gate });
+    // allowed(): a new drawing may start. keep(): a drawing already shown may stay. They differ in Gaming mode: a drawing
+    // the user asked for by voice outlives that voice session (Gaming mode turning on clears it explicitly in main).
+    Object.assign(this, { targets, layer, layout, foreground, now, every, stopEvery, allowed, keep, ownPid, yieldFocus, gate });
     this.marks = new Map(); // id -> { id, kind, target, to?, text?, bounds, toBounds? }
     this.cards = [];
     this.window = null;     // the annotated window, native px, as last seen
@@ -167,7 +169,7 @@ class GuideSession {
 
   checkNow() {
     if (!this.active || this.replacing) return;
-    if (!this.allowed()) return this.clear('not-allowed');
+    if (!this.keep()) return this.clear('not-allowed');
     if (this.now() - this.lastActivity >= IDLE_MS) return this.clear('idle');
     const current = this.foreground();
     if (this.own(current)) return; // her own window in front: keep the drawing as it is

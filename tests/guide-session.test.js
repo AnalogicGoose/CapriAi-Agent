@@ -9,7 +9,7 @@ const box = (x, y, width, height) => ({ x, y, width, height });
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const ctx = { check() {}, signal: undefined };
 
-function fixture({ allowed = () => true, render, yieldFocus } = {}) {
+function fixture({ allowed = () => true, keep, render, yieldFocus } = {}) {
   const state = { now: 0, win: { id: 5, pid: 9, ...box(0, 0, 800, 600) }, found: new Map(), reasons: new Map(),
     resolves: [], scenes: [], renders: [], clears: 0, interval: null };
   const targets = {
@@ -26,7 +26,7 @@ function fixture({ allowed = () => true, render, yieldFocus } = {}) {
     clear: () => { state.clears += 1; },
   };
   const layout = scene => { state.scenes.push(scene); return new Map([[1, { marks: scene.marks, cards: scene.cards }]]); };
-  const session = new GuideSession({ targets, layer, layout, allowed, ownPid: 77, yieldFocus,
+  const session = new GuideSession({ targets, layer, layout, allowed, ...(keep ? { keep } : {}), ownPid: 77, yieldFocus,
     foreground: () => state.win, now: () => state.now,
     setInterval: (fn, ms) => { state.interval = { fn, ms }; return 'timer'; },
     clearInterval: token => { if (token === 'timer') state.interval = null; } });
@@ -154,7 +154,8 @@ test('refuses to draw when screen awareness is off, or in Gaming mode outside a 
   // Same expression main.js uses: ScreenAccess.enabled() over agentConfig, which lifts Gaming mode for a voice session.
   let cfg = { screenAwareness: false, gamingMode: false }, voice = false;
   const screenAccess = new ScreenAccess({ settings: () => voice ? { ...cfg, gamingMode: false } : cfg });
-  const f = fixture({ allowed: () => screenAccess.enabled() });
+  // keep: main's rule for a drawing already shown (only screen awareness itself; Gaming mode on clears it in main).
+  const f = fixture({ allowed: () => screenAccess.enabled(), keep: () => cfg.screenAwareness !== false });
   f.state.found.set('Save', box(100, 100, 60, 20));
   const args = () => ({ marks: [mark('a', 'ring', tgt('text', 'Save'))], cards: [], clear: false });
   await assert.rejects(f.session.draw(args(), ctx), /screen awareness/i);
@@ -164,8 +165,14 @@ test('refuses to draw when screen awareness is off, or in Gaming mode outside a 
   assert.equal(f.state.renders.length, 0);
   voice = true;
   assert.equal((await f.session.draw(args(), ctx)).drawn, 1);
-  // Losing permission while something is drawn clears it on the next check.
+  // The voice session that asked for it ends (still in Gaming mode): the drawing stays until its own lifetime ends.
   voice = false;
+  await f.tick();
+  assert.equal(f.state.clears, 0, 'a drawing survives the end of the voice session');
+  assert.equal(f.session.active, true);
+  await assert.rejects(f.session.draw(args(), ctx), /screen awareness/i, 'but no new drawing starts without the lift');
+  // Turning screen awareness off clears it on the next check.
+  cfg = { screenAwareness: false, gamingMode: true };
   await f.tick();
   assert.equal(f.state.clears, 1);
 });

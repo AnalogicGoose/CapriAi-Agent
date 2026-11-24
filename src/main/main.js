@@ -267,7 +267,12 @@ async function captureDisplay(displayId, thumbnailSize = { width: 1600, height: 
   return source.thumbnail;
 }
 
-const screenAccess = new ScreenAccess({ settings: agentConfig,
+// Gaming mode pauses screen reads, lifted for the user's voice request (agentConfig) and, for guide reads only
+// ({ lifted: true } from GuideTargets / a walkthrough re-plan), for a guide or walkthrough the user started: it keeps
+// working after the voice session ends, until it finishes, is stopped, or Gaming mode is turned on (which stops it).
+// Effects (capri_control, desktop input) are never lifted.
+const guideReadLift = () => Boolean(voiceSession || walkthroughs?.active || guide?.active);
+const screenAccess = new ScreenAccess({ settings: agentConfig, readLift: guideReadLift,
   displays: () => {
     const fg = require('./native-windows').foregroundBounds();
     const active = fg ? screen.getDisplayNearestPoint(screen.screenToDipPoint({ x: Math.round(fg.x + fg.width / 2), y: Math.round(fg.y + fg.height / 2) })).id : screen.getPrimaryDisplay().id;
@@ -295,7 +300,7 @@ const highlight = desktopHighlight({ BrowserWindow, screen, foreground: external
   enabled: () => screenAccess.enabled() && config.load().visible !== false,
   onError: () => console.error('[capri] Could not keep the desktop highlight visible.') });
 const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
-  settings: () => config.load(), foreground: externalForeground, highlight: highlight.show,
+  settings: () => config.load(), foreground: externalForeground, highlight: highlight.show, readLift: guideReadLift,
   yieldFocus: yieldOverlayFocus,
   confirm: async (message, detail) => (await dialog.showMessageBox({ type: 'question', title: 'Capri - Desktop action', message,
     detail, buttons: ['Cancel', 'Confirm'], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
@@ -344,6 +349,8 @@ const guide = new GuideSession({
   foreground: () => require('./native-windows').foregroundBounds(), ownPid: process.pid, yieldFocus: yieldOverlayFocus,
   // ScreenAccess reads agentConfig, which lifts Gaming mode only while a voice session is active.
   allowed: () => screenAccess.enabled(), gate: exclusiveGate,
+  // A drawing already shown is not cleared when the voice session that asked for it ends (Gaming mode on clears it).
+  keep: () => config.load().screenAwareness !== false,
 });
 // One walkthrough at a time (walkthrough-controller.js). Re-plans use the decision brain with one fresh screenshot,
 // outside chat history. Each line goes to the overlay's normal TTS path with a one-time voice grant, so it is spoken while
@@ -358,7 +365,7 @@ const walkthroughs = new WalkthroughController({ targets: guideTargets, layer: g
   speak: guideSay, onActive: () => syncCommands(), gate: exclusiveGate,
   body: action => bodyAction(action),
   bodyAllowed: () => Boolean(overlay && !overlay.isDestroyed() && overlay.isVisible() && !fullscreenState.active && !config.load().gamingMode),
-  snapshot: () => screenAccess.snapshot(),
+  snapshot: () => screenAccess.snapshot('', () => {}, { lifted: true }),
   infer: async request => {
     decisionBrain.reset();
     try { return await decisionBrain.chat(JSON.stringify(request.messages), () => {}, () => {}, { outputSchema: request.schema, recordHistory: false, images: request.images }); }

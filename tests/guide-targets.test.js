@@ -99,3 +99,43 @@ test('snapshot target is stale when the window or display geometry changed', asy
   g.frames.get('snap').display = { ...g.display, bounds: { x: -1000, y: 0, width: 1000, height: 800 } };
   assert.equal((await g.service.resolve(snap, ctx)).reason, 'stale');
 });
+
+test('in Gaming mode, name and text targets resolve through the guide read lift only (reads, never effects)', async () => {
+  const { WindowsAccessibility } = require('../src/main/windows-accessibility');
+  const win = { id: 5, pid: 9, x: 0, y: 0, width: 800, height: 600 };
+  const cfg = { screenAwareness: true, gamingMode: true, systemAccess: true, desktopActions: true };
+  let lift = true; // main: voice session, or a walkthrough / drawing the user started is active
+  const accessibility = new WindowsAccessibility({ settings: () => cfg, foreground: () => ({ ...win }), readLift: () => lift,
+    confirm: async () => true, highlight: async () => {},
+    run: async call => (call.operation === 'inspect'
+      ? { controls: call.query === 'Save' ? [{ identity: '1', name: 'Save', role: 'Button', enabled: true, operations: ['invoke'], bounds: box(10, 10, 50, 20) }] : [] }
+      : { dispatched: true }),
+    captureWindow: async () => ({ image: 'x', x: 0, y: 0, scaleX: 1, scaleY: 1 }),
+    ocr: async () => ({ matches: [{ name: 'Open file', bounds: box(100, 100, 80, 20) }] }) });
+  const targets = new GuideTargets({ accessibility, screen: { frames: new Map(), displays: () => [] }, foreground: () => ({ ...win }) });
+  const named = await targets.resolve({ type: 'name', name: 'Save' }, ctx);
+  assert.equal(named.ok, true);
+  assert.deepEqual(named.bounds, box(10, 10, 50, 20));
+  const text = await targets.resolve({ type: 'text', text: 'Open file' }, ctx);
+  assert.equal(text.ok, true);
+  assert.deepEqual(text.bounds, box(100, 100, 80, 20));
+  // Codex's own inspection is not lifted, and effects never are.
+  await assert.rejects(accessibility.inspect('Save', ctx), /paused/);
+  const { controls: [save] } = await accessibility.inspect('Save', { ...ctx, lifted: true });
+  await assert.rejects(accessibility.use('invoke', save.id, '', { ...ctx, text: 'press save' }), /paused/);
+  // Without the lift (nothing the user started is active), guide reads are paused too.
+  lift = false;
+  await assert.rejects(targets.resolve({ type: 'name', name: 'Save' }, ctx), /paused/);
+});
+
+test('a walkthrough re-plan snapshot is lifted in Gaming mode only while a guide is active', async () => {
+  const { ScreenAccess } = require('../src/main/screen-access');
+  let lift = true;
+  const access = new ScreenAccess({ settings: () => ({ screenAwareness: true, gamingMode: true }), readLift: () => lift,
+    displays: () => [{ id: 1, bounds: box(0, 0, 100, 100), primary: true }], foreground: () => ({ id: 3 }),
+    capture: async () => ({ url: 'data:image/png;base64,AA==', width: 10, height: 10 }) });
+  await assert.rejects(access.snapshot(), /paused/, 'an ordinary snapshot stays paused');
+  assert.equal((await access.snapshot('', () => {}, { lifted: true })).width, 10);
+  lift = false;
+  await assert.rejects(access.snapshot('', () => {}, { lifted: true }), /paused/);
+});

@@ -1,5 +1,7 @@
 'use strict';
 
+// Reads made to place a guide mark: WindowsAccessibility may lift Gaming mode's pause for them (its readLift()).
+const guideRead = ctx => ({ ...(ctx || {}), lifted: true });
 const intersects = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 class GuideTargets {
@@ -45,7 +47,7 @@ class GuideTargets {
   async text(text, nth, ctx) {
     const window = this.foreground();
     if (!window?.id) return { ok: false, reason: 'stale' };
-    const matches = await this.accessibility.readPixels(window, text, ctx);
+    const matches = await this.accessibility.readPixels(window, text, guideRead(ctx));
     ctx.check?.();
     if (!this.sameWindow(window)) return { ok: false, reason: 'stale' };
     if (!matches.length) return { ok: false, reason: 'not-found' };
@@ -68,7 +70,7 @@ class GuideTargets {
   async name({ name, role }, ctx) {
     if (typeof name !== 'string' || !name.trim()) return { ok: false, reason: 'not-found' };
     const wanted = name.trim().toLowerCase();
-    const { controls } = await this.accessibility.inspect(name, ctx);
+    const { controls } = await this.accessibility.inspect(name, guideRead(ctx));
     const hits = (controls || []).filter(c => typeof c.name === 'string' && c.name.trim().toLowerCase() === wanted &&
       (!role || String(c.role).toLowerCase() === role.toLowerCase()));
     if (hits.length > 1) return { ok: false, reason: 'ambiguous' };
