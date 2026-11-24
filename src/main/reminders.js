@@ -143,8 +143,13 @@ class ReminderStore {
     return this.get(id);
   }
 
-  snooze(id, until) {
-    this.db.prepare("UPDATE reminders SET snoozed_until = ? WHERE id = ? AND status = 'active'").run(until, id);
+  // With `firedDue`, a one-time reminder that just fired at that time (markFired made it 'done') is reopened for the
+  // snooze; without it only active reminders can be snoozed.
+  snooze(id, until, firedDue) {
+    const r = this.get(id);
+    const reopen = r && r.status === 'done' && r.schedule.kind === 'once' && firedDue !== undefined && r.fired_due === firedDue;
+    this.db.prepare(`UPDATE reminders SET snoozed_until = ?, status = 'active' WHERE id = ? AND (status = 'active'${reopen ? " OR status = 'done'" : ''})`)
+      .run(until, id);
     this._changed();
     return this.get(id);
   }

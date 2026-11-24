@@ -144,7 +144,9 @@ class CodexTools {
         if (!spec) throw Error('Invalid schedule: a schedule is required');
         return reminderSummary(store.add({ text, schedule: spec, language: lang }), lang);
       }
-      if (!store.get(id)) throw Error(`Reminder ${id} not found`);
+      const row = store.get(id);
+      if (!row) throw Error(`Reminder ${id} not found`);
+      if (row.status !== 'active') throw Error(`Reminder ${id} is not active (${row.status})`);
       if (operation === 'cancel') return { cancelled: store.cancel(id), id };
       return reminderSummary(store.update(id, { text: text.trim() ? text : undefined, schedule: spec }), lang);
     } catch (error) { return { error: error.message }; }

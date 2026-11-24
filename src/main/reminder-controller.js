@@ -1,0 +1,161 @@
+'use strict';
+// Fired reminder -> delivery plan -> spoken line (with a one-time voice grant) and/or her reminder card, or held until
+// fullscreen / Gaming mode ends. Card buttons and the voice commands "done" / "snooze N" act on it. Pure: main.js
+// injects the overlay sender, TTS grant and command window, so this runs in tests without Electron.
+const { deliveryPlan, reminderLine, HeldReminders } = require('./reminder-delivery');
+
+const WINDOW_MS = 30000; // commands-only listening after a card is shown (spec decision 1)
+const MAX_SNOOZE_MINUTES = 7 * 24 * 60;
+const MAX_SENT = 32;
+
+// minutes: a finite number in (0, 7 days], or 'tomorrow' (09:00 the next local day). Anything else -> null.
+function snoozeUntil(minutes, nowMs) {
+  if (minutes === 'tomorrow') {
+    const d = new Date(nowMs);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 9, 0, 0, 0).getTime();
+  }
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes <= 0 || minutes > MAX_SNOOZE_MINUTES) return null;
+  return nowMs + Math.round(minutes * 60000);
+}
+
+// Card copy. {time} is local HH:MM, {n} a count. No companion name anywhere.
+const COPY = {
+  en: { done: 'Done', snooze10: 'Snooze 10 min', snooze: 'Snooze…', m15: '15 min', h1: '1 h', tomorrow: 'Tomorrow 9:00',
+    ackDone: 'Done, nice work.', ackSnooze: 'Okay, I’ll remind you again at {time}.',
+    more: '…and {n} more reminders. Ask me for your reminders to see them all.' },
+  es: { done: 'Hecho', snooze10: 'Posponer 10 min', snooze: 'Posponer…', m15: '15 min', h1: '1 h', tomorrow: 'Mañana 9:00',
+    ackDone: 'Hecho, muy bien.', ackSnooze: 'Vale, te lo recuerdo otra vez a las {time}.',
+    more: '…y {n} recordatorios más. Pregúntame por tus recordatorios para verlos todos.' },
+  fr: { done: 'Fait', snooze10: 'Reporter 10 min', snooze: 'Reporter…', m15: '15 min', h1: '1 h', tomorrow: 'Demain 9:00',
+    ackDone: 'C’est fait, bravo.', ackSnooze: 'D’accord, je te le rappelle à {time}.',
+    more: '…et {n} autres rappels. Demande-moi tes rappels pour tous les voir.' },
+  pt: { done: 'Feito', snooze10: 'Adiar 10 min', snooze: 'Adiar…', m15: '15 min', h1: '1 h', tomorrow: 'Amanhã 9:00',
+    ackDone: 'Feito, muito bem.', ackSnooze: 'Certo, te lembro de novo às {time}.',
+    more: '…e mais {n} lembretes. Pergunte pelos seus lembretes para ver todos.' },
+  ru: { done: 'Готово', snooze10: 'Отложить на 10 мин', snooze: 'Отложить…', m15: '15 мин', h1: '1 ч', tomorrow: 'Завтра в 9:00',
+    ackDone: 'Готово, молодец.', ackSnooze: 'Хорошо, напомню снова в {time}.',
+    more: '…и ещё напоминаний: {n}. Спроси про напоминания, чтобы увидеть все.' },
+};
+const copy = lang => COPY[String(lang || '').toLowerCase().split(/[-_]/)[0]] || COPY.en;
+const clock = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const keyOf = (id, firedDue) => `${id}:${firedDue}`;
+
+class ReminderController {
+  // state(): { fullscreen, gaming, overlayAvailable, voiceOn }; send(payload) to the overlay ('reminder:due');
+  // grant(line) -> one-time TTS token; openWindow(ms) opens commands-only listening; isOverlay(sender).
+  constructor({ store, state, lang = () => 'en', send, grant, openWindow = () => {}, isOverlay = () => false, now = Date.now }) {
+    Object.assign(this, { store, state, lang, send, grant, openWindow, isOverlay, now });
+    this.held = new HeldReminders();
+    this.sent = new Map(); // id:firedDue -> true, cards sent and not yet acted on
+    this.last = null; // { id, firedDue, at } of the most recently shown card
+    this.ready = false; // the overlay renderer has registered its reminder listener
+  }
+
+  // The renderer is (re)loaded and listening, or went away.
+  setReady(on) {
+    this.ready = Boolean(on);
+    if (!this.ready) { this.last = null; return; }
+    this.flush();
+  }
+
+  _state() {
+    const s = this.state() || {};
+    return { fullscreen: Boolean(s.fullscreen), gaming: Boolean(s.gaming), voiceOn: Boolean(s.voiceOn),
+      overlayAvailable: this.ready && Boolean(s.overlayAvailable) };
+  }
+
+  _line(entry) {
+    return reminderLine({ text: entry.text, fired_due: entry.firedDue }, { missed: entry.missed, lang: this.lang(), firedDue: entry.firedDue });
+  }
+
+  _grant(line) { try { return this.grant(line); } catch { return undefined; } }
+
+  _card(entry, speak) {
+    const line = this._line(entry), t = copy(this.lang());
+    this.sent.delete(keyOf(entry.id, entry.firedDue));
+    this.sent.set(keyOf(entry.id, entry.firedDue), true);
+    while (this.sent.size > MAX_SENT) this.sent.delete(this.sent.keys().next().value);
+    const grant = speak ? this._grant(line) : undefined;
+    this.send({ type: 'card', id: entry.id, firedDue: entry.firedDue, line,
+      actions: [{ id: 'done', label: t.done }, { id: 'snooze10', label: t.snooze10 }, { id: 'snooze', label: t.snooze }],
+      snooze: [{ minutes: 15, label: t.m15 }, { minutes: 60, label: t.h1 }, { minutes: 'tomorrow', label: t.tomorrow }],
+      ...(grant ? { speak: true, grant } : {}) });
+  }
+
+  // Scheduler callback.
+  fire(reminder, { missed = false, firedDue } = {}) {
+    const s = this._state();
+    const plan = deliveryPlan(s);
+    const entry = { id: reminder.id, text: reminder.text, missed: Boolean(missed), firedDue: firedDue ?? reminder.fired_due ?? reminder.next_due };
+    // Her voice goes through the overlay renderer: without it, the line is spoken when the held card is shown.
+    const speakNow = plan.speak && s.overlayAvailable;
+    if (plan.card === 'now') { this._card(entry, speakNow); return; }
+    if (speakNow) {
+      const line = this._line(entry), grant = this._grant(line);
+      if (grant) this.send({ type: 'speak', line, grant });
+    }
+    this.held.add({ ...entry, unspoken: plan.speak && !speakNow });
+  }
+
+  // Shows held cards once nothing holds them (fullscreen ended, Gaming mode off, renderer ready).
+  flush() {
+    const s = this._state();
+    if (!s.overlayAvailable || s.fullscreen || s.gaming) return;
+    this.held.flush(({ reminders, more }) => {
+      for (const entry of reminders) this._card(entry, entry.unspoken && s.voiceOn);
+      if (more > 0) this.send({ type: 'more', line: copy(this.lang()).more.replace('{n}', String(more)) });
+    });
+  }
+
+  // The renderer actually showed this card: it becomes the target of voice replies for WINDOW_MS.
+  shown(sender, id, firedDue) {
+    if (!this.isOverlay(sender) || !this.sent.has(keyOf(id, firedDue))) return false;
+    this.last = { id, firedDue, at: this.now() };
+    this.openWindow(WINDOW_MS);
+    return true;
+  }
+
+  // 'reminder:action' from the overlay: (id, 'done'|'snooze', firedDue, minutes number | 'tomorrow').
+  ipcAction(sender, id, action, firedDue, minutes) {
+    if (!this.isOverlay(sender)) return { ok: false, error: 'Overlay required.' };
+    return this.act(id, action, firedDue, minutes);
+  }
+
+  act(id, action, firedDue, minutes) {
+    if (!Number.isSafeInteger(id) || id < 1 || !Number.isFinite(firedDue) || !['done', 'snooze'].includes(action)) {
+      return { ok: false, error: 'Invalid reminder action.' };
+    }
+    const key = keyOf(id, firedDue);
+    if (!this.sent.has(key)) return { ok: false, error: 'That reminder card is no longer open.' };
+    const t = copy(this.lang());
+    let text;
+    try {
+      if (action === 'done') {
+        if (!this.store.complete(id, firedDue)) return { ok: false, error: 'Reminder not found.' };
+        text = t.ackDone;
+      } else {
+        const until = snoozeUntil(minutes, this.now());
+        if (until === null) return { ok: false, error: 'Invalid snooze time.' };
+        const row = this.store.snooze(id, until, firedDue);
+        if (!row || row.status !== 'active' || row.snoozed_until !== until) return { ok: false, error: 'That reminder can no longer be snoozed.' };
+        text = t.ackSnooze.replace('{time}', clock(until));
+      }
+    } catch { return { ok: false, error: 'Reminder storage is unavailable.' }; }
+    this.sent.delete(key);
+    if (this.last && keyOf(this.last.id, this.last.firedDue) === key) this.last = null;
+    return { ok: true, text };
+  }
+
+  // Commands-only listening: "done" / "snooze [N | tomorrow]" go to the most recently shown card within WINDOW_MS.
+  // Returns true when the command was meant for a reminder (even if the snooze value was rejected).
+  voice({ command, minutes } = {}) {
+    if (command !== 'done' && command !== 'snooze') return false;
+    const last = this.last;
+    if (!last || this.now() - last.at > WINDOW_MS) return false;
+    const result = this.act(last.id, command, last.firedDue, command === 'snooze' ? (minutes ?? 10) : undefined);
+    if (result.ok) this.send({ type: 'resolved', id: last.id, firedDue: last.firedDue, line: result.text });
+    return true;
+  }
+}
+
+module.exports = { ReminderController, snoozeUntil, WINDOW_MS, MAX_SNOOZE_MINUTES };

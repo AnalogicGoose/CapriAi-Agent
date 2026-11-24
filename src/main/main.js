@@ -63,6 +63,12 @@ const { RequestInterpreter } = require('./request-interpreter');
 const { createAgentBrowser } = require('./agent-browser');
 const { WorldState } = require('./world-state');
 const capabilities = require('./capabilities');
+const { ReminderStore } = require('./reminders');
+const { ReminderScheduler } = require('./reminder-scheduler');
+const { ReminderController } = require('./reminder-controller');
+const { routeReminderCommand } = require('./reminder-commands');
+// Reminders (reminder-controller.js): created after app ready; card actions and voice replies go through `reminders`.
+let reminderStore = null, reminderScheduler = null, reminders = null;
 let memoryStore, recentChatStore, goalStore, autonomy, reflection, curiosity, interests;
 let sessionAvailable = true;
 let checkInDeadline = 0;
@@ -512,9 +518,9 @@ function syncCommands(force = false) {
   else if (!overlay.isVisible()) overlay.webContents.setBackgroundThrottling(!config.load().wakeWordEnabled && !voiceSession);
   overlay.webContents.send('speech:commands', { on });
 }
-function routeSpeechCommand({ command }) {
+function routeSpeechCommand({ command, minutes }) {
   if (walkthroughs.voiceCommand(command)) return;
-  // TODO(reminders plan): 'done' / 'snooze' (with minutes) go to the reminder whose command window is open.
+  reminders?.voice({ command, minutes }); // 'done' / 'snooze': the most recently shown reminder card, within its window
 }
 const speech = new SpeechInput({
   runtimeDir: app.isPackaged ? path.join(app.getPath('userData'),'speech-runtime') : path.join(ROOT,'.caprigpt-local','speech-runtime'),
@@ -633,13 +639,35 @@ function createOverlay() {
     speech.cancel(true); tts.cancel(); endVoiceSession();
     console.error('[capri] renderer gone:', details.reason);
   });
-  overlay.webContents.on('did-start-loading', () => { speech.cancel(true); tts.cancel(); endVoiceSession(); });
+  overlay.webContents.on('did-start-loading', () => { speech.cancel(true); tts.cancel(); endVoiceSession(); reminders?.setReady(false); });
   if (DEV) {
     overlay.webContents.on('console-message', (e) => {
       const { level, message, lineNumber, sourceId } = e;
       console.log(`[renderer:${level}] ${message} (${String(sourceId).split('/').pop()}:${lineNumber})`);
     });
     if (process.env.CAPRI_DEVTOOLS) overlay.webContents.openDevTools({ mode: 'detach' });
+  }
+}
+
+// Reminders: one local SQLite file, one timer. A fired reminder speaks with a one-time 'reminder' voice grant (also while
+// she is hidden in a fullscreen game or Gaming mode; never when voice is off or muted) and shows her card, or holds the card
+// until fullscreen ends / Gaming mode is off. A shown card opens the 30 s commands window for "done" / "snooze".
+function startReminders() {
+  try {
+    reminderStore = new ReminderStore(path.join(app.getPath('userData'), 'reminders.sqlite'));
+    reminders = new ReminderController({ store: reminderStore, lang: () => resolveLang(config.load().lang),
+      state: () => { const cfg = config.load(); return { fullscreen: fullscreenState.active, gaming: cfg.gamingMode === true,
+        overlayAvailable: Boolean(overlay && !overlay.isDestroyed()), voiceOn: Boolean(cfg.ttsEnabled) && !cfg.muted }; },
+      send: payload => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('reminder:due', payload); },
+      grant: line => tts.grant('reminder', line), openWindow: openCommandWindow,
+      isOverlay: sender => Boolean(overlay && !overlay.isDestroyed() && sender === overlay.webContents) });
+    reminderScheduler = new ReminderScheduler({ store: reminderStore, fire: (reminder, info) => reminders.fire(reminder, info) });
+    brainTools.reminders = reminderStore;
+    reminderScheduler.resume();
+  } catch (error) {
+    console.error('[capri] Reminders unavailable:', error.message);
+    reminderScheduler?.stop(); reminderStore?.close();
+    reminderStore = reminderScheduler = reminders = null; brainTools.reminders = undefined;
   }
 }
 
@@ -734,6 +762,7 @@ function onFullscreen(active) {
     overlay.showInactive();
   }
   overlay.webContents.send('fullscreen:state', fullscreenState);
+  if (!active) reminders?.flush(); // held reminder cards appear once fullscreen ends
 }
 
 // Ctrl+Alt+C: she folds herself away into her biochip in the corner, or comes back out of it.
@@ -817,6 +846,7 @@ function updateConfig(patch) {
   if (['ttsEnabled', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText'].some(changes) || patch.muted === true) tts.close();
   if (patch.privacy) patch = { ...patch, privacy: nextPrivacy };
   config.save(patch);
+  if (patch.gamingMode === false) reminders?.flush();
   if (backendChanged || patch.gamingMode === true || patch.visible === false ||
       [patch.interestsEnabled, patch.cognitiveEnabled, patch.agentEnabled].includes(false)) interestCollaboration.cancel();
   if (speech.current?.checkIn && (patch.muted === true || patch.volume === 0 ||
@@ -1002,6 +1032,11 @@ function registerIpc() {
   });
   ipcMain.handle('tts:speak', (event, request) => speechCaller(event) ? tts.speak(request) : {ok:false,error:'Voice unavailable.'});
   ipcMain.on('tts:cancel', event => { if (speechCaller(event)) tts.cancel(false); });
+  // Reminder cards: only the overlay may act on them (checked again in ReminderController).
+  ipcMain.handle('reminder:action', (event, id, action, firedDue, minutes) =>
+    reminders ? reminders.ipcAction(event.sender, id, action, firedDue, minutes) : { ok: false, error: 'Reminders are unavailable.' });
+  ipcMain.on('reminder:shown', (event, id, firedDue) => { reminders?.shown(event.sender, id, firedDue); });
+  ipcMain.on('reminder:ready', event => { if (speechCaller(event)) reminders?.setReady(true); });
   ipcMain.handle('speech:start', (event, request) => {
     if (!speechCaller(event)) return { ok: false, error: 'speech-unavailable' };
     if (request?.checkIn === true) {
@@ -1051,6 +1086,8 @@ function registerIpc() {
     try {
       if (event.sender !== overlay?.webContents) throw Error('Overlay required.');
       if (typeof text !== 'string' || text.length > 12000) throw Error('Invalid message.');
+      const reminderReply = reminderStore && routeReminderCommand(text, reminderStore, resolveLang(config.load().lang));
+      if (reminderReply) return reminderReply;
       // A running walkthrough keeps the guide layer: a command runs locally, anything else pauses it until answered; only "stop" or a new walkthrough ends it.
       const walkReply = walkthroughs.route(text);
       if (walkReply) return walkReply;
@@ -1347,6 +1384,7 @@ function main() {
       onChange: onFullscreen,
     });
     watchWindows();
+    startReminders();
     // Existing OS events only; at most one in-memory snapshot with a 60-second TTL.
     for (const [event, reason] of [['resume', 'resume'], ['on-ac', 'power-change'], ['on-battery', 'power-change']]) {
       powerMonitor.on(event, () => { pcContext.onEvent(reason).catch(() => {}); autonomy.touch(); });
@@ -1421,7 +1459,7 @@ function main() {
         interestCollaboration.cancel();
         if (speech.current?.checkIn) { speech.cancel(); endVoiceSession(); }
         commandWindowUntil = 0;
-      }
+      } else reminderScheduler?.resume();
       syncCommands();
     });
     const presenceTimer = setInterval(() => {
@@ -1457,6 +1495,7 @@ function main() {
     fullscreenWatch?.stop();
     clearTimeout(fullscreenHideTimer);
     memoryStore?.close(); recentChatStore?.close(); goalStore?.close(); curiosity?.close();
+    reminderScheduler?.stop(); reminderStore?.close();
   });
   app.on('window-all-closed', (e) => e.preventDefault());
 }
