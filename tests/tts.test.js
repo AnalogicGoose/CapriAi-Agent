@@ -109,3 +109,39 @@ test('a stopped PCM chunk cannot schedule audio after its asynchronous context c
     await player.pcm({ sampleRate: 24000, audio: 'AQI=' }, player.epoch);
   } finally { Object.assign(global, old); }
 });
+
+test('a TTS grant speaks once while the overlay is hidden and never when muted', async () => {
+  let launches = 0, cfg = { ttsEnabled: true, ttsEngine: 'windows' };
+  const out = new SpeechOutput({ root: process.cwd(), config: () => cfg, allowed: () => false, grantAllowed: () => true,
+    launch: (_exe, args) => {
+      launches++;
+      const child = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => child.emit('close', 1);
+      setImmediate(async () => {
+        const request = JSON.parse(await fs.readFile(args.at(-1), 'utf8'));
+        await fs.writeFile(request.output, wave(Buffer.alloc(32000)));
+        child.emit('close', 0);
+      });
+      return child;
+    } });
+  assert.equal((await out.speak({ text: 'Click Display' })).ok, false, 'hidden overlay without a grant stays silent');
+  assert.equal((await out.speak({ text: 'Click Display', grant: 'forged-token' })).ok, false);
+  const grant = out.grant('guide');
+  assert.equal(typeof grant, 'string');
+  assert.equal((await out.speak({ text: 'Click Display', grant })).ok, true);
+  assert.equal((await out.speak({ text: 'Click Display', grant })).ok, false, 'a grant is single use');
+  assert.equal(launches, 1);
+  cfg = { ttsEnabled: true, ttsEngine: 'windows', muted: true };
+  const muted = out.grant('reminder');
+  assert.equal((await out.speak({ text: 'Stretch', grant: muted })).ok, false, 'a grant never overrides mute');
+  cfg = { ttsEnabled: true, ttsEngine: 'windows' };
+  assert.equal((await out.speak({ text: 'Stretch', grant: muted })).ok, false, 'a grant is consumed even when speech fails');
+  cfg = { ttsEnabled: false, ttsEngine: 'windows' };
+  assert.equal((await out.speak({ text: 'Stretch', grant: out.grant('guide') })).ok, false, 'a grant never overrides voice off');
+  assert.equal(launches, 1);
+  assert.throws(() => out.grant('chat'));
+  let clock = 1000;
+  const timed = new SpeechOutput({ root: process.cwd(), config: () => ({ ttsEnabled: true, ttsEngine: 'windows' }), allowed: () => false,
+    grantAllowed: () => true, now: () => clock, launch: () => assert.fail('an expired grant must not start the engine') });
+  const old = timed.grant('guide'); clock += 60001;
+  assert.equal((await timed.speak({ text: 'Late', grant: old })).ok, false, 'grants expire after 60 s');
+});

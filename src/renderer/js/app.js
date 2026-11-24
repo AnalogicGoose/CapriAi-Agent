@@ -14,6 +14,7 @@ import { FullscreenPresence } from './fullscreen-presence.js';
 import { PointerRecovery } from './pointer-recovery.js';
 import { Dictation } from './dictation.js';
 import { WakeListener } from './wake-listener.js';
+import { CommandListener } from './command-listener.js';
 import { VoiceCall } from './voice-call.js';
 import { LINES } from './lines.js';
 import { pick } from './util.js';
@@ -87,7 +88,7 @@ async function boot() {
   new IntegrationCompanion({ capri, panel, voice, host, brain });
 
   // Click-through everywhere except on her body, the panel and her biochip.
-  let talkMenu, wakeListener, voiceCall;
+  let talkMenu, wakeListener, voiceCall, commandListener;
   let interactive = false;
   let mouse = null;
   let pointerRevision = 0;
@@ -222,8 +223,9 @@ async function boot() {
     },
   });
   voice.spoken.configure(config);
-  // Walkthrough lines from main (sent only while main's TTS is allowed). Wait for her current reply to finish
-  // speaking instead of cutting it off; a newer line replaces one still waiting.
+  // Walkthrough lines from main, each with a one-time voice grant (it may speak while she is hidden in a fullscreen
+  // game, never when voice is off or muted). Wait for her current reply to finish speaking instead of cutting it off;
+  // a newer line replaces one still waiting.
   let guideSay = 0;
   host.onGuideSay?.(async message => {
     const text = message?.text;
@@ -231,7 +233,7 @@ async function boot() {
     const mine = ++guideSay, until = Date.now() + 20000;
     const busy = () => voice.spoken.pending || voice.spoken.playing || voice.spoken.response;
     while (busy() && Date.now() < until) { await new Promise(resolve => setTimeout(resolve, 250)); if (mine !== guideSay) return; }
-    if (mine === guideSay) voice.spoken.speak(text);
+    if (mine === guideSay) voice.spoken.speak(text, undefined, typeof message.grant === 'string' ? message.grant : undefined);
   });
   host.onFullscreenState(state => {
     if (!state.active) return;
@@ -255,13 +257,14 @@ async function boot() {
   });
   const dictation = new Dictation({ panel, host, language: () => brain.lang,
     canListen: () => chat.open && (!capri.gaming && !capri.fullscreen || wakeListener?.session),
-    beforeStart: async () => { voiceCall?.end(); voice.spoken.stop(); wakeListener?.pause(); } });
+    beforeStart: async () => { voiceCall?.end(); voice.spoken.stop(); wakeListener?.pause(); commandListener?.pause(); } });
   let restoreStowed = false;
   voiceCall = new VoiceCall({ host, speaker: voice.spoken, history: chat,
     indicator: document.getElementById('voice-indicator'),
     onThinking: on => capri.setChatThinking(on),
     onStart: async checkIn => {
       if (!voice.spoken.enabled) throw Error('Enable spoken replies in Sound settings first.');
+      commandListener?.pause();
       if (checkIn) {
         wakeListener.pause();
         voiceCall.place(capri.head(), capri.view); publishCompanionState(); refreshHit(true);
@@ -286,13 +289,17 @@ async function boot() {
   talkMenu = new TalkMenu({ el: document.getElementById('talk-menu'), capri, host,
     language: () => brain.lang, onChange: () => refreshHit(),
     onChoose: async (mode, greeting) => {
-      if (mode === 'voice') { wakeListener.pause(); await voiceCall.start(); return; }
+      if (mode === 'voice') { wakeListener.pause(); commandListener.pause(); await voiceCall.start(); return; }
       voiceCall.end();
       await chat.start(false, greeting, { mode });
     } });
   brain.onTalk = () => { voiceCall.end(); talkMenu.hide({ keepFocus: true }); return chat.start(); };
+  // Commands-only listening (walkthrough / reminder window, opened by main): the local commands, no wake word needed.
+  commandListener = new CommandListener({ host, indicator: document.getElementById('voice-indicator'),
+    blocked: () => Boolean(voiceCall.active || dictation.id), ownsIndicator: () => !voiceCall.active,
+    place: () => voiceCall.place(capri.head(), capri.view), beforeStart: () => wakeListener?.pause() });
   wakeListener = new WakeListener({ host, indicator: document.getElementById('wake-indicator'),
-    blocked: () => Boolean(voiceCall.active || dictation.id || voice.spoken.pending || voice.spoken.source),
+    blocked: () => Boolean(voiceCall.active || dictation.id || voice.spoken.pending || voice.spoken.source || commandListener.active),
     onSessionEnd: () => { if (voiceCall.fromWake) voiceCall.end(false); document.body.classList.remove('voice-session'); refreshHit(true); },
     onWake: async event => {
       await voiceCall.start(event);

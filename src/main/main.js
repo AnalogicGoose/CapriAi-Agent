@@ -319,14 +319,16 @@ const guide = new GuideSession({
   allowed: () => screenAccess.enabled(),
 });
 // One walkthrough at a time (walkthrough-controller.js). Re-plans use the decision brain with one fresh screenshot,
-// outside chat history; its lines reach the overlay's normal TTS path while tts.allowed() (Task 9 switches to a grant).
+// outside chat history. Each line goes to the overlay's normal TTS path with a one-time voice grant, so it is spoken while
+// she is hidden in a fullscreen game or Gaming mode (never when voice is off or muted). Commands-only listening follows it.
 const walkthroughs = new WalkthroughController({ targets: guideTargets, layer: guideLayer, guide, ownPid: process.pid,
   displays: () => screen.getAllDisplays(), screenToDip: rect => screen.screenToDipRect(null, rect),
   dipToScreen: rect => screen.dipToScreenRect(null, rect), cursor: () => screen.getCursorScreenPoint(),
   foreground: () => require('./native-windows').foregroundBounds(), pointer: () => require('./native-windows').pointerState(),
   processRows: () => require('./native-windows').processRows(), allowed: () => screenAccess.enabled(),
   lang: () => resolveLang(config.load().lang), busy: () => brain.busy || decisionBrain.busy,
-  speak: text => { if (tts.allowed() && overlay && !overlay.isDestroyed()) overlay.webContents.send('guide:say', { text }); },
+  speak: text => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('guide:say', { text, grant: tts.grant('guide') }); },
+  onActive: () => syncCommands(),
   snapshot: () => screenAccess.snapshot(),
   infer: async request => {
     decisionBrain.reset();
@@ -471,12 +473,43 @@ let lastWindows = null;
 const chats = new Map(); // id -> AbortController of an answer being streamed
 const wakeAllowed = () => Boolean(overlay && !overlay.isDestroyed() && config.load().wakeWordEnabled === true
   && (!smokeTest || process.argv.includes('--wake-live')));
+// Commands-only listening (spec decision 1): open while a walkthrough runs or a reminder's command window is open,
+// in fullscreen and Gaming mode too. Only the fixed local commands are acted on; speech.js drops every other transcript.
+let commandWindowUntil = 0, commandWindowTimer = null, commandsOn = false;
+const commandsAllowed = () => Boolean(sessionAvailable && overlay && !overlay.isDestroyed()
+  && (walkthroughs.active || Date.now() < commandWindowUntil));
+// For the reminders plan: open the window for ms (30 s after a reminder fires or is shown).
+function openCommandWindow(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return;
+  commandWindowUntil = Math.max(commandWindowUntil, Date.now() + Math.min(ms, 120000));
+  clearTimeout(commandWindowTimer);
+  commandWindowTimer = setTimeout(() => syncCommands(), commandWindowUntil - Date.now() + 50);
+  commandWindowTimer.unref?.();
+  syncCommands();
+}
+function syncCommands(force = false) {
+  const on = commandsAllowed();
+  if (!on && speech.current?.mode === 'commands') speech.cancel();
+  if (on === commandsOn && !force) return;
+  commandsOn = on;
+  if (!overlay || overlay.isDestroyed()) return;
+  // Hidden for a fullscreen game, the overlay must keep capturing while the window is open.
+  if (on) overlay.webContents.setBackgroundThrottling(false);
+  else if (!overlay.isVisible()) overlay.webContents.setBackgroundThrottling(!config.load().wakeWordEnabled && !voiceSession);
+  overlay.webContents.send('speech:commands', { on });
+}
+function routeSpeechCommand({ command }) {
+  if (walkthroughs.voiceCommand(command)) return;
+  // TODO(reminders plan): 'done' / 'snooze' (with minutes) go to the reminder whose command window is open.
+}
 const speech = new SpeechInput({
   runtimeDir: app.isPackaged ? path.join(app.getPath('userData'),'speech-runtime') : path.join(ROOT,'.caprigpt-local','speech-runtime'),
   allowed: () => Boolean(overlay && !overlay.isDestroyed() && (voiceSession || (overlay.isVisible()
     && !config.load().gamingMode && !fullscreenState.active))),
   wakeAllowed,
+  commandsAllowed,
   notify: state => {
+    if (state.type === 'command') { routeSpeechCommand(state); return; } // handled here, never forwarded
     if (!overlay || overlay.isDestroyed()) return;
     if (state.type === 'wake' || (state.type === 'ready' && state.mode === 'conversation')) {
       voiceSession = true; autonomy.cancel(); tts.cancel(); tts.warm();
@@ -489,7 +522,10 @@ const speech = new SpeechInput({
 
 const tts = new SpeechOutput({ root: ROOT, config: () => config.load(),
   allowed: () => sessionAvailable && speech.allowed() && (voiceSession || config.load().visible !== false)
-    && (!speech.current || ['wake', 'conversation'].includes(speech.current.mode)),
+    && (!speech.current || ['wake', 'conversation', 'commands'].includes(speech.current.mode)),
+  // A granted guide/reminder line skips only the visibility, fullscreen and Gaming part of allowed().
+  grantAllowed: () => Boolean(sessionAvailable && overlay && !overlay.isDestroyed()
+    && (!speech.current || ['wake', 'conversation', 'commands'].includes(speech.current.mode))),
   notify: state => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('tts:state', state); },
 });
 
@@ -658,7 +694,7 @@ function onFullscreen(active) {
   if (active === fullscreenState.active) return;
   const revision = fullscreenState.revision + 1;
   fullscreenState = { active, revision };
-  if (active) { if (speech.current?.mode !== 'wake' && !speech.current?.wakeActivated) speech.cancel(); if (!voiceSession) tts.cancel(); }
+  if (active) { if (!['wake', 'commands'].includes(speech.current?.mode) && !speech.current?.wakeActivated) speech.cancel(); if (!voiceSession) tts.cancel(); }
   clearTimeout(fullscreenHideTimer);
   if (!overlay || overlay.isDestroyed()) return;
   overlay.webContents.setBackgroundThrottling(false);
@@ -669,7 +705,7 @@ function onFullscreen(active) {
     fullscreenHideTimer = setTimeout(() => {
       if (!voiceSession && fullscreenState.active && fullscreenState.revision === revision && !overlay?.isDestroyed()) {
         overlay?.hide();
-        overlay?.webContents.setBackgroundThrottling(true);
+        overlay?.webContents.setBackgroundThrottling(!commandsOn);
       }
     }, 260);
   } else if (!config.load().gamingMode) {
@@ -685,7 +721,7 @@ function onFullscreen(active) {
 // Ctrl+Alt+C: she folds herself away into her biochip in the corner, or comes back out of it.
 function toggleVisible(force) {
   const visible = typeof force === 'boolean' ? force : !config.load().visible;
-  if (!visible) { if (speech.current?.mode !== 'wake') speech.cancel(); tts.cancel(); }
+  if (!visible) { if (!['wake', 'commands'].includes(speech.current?.mode)) speech.cancel(); tts.cancel(); }
   config.save({ visible });
   sendCommand('stow', { on: !visible });
   rebuildTray();
@@ -757,7 +793,7 @@ function updateConfig(patch) {
     brain.reset({ keepRecent: !revokedRecall && !['systemAccess', 'screenAwareness', 'codexExecutable'].some(changes) });
   }
   if (patch.gamingMode === true || patch.screenAwareness === false) { walkthroughs.stop(); guide.clear('paused'); }
-  if ((patch.gamingMode === true || patch.visible === false) && speech.current?.mode !== 'wake') speech.cancel();
+  if ((patch.gamingMode === true || patch.visible === false) && !['wake', 'commands'].includes(speech.current?.mode)) speech.cancel();
   if (patch.gamingMode === true || patch.visible === false
       || ['muted', 'volume', 'ttsEnabled', 'speakTypedReplies', 'proactiveVoice', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText', 'ttsDevice'].some(changes)) tts.cancel();
   if (['ttsEnabled', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText'].some(changes) || patch.muted === true) tts.close();
@@ -956,8 +992,8 @@ function registerIpc() {
           !cfg.checkInReplies || !cfg.proactiveVoice || !cfg.proactiveEnabled || !cfg.ttsEnabled || cfg.muted || cfg.volume === 0 ||
           Date.now() >= checkInDeadline) return { ok: false, error: 'speech-paused' };
     }
-    if (request?.checkIn !== true) autonomy.touch();
-    tts.cancel();
+    // Commands-only listening runs under her guide lines: it neither interrupts her nor counts as user activity.
+    if (request?.mode !== 'commands') { if (request?.checkIn !== true) autonomy.touch(); tts.cancel(); }
     const result = speech.start(request);
     if (result.ok && request?.checkIn === true) checkInDeadline = 0;
     return result;
@@ -967,6 +1003,7 @@ function registerIpc() {
     return updateConfig({ wakeWordEnabled: enabled });
   });
   ipcMain.on('wake:end-session', event => { if (speechCaller(event)) endVoiceSession(); });
+  ipcMain.handle('speech:commands-state', event => ({ on: speechCaller(event) ? commandsAllowed() : false }));
   ipcMain.handle('speech:stop', (event, request) => {
     if (!speechCaller(event)) return { ok: false, error: 'speech-unavailable' };
     return speech.stop(request?.id);
@@ -989,7 +1026,7 @@ function registerIpc() {
         || state.hidden !== fullscreenState.active) return;
     clearTimeout(fullscreenHideTimer);
     if (state.hidden && !voiceSession) overlay.hide();
-    overlay.webContents.setBackgroundThrottling(!config.load().wakeWordEnabled && !voiceSession);
+    overlay.webContents.setBackgroundThrottling(!config.load().wakeWordEnabled && !voiceSession && !commandsOn);
   });
   ipcMain.handle('runtime:info', () => runtime());
   ipcMain.handle('personal:route', async (event, text, id, conversation, commandsOnly = false, replyTo, conversationId) => foreground.run(async () => {
@@ -1365,7 +1402,9 @@ function main() {
         checkInDeadline = 0; tts.cancel();
         interestCollaboration.cancel();
         if (speech.current?.checkIn) { speech.cancel(); endVoiceSession(); }
+        commandWindowUntil = 0;
       }
+      syncCommands();
     });
     const presenceTimer = setInterval(() => {
       const cfg = config.load();

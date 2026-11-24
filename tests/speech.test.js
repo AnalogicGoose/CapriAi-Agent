@@ -133,3 +133,41 @@ test('closing a panel cancels capture; device errors unlock input; full drafts s
   f.input.value='a'.repeat(499);f.input.selectionStart=f.input.selectionEnd=499;
   await f.dictation.toggle();f.send({type:'final',text:'many extra words'});assert.ok(f.input.value.length<=500);f.dictation.cancel();
 });
+
+function commandsFixture(){
+  const events=[],jobs=[];let commands=true,stops=0;
+  const engine={device:'GPU',start:async()=>{},stop:()=>{stops++;},transcribe:(pcm,signal)=>new Promise(resolve=>jobs.push({resolve,signal}))};
+  // allowed() is false: the overlay is hidden in a fullscreen game or Gaming mode.
+  const speech=new SpeechInput({allowed:()=>false,commandsAllowed:()=>commands,notify:event=>events.push(event),engine});
+  return {speech,events,jobs,revoke:()=>{commands=false;},stops:()=>stops};
+}
+
+test('commands mode discards non-command speech',async()=>{
+  const f=commandsFixture();
+  try{
+    assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).ok,true);await tick();
+    const slot=f.speech.current;assert.equal(slot.mode,'commands');assert.equal(slot.segmenter.maxSamples,5*16000);
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[0].resolve('what a nice day');await tick();
+    assert.equal(JSON.stringify(f.events).includes('nice day'),false);
+    assert.equal(f.events.some(event=>event.type==='final'||event.type==='processing'||event.type==='command'),false);
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[1].resolve('Next, please.');await tick();
+    assert.deepEqual(f.events.filter(event=>event.type==='command'),[{id:'commands-0001',type:'command',command:'next'}]);
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[2].resolve('snooze 15 minutes');await tick();
+    assert.deepEqual(f.events.at(-1),{id:'commands-0001',type:'command',command:'snooze',minutes:15});
+    assert.equal(f.events.some(event=>'text' in event),false,'commands mode never sends transcript text');
+    assert.equal(f.speech.current,slot);assert.equal(slot.timeout,undefined,'no dictation timeout while commands are allowed');
+  }finally{f.speech.cancel();}
+});
+
+test('commands mode is refused when commandsAllowed is false and allowed in fullscreen when true',async()=>{
+  const f=commandsFixture();
+  try{
+    assert.equal(f.speech.start({id:'dictate-0001'}).error,'speech-paused','ordinary dictation stays paused in fullscreen');
+    assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).ok,true);await tick();
+    assert.equal(f.events.find(event=>event.type==='ready').mode,'commands');
+    f.speech.audio({id:'commands-0001',samples:tone()});assert.ok(f.speech.current,'audio is accepted while hidden/fullscreen');
+    f.revoke();f.speech.audio({id:'commands-0001',samples:tone()});
+    assert.equal(f.speech.current,null,'the window closes as soon as commands are no longer allowed');
+    assert.equal(f.speech.start({id:'commands-0002',mode:'commands'}).error,'speech-paused');
+  }finally{f.speech.cancel();}
+});

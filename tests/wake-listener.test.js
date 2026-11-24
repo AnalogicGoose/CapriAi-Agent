@@ -85,3 +85,31 @@ test('wake setting is a displayed boolean preference, not arbitrary overlay conf
   assert.throws(() => settingsPatch({ wakeWordEnabled: 'yes' }));
   assert.throws(() => overlayPatch({ wakeWordEnabled: true }));
 });
+
+test('commands listener opens the microphone only while main allows commands and shows the voice indicator', async () => {
+  global.window = { addEventListener() {} };
+  const code = fs.readFileSync(path.join(__dirname, '../src/renderer/js/command-listener.js'), 'utf8')
+    .replace("import { MicrophoneCapture } from './microphone.js';", 'class MicrophoneCapture {}');
+  const { CommandListener } = await import(uri(code));
+  const calls = [], captures = []; let receive, commands, blocked = false, owns = true;
+  const indicator = { hidden: true, setAttribute() {}, getAttribute() { return ''; }, dataset: {} };
+  const listener = new CommandListener({ indicator, blocked: () => blocked, ownsIndicator: () => owns,
+    host: { onSpeechState: fn => { receive = fn; }, onSpeechCommands: fn => { commands = fn; },
+      speechStart: async request => { calls.push(request); return { ok: true }; },
+      speechCancel: request => calls.push({ cancel: request.id }), speechAudio: request => calls.push({ audio: request.id }) },
+    captureFactory: () => { const capture = { start: async onSamples => { capture.send = onSamples; }, cancel: () => { capture.cancelled = true; } }; captures.push(capture); return capture; } });
+  try {
+    listener.tick(); assert.equal(calls.length, 0, 'closed until main opens the window');
+    commands({ on: true }); await tick(); const id = listener.id;
+    assert.equal(listener.active, true); assert.equal(calls[0].mode, 'commands');
+    await receive({ id, type: 'ready' });
+    assert.equal(indicator.hidden, false); assert.equal(indicator.dataset.state, 'listening');
+    captures[0].send(new ArrayBuffer(4)); assert.equal(calls.at(-1).audio, id);
+    blocked = true; owns = false; listener.tick();
+    assert.equal(captures[0].cancelled, true); assert.equal(indicator.hidden, false, 'a voice call that took over keeps its indicator');
+    blocked = false; owns = true; listener.tick(); await tick(); await receive({ id: listener.id, type: 'ready' });
+    commands({ on: false });
+    assert.equal(listener.id, null); assert.equal(listener.active, false); assert.equal(indicator.hidden, true);
+    assert.equal(captures[1].cancelled, true); assert.ok(calls.some(call => call.cancel));
+  } finally { clearInterval(listener.timer); listener.pause(); }
+});

@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('host', {
   speechStop: request => ipcRenderer.invoke('speech:stop', request),
   speechCancel: request => ipcRenderer.send('speech:cancel', request),
   onSpeechState: on('speech:state'),
+  onSpeechCommands: on('speech:commands'),
+  speechCommandsState: () => ipcRenderer.invoke('speech:commands-state'),
   onConfig: on('capri:config'),
   onResize: on('overlay:resize'),
   onWindows: on('windows:update'),

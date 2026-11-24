@@ -2,20 +2,21 @@
 const {WhisperEngine}=require('./whisper-engine');
 const {SpeechSegmenter}=require('./speech-segmenter');
 const {wakePhrase}=require('./wake-phrase');
+const {commandPhrase}=require('./command-phrases');
 const CHECK_IN_LIMIT_MS=40_000;
 class SpeechInput {
-  constructor({allowed,notify,engine,runtimeDir,wakeAllowed=()=>false}){
-    Object.assign(this,{allowed,notify,wakeAllowed});this.engine=engine||new WhisperEngine({runtimeDir});this.current=null;
+  constructor({allowed,notify,engine,runtimeDir,wakeAllowed=()=>false,commandsAllowed=()=>false}){
+    Object.assign(this,{allowed,notify,wakeAllowed,commandsAllowed});this.engine=engine||new WhisperEngine({runtimeDir});this.current=null;
   }
   start(request={}){
     if(!request||typeof request.id!=='string'||!/^[a-zA-Z0-9-]{8,80}$/.test(request.id))return {ok:false,error:'invalid-request'};
-    const mode=request.mode==='wake'?'wake':request.mode==='conversation'?'conversation':'dictation';
-    if(!(mode==='wake'?this.wakeAllowed():this.allowed()))return {ok:false,error:'speech-paused'};
+    const mode=['wake','conversation','commands'].includes(request.mode)?request.mode:'dictation';
+    if(!this.permitted({mode}))return {ok:false,error:'speech-paused'};
     if(this.current)return {ok:false,error:'speech-busy'};
     const checkIn=mode==='conversation'&&request.checkIn===true;
     const slot={id:request.id,mode,checkIn,inputBlocked:checkIn,
       phase:'starting',queue:[],running:false,total:0,revision:0,recent:[],abort:new AbortController()};
-    this.current=slot;slot.segmenter=new SpeechSegmenter((pcm,meta)=>this.enqueue(slot,pcm,meta),{maxSamples:mode==='wake'?5*16000:20*16000});
+    this.current=slot;slot.segmenter=new SpeechSegmenter((pcm,meta)=>this.enqueue(slot,pcm,meta),{maxSamples:mode==='wake'||mode==='commands'?5*16000:20*16000});
     if(slot.checkIn)slot.timeout=setTimeout(()=>{if(this.current===slot)this.cancel();},CHECK_IN_LIMIT_MS);
     this.engine.start(progress=>this.emit(slot,{type:'setup',percent:progress.percent})).then(()=>{
       if(this.current!==slot)return;
@@ -29,7 +30,8 @@ class SpeechInput {
     return {ok:true,id:slot.id};
   }
   emit(slot,event){if(this.current===slot)this.notify({id:slot.id,...event});}
-  permitted(slot){return slot.mode==='wake'||slot.wakeActivated?this.wakeAllowed():this.allowed();}
+  // Commands-only listening has its own rule (a walkthrough or reminder window), which holds in fullscreen and Gaming mode.
+  permitted(slot){return slot.mode==='commands'?this.commandsAllowed():slot.mode==='wake'||slot.wakeActivated?this.wakeAllowed():this.allowed();}
   audio({id,samples}={}){
     const slot=this.current;
     if(!slot||slot.id!==id||slot.phase!=='listening')return;
@@ -51,7 +53,7 @@ class SpeechInput {
     if(slot.running)return;slot.running=true;
     try{
       while(this.current===slot&&slot.queue.length){
-        const {pcm,complete,revision}=slot.queue.shift();if(slot.mode!=='wake')this.emit(slot,{type:'processing'});
+        const {pcm,complete,revision}=slot.queue.shift();if(slot.mode!=='wake'&&slot.mode!=='commands')this.emit(slot,{type:'processing'});
         const text=await this.engine.transcribe(pcm,slot.abort.signal);
         if(this.current!==slot)return;
         if(revision!==slot.revision)continue;
@@ -63,6 +65,10 @@ class SpeechInput {
           slot.segmenter.maxSamples=20*16000;
           slot.timeout=setTimeout(()=>this.cancel(),95000);
           this.emit(slot,{type:'wake',text:wake.text,complete});
+        }else if(slot.mode==='commands'){
+          const command=commandPhrase(text);
+          if(!command)continue; // Same rule as wake: any other transcript is dropped here, never emitted or logged.
+          this.emit(slot,{type:'command',...command});
         }else if(text)this.emit(slot,{type:'final',text:text.slice(0,slot.mode==='conversation'?1501:slot.wakeActivated?501:500),complete});
       }
     }catch{if(this.current===slot){this.emit(slot,{type:'error',text:'recognizer-failed'});this.cancel();}}
@@ -98,7 +104,7 @@ class SpeechInput {
   finish(slot,cancelled=false){
     if(this.current!==slot)return;
     clearTimeout(slot.timeout);this.current=null;slot.queue=[];slot.segmenter.reset();
-    if(!this.wakeAllowed()||slot.phase==='starting')this.engine.stop();
+    if(!(this.wakeAllowed()||this.commandsAllowed())||slot.phase==='starting')this.engine.stop();
     this.notify({id:slot.id,type:'stopped',cancelled});
   }
   cancel(cold=false){const slot=this.current;if(!slot){this.engine.stop();return;}slot.abort.abort();this.finish(slot,true);if(cold)this.engine.stop();}
