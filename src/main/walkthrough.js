@@ -8,7 +8,7 @@ const { DISPLAY_NAME } = require('./identity');
 //   resolving --found--> waiting --click in ring / next--> resolving (after SETTLE_MS) ... --> ended('done')
 //   resolving --not found for RESOLVE_TIMEOUT_MS--> replanning --plan--> resolving | --null/invalid--> ended('lost')
 //   waiting/resolving --click elsewhere / another app / question()--> paused
-//   paused --continue / resume() / expected window back--> resolving;  paused > PAUSE_LIMIT_MS --> ended('paused-too-long')
+//   paused --continue / next / the card's Continue / resume() / expected window back--> resolving (the paused card says so);  paused > PAUSE_LIMIT_MS --> ended('paused-too-long')
 //   any --stop--> ended('stopped')
 //
 // The pointer is read only while waiting on a click step. Its coordinates are never stored: each tick keeps only
@@ -81,13 +81,14 @@ class Walkthrough {
       case 'stop': this.finish('stopped'); break;
       case 'continue': this.resume(); break;
       case 'repeat': if (this.state === 'waiting' || this.state === 'paused') this.say(this.step.say); break;
-      case 'next': if (this.state !== 'replanning' && !this.settling) this.advance(); break;
+      // While paused, Next resumes the current step instead of skipping it (the user may not have done it yet).
+      case 'next': if (this.state === 'paused') this.resume(); else if (this.state !== 'replanning' && !this.settling) this.advance(); break;
       case 'back': if (this.state !== 'replanning') this.go(Math.max(0, this.index - 1), false); break;
       default: break;
     }
   }
 
-  cardAction(id) { if (id === 'next' || id === 'stop') this.command(id); }
+  cardAction(id) { if (id === 'next' || id === 'stop' || id === 'continue') this.command(id); }
 
   question() { this.pause('question'); }
 
@@ -257,7 +258,14 @@ class Walkthrough {
   foregroundWindow() { try { return this.deps.foreground() || null; } catch { return null; } }
   stop(timer) { if (timer !== null && timer !== undefined) this.deps.clearTimer(timer); }
 
+  // Paused: a short localized line says so, above the step, with Continue instead of Next.
   cardSpec() {
+    if (this.state === 'paused') {
+      let paused = '';
+      try { paused = this.deps.lines('paused', { name: this.name }) || ''; } catch { log(); }
+      return { kind: 'note', title: this.title, text: paused ? `${paused} ${this.step.say}` : this.step.say,
+        buttons: [{ id: 'continue' }, { id: 'stop' }] };
+    }
     return { kind: 'steps', title: this.title, items: [this.step.say], buttons: [{ id: 'next' }, { id: 'stop' }] };
   }
 

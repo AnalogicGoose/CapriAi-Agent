@@ -298,7 +298,8 @@ async function boot() {
   // Commands-only listening (walkthrough / reminder window, opened by main): the local commands, no wake word needed.
   commandListener = new CommandListener({ host, indicator: document.getElementById('voice-indicator'), name: () => config.displayName,
     blocked: () => Boolean(voiceCall.active || dictation.id), ownsIndicator: () => !voiceCall.active,
-    place: () => voiceCall.place(capri.head(), capri.view), beforeStart: () => wakeListener?.pause() });
+    place: () => voiceCall.place(capri.head(), capri.view), beforeStart: () => wakeListener?.pause(),
+    onWake: (event) => wakeListener.adopt(event, event.capture) }); // "Hey <name>" heard while commands own the microphone
   wakeListener = new WakeListener({ host, indicator: document.getElementById('wake-indicator'),
     blocked: () => Boolean(voiceCall.active || dictation.id || voice.spoken.pending || voice.spoken.source || commandListener.active),
     onSessionEnd: () => { if (voiceCall.fromWake) voiceCall.end(false); document.body.classList.remove('voice-session'); refreshHit(true); },

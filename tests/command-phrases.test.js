@@ -43,3 +43,11 @@ test('numbers and words for snooze durations', () => {
   assert.deepEqual(commandPhrase('snooze'), { command: 'snooze' });
   for (const bad of ['snooze 0 minutes', 'snooze 5000 minutes', 'snooze banana minutes', 'snooze 15 bananas']) assert.equal(commandPhrase(bad), null, bad);
 });
+
+test('her display name is dropped as an address, from identity.js', () => {
+  const { DISPLAY_NAME } = require('../src/main/identity');
+  const { commandPhrase: phrase } = require('../src/main/command-phrases');
+  assert.deepEqual(phrase(`${DISPLAY_NAME}, next`), { command: 'next' });
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/main/command-phrases.js'), 'utf8');
+  assert.ok(!/'capri'/i.test(src), 'no hard-coded name');
+});

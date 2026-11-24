@@ -192,6 +192,9 @@ class ReminderController {
     if (this.last && keyOf(this.last.id, this.last.firedDue) === key) this.last = null;
   }
 
+  // A shown card is still waiting for a voice (or typed) "done" / "snooze".
+  windowOpen() { return Boolean(this.last && this.now() - this.last.at <= WINDOW_MS); }
+
   // Commands-only listening: "done" / "snooze [N | tomorrow]" go to the most recently shown card within WINDOW_MS.
   // A superseded card is resolved with the honest line. Returns true when the command was meant for a reminder (even if the snooze value was rejected).
   voice({ command, minutes } = {}) {

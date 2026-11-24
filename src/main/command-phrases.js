@@ -3,6 +3,7 @@
 // call, and is whole-utterance: after dropping her name and courtesy/filler words ("please", "por favor",
 // "s'il te plaît", "пожалуйста", "step"/"paso"…), the whole message must be the command, so a remark that merely
 // contains a command word ("next time remind me", "stop the music") is not one.
+const { DISPLAY_NAME } = require('./identity');
 const COMMANDS = {
   next: ['next', 'next step', 'next one', 'siguiente', 'sigue', 'suivant', 'suivante', 'suite', 'próximo', 'proximo', 'seguinte',
     'далее', 'дальше', 'следующий'],
@@ -22,7 +23,7 @@ const COMMANDS = {
 };
 const SNOOZE_VERBS = ['snooze', 'remind me in', 'remind me', 'pospón', 'pospon', 'posponer', 'reporte', 'reporter', 'rappelle moi dans',
   'adiar', 'adia', 'отложи', 'напомни через'];
-const FILLER = new Set(['hey', 'oye', 'эй', 'ей', 'capri', 'ok', 'okay', 'vale', 'alright', 'please', 'pls', 'por', 'favor',
+const FILLER = new Set([...DISPLAY_NAME.toLowerCase().split(/\s+/).filter(Boolean), 'hey', 'oye', 'эй', 'ей', 'ok', 'okay', 'vale', 'alright', 'please', 'pls', 'por', 'favor',
   "s'il", 's’il', 'te', 'vous', 'plaît', 'plait', 'пожалуйста', 'step', 'paso', 'étape', 'etape', 'passo', 'шаг',
   'the', 'el', 'al', 'le', 'la', 'o', 'now', 'ahora', 'maintenant', 'agora', 'теперь', 'давай']);
 const PREPOSITIONS = new Set(['for', 'in', 'por', 'para', 'durante', 'en', 'de', 'pour', 'dans', 'pendant', 'em', 'на', 'через']);

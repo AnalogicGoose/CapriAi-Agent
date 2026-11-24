@@ -298,3 +298,13 @@ test('permanent action errors say the card is gone', () => {
   assert.equal(snooze.ok, false);
   assert.equal(snooze.gone, true);
 });
+
+test('windowOpen says whether a shown card is still waiting for a voice or typed reply', () => {
+  const r = rig();
+  const row = fireOnce(r);
+  assert.equal(r.controller.windowOpen(), false, 'sent but not shown yet');
+  r.controller.shown(OVERLAY, row.id, at(23, 9));
+  assert.equal(r.controller.windowOpen(), true);
+  r.tick(WINDOW_MS + 1);
+  assert.equal(r.controller.windowOpen(), false);
+});

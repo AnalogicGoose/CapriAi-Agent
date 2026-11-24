@@ -29,6 +29,13 @@ class SpeechInput {
     });
     return {ok:true,id:slot.id};
   }
+  // The wake address was heard: the same slot (and microphone stream) becomes the user's dictation.
+  wake(slot,wake,complete){
+    slot.mode='dictation';slot.wakeActivated=true;slot.total=0;
+    slot.segmenter.maxSamples=20*16000;
+    slot.timeout=setTimeout(()=>this.cancel(),95000);
+    this.emit(slot,{type:'wake',text:wake.text,complete});
+  }
   emit(slot,event){if(this.current===slot)this.notify({id:slot.id,...event});}
   // Commands-only listening has its own rule (a walkthrough or reminder window), which holds in fullscreen and Gaming mode.
   // It also needs the user's own opt-in to voice (the wake word) and an already installed runtime: it never downloads.
@@ -63,14 +70,15 @@ class SpeechInput {
         if(slot.mode==='wake'){
           const wake=wakePhrase(text);
           if(!wake)continue; // Ambient transcripts are discarded here, never sent to the renderer or Codex.
-          slot.mode='dictation';slot.wakeActivated=true;slot.total=0;
-          slot.segmenter.maxSamples=20*16000;
-          slot.timeout=setTimeout(()=>this.cancel(),95000);
-          this.emit(slot,{type:'wake',text:wake.text,complete});
+          this.wake(slot,wake,complete);
         }else if(slot.mode==='commands'){
           const command=commandPhrase(text);
-          if(!command)continue; // Same rule as wake: any other transcript is dropped here, never emitted or logged.
-          this.emit(slot,{type:'command',...command});
+          if(command){this.emit(slot,{type:'command',...command});continue;}
+          // Commands mode owns the microphone, so the wake word is heard here too (when wake listening is allowed)
+          // and hands off exactly as wake mode does.
+          const wake=this.wakeAllowed()?wakePhrase(text):null;
+          if(!wake)continue; // Same rule as wake: any other transcript is dropped here, never emitted or logged.
+          this.wake(slot,wake,complete);
         }else if(text)this.emit(slot,{type:'final',text:text.slice(0,slot.mode==='conversation'?1501:slot.wakeActivated?501:500),complete});
       }
     }catch{if(this.current===slot){this.emit(slot,{type:'error',text:'recognizer-failed'});this.cancel();}}

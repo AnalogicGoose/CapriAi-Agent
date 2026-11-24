@@ -1,12 +1,13 @@
 import { MicrophoneCapture } from './microphone.js';
 
 // Commands-only listening: open only while main says so (a walkthrough is running or a reminder window is open).
-// Main matches the fixed local commands and discards every other transcript; nothing heard comes back here.
+// Main matches the fixed local commands and discards every other transcript; nothing heard comes back here, except the
+// wake address ("Hey <name>", when wake listening is on): that hands this microphone stream to onWake, as WakeListener does.
 // Mirrors WakeListener's microphone lifecycle, and shows her voice indicator the whole time it listens.
 export class CommandListener {
   constructor({ host, indicator, name = () => '', blocked = () => false, ownsIndicator = () => true, place = () => {},
-    beforeStart = () => {}, captureFactory = () => new MicrophoneCapture(), now = Date.now }) {
-    Object.assign(this, { host, indicator, name, blocked, ownsIndicator, place, beforeStart, captureFactory, now });
+    beforeStart = () => {}, onWake = null, captureFactory = () => new MicrophoneCapture(), now = Date.now }) {
+    Object.assign(this, { host, indicator, name, blocked, ownsIndicator, place, beforeStart, onWake, captureFactory, now });
     this.enabled = false; this.retryAt = 0; this.listening = false; this.shown = false;
     host.onSpeechState(event => this.receive(event));
     host.onSpeechCommands?.(message => this.configure(message?.on === true));
@@ -65,6 +66,11 @@ export class CommandListener {
         await this.capture.start(samples => this.host.speechAudio({ id, samples }), () => { if (this.id === id) this.fail(10000); });
         if (this.id === id) { this.listening = true; this.render(); }
       } catch { if (this.id === id) this.fail(10000); }
+    } else if (event.type === 'wake') {
+      // The same stream becomes the user's request: hand it over without cancelling it.
+      const capture = this.capture; this.id = null; this.capture = null; this.listening = false; this.render();
+      try { if (!this.onWake) throw Error('no-wake'); await this.onWake({ ...event, capture }); }
+      catch { capture?.cancel(); this.host.speechCancel({ id: event.id }); this.retryAt = this.now() + 1500; }
     } else if (event.type === 'error') this.fail(10000);
     else if (event.type === 'stopped') { this.pause(); this.retryAt = this.now() + 1500; }
   }

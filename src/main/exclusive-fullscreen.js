@@ -1,5 +1,6 @@
 'use strict';
 const { guideLine } = require('./guide-lines');
+const { DISPLAY_NAME } = require('./identity');
 
 // Exclusive fullscreen (spec 5.1, section 7). A DXGI/Direct3D exclusive-mode game owns the display: DWM is bypassed, so
 // the always-on-top guide window can't appear over it even though its z-order and IsWindowVisible say it is on top.
@@ -27,7 +28,7 @@ class ExclusiveFullscreenGate {
     if (!this.said) {
       this.said = true;
       try { this.speak(guideLine('exclusive-fullscreen', this.lang())); } catch { /* speech is best effort */ }
-      throw Error('The game is in exclusive fullscreen, so on-screen guides cannot appear over it. Capri has just said aloud '
+      throw Error(`The game is in exclusive fullscreen, so on-screen guides cannot appear over it. ${DISPLAY_NAME} has just said aloud `
         + 'that borderless window mode would let her draw; do not repeat it. Help in words only.');
     }
     throw Error('The game is in exclusive fullscreen, so on-screen guides cannot appear over it. Help in words only; '

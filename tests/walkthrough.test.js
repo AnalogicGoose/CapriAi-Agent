@@ -446,3 +446,29 @@ test('a resolve without usable bounds counts as not found', async () => {
   await f.advance(RESOLVE_TIMEOUT_MS + 500);
   assert.deepEqual(f.s.ends, [{ reason: 'lost' }]);
 });
+
+test('a paused walkthrough says so on its card with Continue; Continue resumes and Next does not skip', async () => {
+  const f = fixture();
+  await f.start();
+  await f.click(500, 500);
+  assert.equal(f.walk.state, 'paused');
+  assert.deepEqual(f.s.renders.at(-1).card, { kind: 'note', title: 'Save a file', text: 'line:paused Click Save',
+    buttons: [{ id: 'continue' }, { id: 'stop' }] });
+  f.walk.cardAction('continue');
+  await f.advance(0);
+  assert.equal(f.walk.state, 'waiting');
+  assert.equal(f.walk.index, 0);
+  assert.deepEqual(f.s.renders.at(-1).card.buttons, [{ id: 'next' }, { id: 'stop' }], 'back to Next once resumed');
+  await f.click(500, 500);
+  assert.equal(f.walk.state, 'paused');
+  f.walk.command('next'); // voice or typed "next" while paused
+  await f.advance(0);
+  assert.equal(f.walk.index, 0, 'Next while paused resumes the same step instead of skipping it');
+  assert.equal(f.walk.state, 'waiting');
+  await f.click(500, 500);
+  f.walk.cardAction('next'); // a stale Next button press while paused
+  await f.advance(0);
+  assert.equal(f.walk.index, 0);
+  f.walk.cardAction('stop');
+  assert.deepEqual(f.s.ends, [{ reason: 'stopped' }]);
+});

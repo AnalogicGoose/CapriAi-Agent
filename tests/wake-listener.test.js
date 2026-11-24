@@ -114,3 +114,26 @@ test('commands listener opens the microphone only while main allows commands and
     assert.equal(captures[1].cancelled, true); assert.ok(calls.some(call => call.cancel));
   } finally { clearInterval(listener.timer); listener.pause(); }
 });
+
+test('a wake address heard by commands-only listening hands the same stream to the wake flow', async () => {
+  global.window = { addEventListener() {} };
+  const code = fs.readFileSync(path.join(__dirname, '../src/renderer/js/command-listener.js'), 'utf8')
+    .replace("import { MicrophoneCapture } from './microphone.js';", 'class MicrophoneCapture {}');
+  const { CommandListener } = await import(uri(code));
+  const calls = [], woke = []; let receive, commands;
+  const indicator = { hidden: true, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; }, dataset: {} };
+  const capture = { start: async () => {}, cancel: () => { capture.cancelled = true; } };
+  const listener = new CommandListener({ indicator, onWake: async event => { woke.push(event); },
+    host: { onSpeechState: fn => { receive = fn; }, onSpeechCommands: fn => { commands = fn; },
+      speechStart: async request => { calls.push(request); return { ok: true }; }, speechCancel: request => calls.push({ cancel: request.id }) },
+    captureFactory: () => capture });
+  try {
+    commands({ on: true }); await tick(); const id = listener.id;
+    await receive({ id, type: 'ready' });
+    await receive({ id, type: 'wake', text: 'open Firefox', complete: true });
+    assert.equal(woke.length, 1); assert.equal(woke[0].capture, capture); assert.equal(woke[0].text, 'open Firefox');
+    assert.equal(capture.cancelled, undefined, 'the stream is handed over, not cancelled');
+    assert.equal(calls.some(call => call.cancel), false);
+    assert.equal(listener.id, null); assert.equal(indicator.hidden, true);
+  } finally { clearInterval(listener.timer); listener.pause(); }
+});

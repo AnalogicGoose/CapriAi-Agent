@@ -362,7 +362,7 @@ const walkthroughs = new WalkthroughController({ targets: guideTargets, layer: g
   foreground: () => require('./native-windows').foregroundBounds(), pointer: () => require('./native-windows').pointerState(),
   processRows: () => require('./native-windows').processRows(), allowed: () => screenAccess.enabled(),
   lang: () => resolveLang(config.load().lang), busy: () => brain.busy || decisionBrain.busy,
-  speak: guideSay, onActive: () => syncCommands(), gate: exclusiveGate,
+  speak: guideSay, onActive: () => syncCommands(), gate: exclusiveGate, reminderWindow: () => Boolean(reminders?.windowOpen()),
   body: action => bodyAction(action),
   bodyAllowed: () => Boolean(overlay && !overlay.isDestroyed() && overlay.isVisible() && !fullscreenState.active && !config.load().gamingMode),
   snapshot: () => screenAccess.snapshot('', () => {}, { lifted: true }),
@@ -528,8 +528,8 @@ function syncCommands(force = false) {
   overlay.webContents.send('speech:commands', { on });
 }
 function routeSpeechCommand({ command, minutes }) {
-  if (walkthroughs.voiceCommand(command)) return;
-  reminders?.voice({ command, minutes }); // 'done' / 'snooze': the most recently shown reminder card, within its window
+  // 'done' / 'snooze': the most recently shown reminder card, within its window; otherwise "done" is a walkthrough's Next.
+  walkthroughs.voiceCommand(command, () => Boolean(reminders?.voice({ command, minutes })));
 }
 const speech = new SpeechInput({
   runtimeDir: app.isPackaged ? path.join(app.getPath('userData'),'speech-runtime') : path.join(ROOT,'.caprigpt-local','speech-runtime'),
@@ -542,7 +542,8 @@ const speech = new SpeechInput({
     if (state.type === 'command') { routeSpeechCommand(state); return; } // handled here, never forwarded
     // The walkthrough card's mic badge follows the commands microphone (her overlay may be hidden in a game).
     if (state.type === 'ready' && state.mode === 'commands') { commandsListeningId = state.id; walkthroughs.setListening(true); }
-    else if (state.type === 'stopped' && state.id === commandsListeningId) { commandsListeningId = null; walkthroughs.setListening(false); }
+    // 'wake': the wake address was heard in commands mode, so that stream is now the user's request.
+    else if (['stopped', 'wake'].includes(state.type) && state.id === commandsListeningId) { commandsListeningId = null; walkthroughs.setListening(false); }
     if (!overlay || overlay.isDestroyed()) return;
     if (state.type === 'wake' || (state.type === 'ready' && state.mode === 'conversation')) {
       voiceSession = true; autonomy.cancel(); tts.cancel(); tts.warm();

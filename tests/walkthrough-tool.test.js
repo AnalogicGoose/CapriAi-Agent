@@ -263,6 +263,11 @@ test('every walkthrough ending speaks a guideLine in the user\'s language', asyn
   for (const kind of KINDS) for (const lang of ['en', 'es', 'fr', 'pt', 'ru']) assert.ok(guideLine(kind, lang).length > 0, `${kind}/${lang}`);
   assert.equal(guideLine('done', 'xx'), guideLine('done', 'en'));
   assert.ok(KINDS.includes('exclusive-fullscreen'));
+  for (const lang of ['en', 'es', 'fr', 'pt', 'ru']) {
+    assert.ok(!/capri/i.test(guideLine('paused', lang)), `paused/${lang} has no literal name`);
+    assert.ok(guideButton('continue', lang) && guideButton('continue', lang) !== 'continue', `continue/${lang}`);
+  }
+  assert.notEqual(guideLine('paused', 'es'), guideLine('paused', 'en'));
 });
 
 test('combined new tool descriptions stay under 1500 bytes', () => {
@@ -493,4 +498,33 @@ test('exclusive fullscreen refuses with one spoken suggestion per session', asyn
     assert.match(guideLine('exclusive-fullscreen', lang), /borderless|sin bordes|sans bordure|sem bordas|без рамки/i, lang);
     assert.doesNotMatch(guideLine('exclusive-fullscreen', lang), /Capri/);
   }
+});
+
+test('"done" during a walkthrough means Next unless a reminder card takes it (voice and typed)', async () => {
+  let reminderOpen = false;
+  const f = fixture({ extra: { reminderWindow: () => reminderOpen } });
+  f.ctl.start(PLAN, {});
+  await f.advance(0);
+  assert.equal(walkthroughCommand('listo'), null, 'not a walkthrough command by itself');
+  assert.equal(walkthroughCommand('I did it', { doneIsNext: true }), 'next');
+  // Voice: a reminder card in its window takes "done"; otherwise it is Next.
+  let asked = 0;
+  assert.equal(f.ctl.voiceCommand('done', () => { asked++; return true; }), true);
+  assert.equal(f.ctl.current.index, 0, 'the reminder took it');
+  assert.equal(f.ctl.voiceCommand('done', () => { asked++; return false; }), true);
+  await f.advance(5000);
+  assert.equal(f.ctl.current.index, 1, '"done" moved to the next step');
+  assert.equal(asked, 2);
+  assert.equal(f.ctl.voiceCommand('snooze', () => false), false, 'snooze never steers a walkthrough');
+  // Typed.
+  reminderOpen = true;
+  assert.equal(f.ctl.route('done'), null, 'with a reminder card waiting, typed "done" is not a walkthrough command');
+  f.ctl.answered();
+  reminderOpen = false;
+  const typed = f.ctl.route('listo');
+  assert.equal(typed.handled, true);
+  await f.advance(5000);
+  assert.equal(f.ctl.active, false, 'the last step was done');
+  // No walkthrough: "done" still goes to the reminder only.
+  assert.equal(f.ctl.voiceCommand('done', () => false), false);
 });
