@@ -26,6 +26,8 @@ const CLOSING = new Set(['done', 'lost', 'paused-too-long']);
 
 const within = (p, b, m = 0) => Boolean(b) && Number.isFinite(p.x) && Number.isFinite(p.y)
   && p.x >= b.x - m && p.x <= b.x + b.width + m && p.y >= b.y - m && p.y <= b.y + b.height + m;
+const validBox = b => Boolean(b) && typeof b === 'object' && ['x', 'y', 'width', 'height'].every(k => Number.isFinite(b[k]))
+  && b.width >= 0 && b.height >= 0;
 const appKey = s => (typeof s === 'string' ? s.trim().toLowerCase().replace(/\.exe$/, '') : '');
 const log = () => console.error('[capri] A walkthrough callback failed.');
 
@@ -60,6 +62,9 @@ class Walkthrough {
     this.pressed = null;    // null (unread) | 'idle' | 'before' | 'ring' | 'card' | 'elsewhere'
     this.pauseCause = null;
     this.pausedAt = 0;
+    this.drawSeq = 0;       // render calls issued
+    this.paintedSeq = 0;    // newest render call that has finished
+    this.drawing = null;    // the latest { marks, card, extra } asked for (target bounds only, never the pointer)
   }
 
   get step() { return this.steps[this.index]; }
@@ -95,6 +100,8 @@ class Walkthrough {
     const gen = this.generation;
     this.stop(this.stepTimer); this.stepTimer = null;
     Object.assign(this, { index, state: 'resolving', ring: null, pressed: null, pauseCause: null, settling: settle });
+    // The previous ring comes down at once; the card already shows this step's line while its target is found.
+    this.draw([], this.cardSpec()).then(box => { if (gen === this.generation) this.cardBox = box; });
     const begin = () => { this.settling = false; this.resolveSince = this.deps.now(); this.attempt(gen); };
     if (settle) this.stepTimer = this.deps.setTimer(() => { this.stepTimer = null; if (gen === this.generation) begin(); }, SETTLE_MS);
     else begin();
@@ -106,7 +113,7 @@ class Walkthrough {
     let found;
     try { found = await this.deps.targets.resolve(this.step.target, ctx); } catch { found = { ok: false }; }
     if (gen !== this.generation) return;
-    if (found?.ok) return this.show(found, gen);
+    if (found?.ok && validBox(found.bounds)) return this.show(found, gen); // no usable bounds counts as not found
     if (this.deps.now() - this.resolveSince >= RESOLVE_TIMEOUT_MS) return this.lost();
     this.stepTimer = this.deps.setTimer(() => { this.stepTimer = null; if (gen === this.generation) this.attempt(gen); }, RESOLVE_RETRY_MS);
   }
@@ -119,8 +126,9 @@ class Walkthrough {
     ];
     const cardBox = await this.draw(marks, this.cardSpec(), { window: found.window });
     if (gen !== this.generation) return;
-    const fg = this.foregroundWindow();
-    if (fg && !this.own(fg)) this.base = this.identify(fg);
+    // The step lives in the target's window when resolve says which; otherwise in whatever is in front now.
+    const win = found.window && found.window.id !== undefined && Number.isFinite(found.window.pid) ? found.window : this.foregroundWindow();
+    if (win && !this.own(win)) this.base = this.identify(win);
     Object.assign(this, { ring: bounds, cardBox, state: 'waiting', pressed: null });
     this.say(this.step.say);
     this.watch();
@@ -149,6 +157,7 @@ class Walkthrough {
     const gen = this.generation;
     this.state = 'replanning';
     this.stop(this.watchTimer); this.watchTimer = null;
+    this.draw([], this.cardSpec()); // never a ring while she doesn't know where the control is
     const done = this.steps.slice(0, this.index);
     let plan = null;
     try { plan = validateWalkthrough(await this.deps.replan({ request: this.request, done, missing: this.step.target })); } catch { plan = null; }
@@ -253,12 +262,27 @@ class Walkthrough {
   }
 
   // Resolves to the card's bounds (or null). Rendering failures are logged, never thrown into timers.
-  async draw(marks, card, extra) {
+  // Every call records the latest drawing. If an older render finishes after a newer one (a step's ring landing
+  // after next/back/pause moved on), the latest drawing is painted again, so a stale ring never stays on screen.
+  draw(marks, card, extra) {
+    this.drawSeq += 1;
+    this.drawing = { marks, card, extra };
+    return this.paint(this.drawSeq, marks, card, extra);
+  }
+
+  async paint(seq, marks, card, extra) {
+    let box = null;
     try {
       const out = await this.deps.render(marks, card, extra);
-      const box = out?.cardBounds;
-      return box && ['x', 'y', 'width', 'height'].every(k => Number.isFinite(box[k])) ? { ...box } : null;
+      box = validBox(out?.cardBounds) ? { ...out.cardBounds } : null;
     } catch { console.error('[capri] Could not update the walkthrough guide.'); return null; }
+    if (seq < this.paintedSeq) {
+      const latest = this.drawing;
+      this.draw(latest.marks, latest.card, latest.extra).then(b => {
+        if (this.drawing === latest && this.state !== 'ended' && latest.card) this.cardBox = b;
+      });
+    } else this.paintedSeq = seq;
+    return box;
   }
 
   say(text) {

@@ -16,19 +16,24 @@ function fixture({ steps, cardBounds = null, replan, title = 'Save a file' } = {
     pointer: { down: false, x: SENTINEL, y: SENTINEL }, reads: 0,
     fg: { id: 5, pid: 9, app: 'editor', ...box(0, 0, 800, 600) },
     found: new Map([['Save', box(100, 100, 60, 20)], ['Open', box(300, 100, 60, 20)], ['Name', box(100, 300, 200, 24)], ['List', box(100, 400, 200, 100)]]),
-    resolves: [], spoken: [], renders: [], ends: [], replans: [], states: [],
+    resolves: [], spoken: [], renders: [], ends: [], replans: [], states: [], hold: 0, held: [], windowOf: null,
   };
   const targets = {
     resolve: async target => {
       s.resolves.push(target.name);
       const bounds = s.found.get(target.name);
-      return bounds ? { ok: true, bounds, window: { id: s.fg.id } } : { ok: false, reason: 'not-found' };
+      return bounds ? { ok: true, bounds, window: s.windowOf ? s.windowOf(target.name) : { id: s.fg.id } } : { ok: false, reason: 'not-found' };
     },
   };
   const walk = new Walkthrough({
     plan: { title, steps: steps || [step('Save', 'Click Save'), step('Open', 'Now click Open')] },
     targets,
-    render: (marks, card) => { s.renders.push({ marks, card }); return Promise.resolve({ cardBounds: card ? cardBounds : null }); },
+    // A render is recorded when it finishes, the order in which the layer would show it. s.hold delays the next ones.
+    render: (marks, card) => {
+      const paint = () => { s.renders.push({ marks, card }); return { cardBounds: card ? cardBounds : null }; };
+      if (s.hold > 0) { s.hold -= 1; return new Promise(resolve => s.held.push(() => resolve(paint()))); }
+      return Promise.resolve(paint());
+    },
     speak: (text, opts) => { s.spoken.push(text); assert.deepEqual(opts, { purpose: 'guide' }); },
     pointer: () => { s.reads += 1; return { ...s.pointer }; },
     foreground: () => (s.fg ? { ...s.fg } : null),
@@ -376,4 +381,68 @@ test('a button already held when the step begins is not a click', async () => {
   await f.advance(POLL_MS);
   assert.equal(f.walk.index, 0);
   assert.equal(f.walk.state, 'waiting');
+});
+
+const hasRing = r => r.marks.some(m => m.kind === 'ring' || m.kind === 'number');
+
+test('the previous ring comes down while the next target resolves and while re-planning', async () => {
+  let answer;
+  const f = fixture({ steps: [step('Save', 'Click Save'), step('Gone', 'Click Gone')],
+    replan: () => new Promise(resolve => { answer = resolve; }) });
+  await f.start();
+  assert.ok(hasRing(f.s.renders.at(-1)));
+  await f.click(110, 110);
+  assert.equal(f.walk.state, 'resolving');
+  assert.ok(!hasRing(f.s.renders.at(-1)), 'no ring around the control that was already clicked');
+  assert.deepEqual(f.s.renders.at(-1).card.items, ['Click Gone'], 'the card already shows the new line');
+  await f.advance(SETTLE_MS + 1000);
+  assert.equal(f.walk.state, 'resolving');
+  assert.ok(!hasRing(f.s.renders.at(-1)));
+  await f.advance(RESOLVE_TIMEOUT_MS);
+  assert.equal(f.walk.state, 'replanning');
+  assert.ok(!hasRing(f.s.renders.at(-1)));
+  answer({ title: 'x', steps: [step('Open', 'Open instead')] });
+  await f.advance(0);
+  assert.equal(f.walk.state, 'waiting');
+  assert.ok(f.s.renders.at(-1).marks.some(m => m.kind === 'ring' && m.bounds.x === 300));
+});
+
+test('next while a step is still being drawn never leaves that step\'s ring behind', async () => {
+  const f = fixture({ steps: [step('Name', 'One', 'look'), step('List', 'Two', 'look')] });
+  f.walk.start();
+  f.s.hold = 1; // the first step's ring render (after its target resolves) stays in flight
+  await f.advance(0);
+  assert.equal(f.s.held.length, 1);
+  f.walk.command('next');
+  await f.advance(0);
+  f.s.held.shift()(); // the stale ring lands late
+  await f.advance(0);
+  assert.equal(f.walk.state, 'resolving');
+  assert.ok(!hasRing(f.s.renders.at(-1)), 'the latest drawing is painted again over the late ring');
+  assert.deepEqual(f.s.renders.at(-1).card.items, ['Two']);
+  await f.advance(SETTLE_MS);
+  assert.equal(f.walk.state, 'waiting');
+  assert.ok(f.s.renders.at(-1).marks.some(m => m.kind === 'ring' && m.bounds.y === 400));
+});
+
+test("the step's window comes from the resolved target when known", async () => {
+  const f = fixture();
+  f.s.windowOf = () => ({ id: 21, pid: 50 });
+  await f.start();
+  // The target's app is the baseline, so the editor in front is a different app and pauses.
+  await f.advance(500);
+  assert.equal(f.walk.state, 'paused');
+  f.s.fg = { id: 21, pid: 50, ...box(0, 0, 800, 600) };
+  await f.advance(500);
+  assert.equal(f.walk.state, 'waiting');
+});
+
+test('a resolve without usable bounds counts as not found', async () => {
+  const f = fixture({ steps: [step('Save', 'Click Save')] });
+  f.s.found.set('Save', { x: 1, y: 2 });
+  await f.start();
+  assert.equal(f.walk.state, 'resolving');
+  assert.ok(!f.s.renders.some(hasRing));
+  await f.advance(RESOLVE_TIMEOUT_MS + 500);
+  assert.deepEqual(f.s.ends, [{ reason: 'lost' }]);
 });
