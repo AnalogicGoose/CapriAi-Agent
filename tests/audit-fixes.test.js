@@ -142,7 +142,7 @@ function applySettings(patch) {
     settingsRequests: service('settings'), tts: service('tts'), speech: service('speech'), agent: service('agent'),
     memoryRequests: service('memory'), requests: service('tasks'), brain: service('codex'), decisionBrain: service('decisions'),
     interestCollaboration: service('collaboration'),
-    guide: { clear: reason => calls.push('guide:' + reason) },
+    guide: { clear: reason => calls.push('guide:' + reason) }, walkthroughs: { stop: () => calls.push('walkthrough:stop') },
     permissions: p => p, config: { load: () => state, save: p => Object.assign(state, p) },
     pcContext: { eventSnapshot() {} }, overlay: null, memoryStore: null, goalStore: null, rendererConfig: () => state,
     fitOverlay() {}, watchWindows() {}, rebuildTray() {},
@@ -158,6 +158,7 @@ test('cosmetic settings preserve Codex turns and memory reviews; policy changes 
     const calls = applySettings(patch);
     for (const name of ['agent', 'tasks', 'memory', 'codex', 'codex:reset', 'decisions']) assert.ok(calls.includes(name), name);
     assert.equal(calls.includes('guide:paused'), Object.hasOwn(patch, 'gamingMode'), 'Gaming mode clears on-screen guides');
+    assert.equal(calls.includes('walkthrough:stop'), Object.hasOwn(patch, 'gamingMode'), 'Gaming mode ends a walkthrough');
   }
   const desktop = applySettings({ desktopActions: false });
   assert.ok(desktop.includes('codex')); assert.ok(desktop.includes('tasks'));

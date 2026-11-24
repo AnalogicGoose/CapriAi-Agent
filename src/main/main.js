@@ -29,6 +29,7 @@ const { GuideTargets } = require('./guide-targets');
 const { layoutScene } = require('./guide-scene');
 const { createGuideLayer } = require('./guide-layer');
 const { GuideSession } = require('./guide-session');
+const { WalkthroughController } = require('./walkthrough-controller');
 const { CognitiveFoundation } = require('./cognitive-foundation');
 const { GroundedCuriosity } = require('./grounded-curiosity');
 const { ReflectionEngine } = require('./cognitive-reflection');
@@ -305,17 +306,34 @@ const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
 }) : null;
 app.on('before-quit', highlight.clear);
 // The guide layer is separate from her overlay: onFullscreen hides only the overlay, never this layer.
+const guideTargets = new GuideTargets({ accessibility, screen: screenAccess, foreground: externalForeground });
+const guideLayer = createGuideLayer({ BrowserWindow, screen, preload: path.join(__dirname, '..', 'guide-preload.js'),
+  page: path.join(__dirname, '..', 'renderer', 'guide.html') });
 const guide = new GuideSession({
-  targets: new GuideTargets({ accessibility, screen: screenAccess, foreground: externalForeground }),
-  layer: createGuideLayer({ BrowserWindow, screen, preload: path.join(__dirname, '..', 'guide-preload.js'),
-    page: path.join(__dirname, '..', 'renderer', 'guide.html') }),
+  targets: guideTargets, layer: guideLayer,
   layout: scene => layoutScene(scene, { displays: screen.getAllDisplays(), screenToDip: rect => screen.screenToDipRect(null, rect) }),
   // Raw foreground: her own windows (pid) keep the drawing instead of clearing it.
   foreground: () => require('./native-windows').foregroundBounds(), ownPid: process.pid, yieldFocus: yieldOverlayFocus,
   // ScreenAccess reads agentConfig, which lifts Gaming mode only while a voice session is active.
   allowed: () => screenAccess.enabled(),
 });
-app.on('before-quit', () => guide.clear('quit'));
+// One walkthrough at a time (walkthrough-controller.js). Re-plans use the decision brain with one fresh screenshot,
+// outside chat history; its lines reach the overlay's normal TTS path while tts.allowed() (Task 9 switches to a grant).
+const walkthroughs = new WalkthroughController({ targets: guideTargets, layer: guideLayer, guide, ownPid: process.pid,
+  displays: () => screen.getAllDisplays(), screenToDip: rect => screen.screenToDipRect(null, rect),
+  dipToScreen: rect => screen.dipToScreenRect(null, rect), cursor: () => screen.getCursorScreenPoint(),
+  foreground: () => require('./native-windows').foregroundBounds(), pointer: () => require('./native-windows').pointerState(),
+  processRows: () => require('./native-windows').processRows(), allowed: () => screenAccess.enabled(),
+  lang: () => resolveLang(config.load().lang), busy: () => brain.busy || decisionBrain.busy,
+  speak: text => { if (tts.allowed() && overlay && !overlay.isDestroyed()) overlay.webContents.send('guide:say', { text }); },
+  snapshot: () => screenAccess.snapshot(),
+  infer: async request => {
+    decisionBrain.reset();
+    try { return await decisionBrain.chat(JSON.stringify(request.messages), () => {}, () => {}, { outputSchema: request.schema, recordHistory: false, images: request.images }); }
+    finally { decisionBrain.reset(); }
+  } });
+guideLayer.onCardAction((displayId, id) => walkthroughs.cardAction(displayId, id));
+app.on('before-quit', () => { walkthroughs.stop(); guide.clear('quit'); });
 const currentContext = text => {
   const p = permissions(agentConfig().privacy);
   const savedContinuity = goals().continuity.context();
@@ -333,7 +351,7 @@ const currentContext = text => {
   recentTasks: actions.grounding({ includeApps: false }) };
 };
 const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: resolveLang, context: pcContext,
-  screen: screenAccess, accessibility, guide, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
+  screen: screenAccess, accessibility, guide, walkthroughs, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
   body: (action, { check, signal }) => new Promise((resolve, reject) => {
     check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Capri’s body is unavailable.'));
     const id = randomBytes(12).toString('hex');
@@ -737,7 +755,7 @@ function updateConfig(patch) {
   if (['gamingMode', 'privacy', 'systemAccess', 'screenAwareness'].some(changes) || backendChanged) {
     brain.reset({ keepRecent: !revokedRecall && !['systemAccess', 'screenAwareness', 'codexExecutable'].some(changes) });
   }
-  if (patch.gamingMode === true || patch.screenAwareness === false) guide.clear('paused');
+  if (patch.gamingMode === true || patch.screenAwareness === false) { walkthroughs.stop(); guide.clear('paused'); }
   if ((patch.gamingMode === true || patch.visible === false) && speech.current?.mode !== 'wake') speech.cancel();
   if (patch.gamingMode === true || patch.visible === false
       || ['muted', 'volume', 'ttsEnabled', 'speakTypedReplies', 'proactiveVoice', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText', 'ttsDevice'].some(changes)) tts.cancel();
@@ -977,7 +995,10 @@ function registerIpc() {
     try {
       if (event.sender !== overlay?.webContents) throw Error('Overlay required.');
       if (typeof text !== 'string' || text.length > 12000) throw Error('Invalid message.');
-      guide.clear('new-request');
+      // A running walkthrough keeps the guide layer: a question pauses it, "stop" or a new task ends it.
+      const walkReply = walkthroughs.route(text);
+      if (walkReply) return walkReply;
+      if (!walkthroughs.active) guide.clear('new-request');
       if (projectRouting) return { handled: true, text: 'Finish choosing your project before sending a request.' };
       const trialReply = initiativeCommand(text);
       if (trialReply) return trialReply;
@@ -1060,7 +1081,7 @@ function registerIpc() {
       return { handled: false };
     }
     catch (err) { return { handled: true, text: `Local assistant unavailable: ${err.message}` }; }
-  }));
+  }).then(result => walkthroughs.afterRoute(result, commandsOnly === true), error => { walkthroughs.answered(); throw error; }));
   ipcMain.handle('task:openResult', async (_event, ref) => {
     try { if (typeof ref!=='string'||!/^[a-f0-9]{16}$/.test(ref)) throw Error('Invalid result.'); return {ok:true,...await actions.openResult(ref)}; }
     catch(error) { return {ok:false,error:error.message}; }
@@ -1098,7 +1119,7 @@ function registerIpc() {
     if (!Number.isSafeInteger(id) || current?.role !== 'user' || typeof current.content !== 'string') return { ok: false, error: 'Invalid chat request.' };
     if (projectRouting) return { ok: false, error: 'Finish choosing your project before sending a request.' };
     if (chats.size || brain.busy || actions.busy) return { ok: false, error: 'One Capri request at a time.' };
-    guide.clear('new-request');
+    if (!walkthroughs.active) guide.clear('new-request');
     if (config.load().speakTypedReplies && tts.allowed()) tts.warm();
     const abort = new AbortController();
     let finish;
@@ -1128,11 +1149,11 @@ function registerIpc() {
       return { ok: true, text, closeViaTools: true, delivery };
     } catch (error) { projectFeedbackAnchor = null; return { ok: false, error: abort.signal.aborted ? 'stopped' : error.message }; }
     finally { abort.signal.removeEventListener('abort', stop); chats.delete(id); finish(); }
-  }));
+  }).finally(() => walkthroughs.answered()));
   ipcMain.on('chat:stop', (event, id) => {
     if (event.sender !== overlay?.webContents) return;
     interestCollaboration.cancel(id);
-    chats.get(id)?.abort.abort(); brain.cancel(); decisionBrain.cancel();
+    chats.get(id)?.abort.abort(); brain.cancel(); decisionBrain.cancel(); walkthroughs.stop();
     settingsRequests.cancel(); agent.cancel(); requests.cancel(); memoryRequests.cancel();
   });
   // closing an app you asked her to close, once you've clicked to confirm (apps.js)
@@ -1338,7 +1359,7 @@ function main() {
       sessionAvailable = event === 'resume' || event === 'unlock-screen';
       autonomy.observeIdle(null); autonomy.touch(); reflection.cancel();
       if (!sessionAvailable) {
-        guide.clear('locked');
+        walkthroughs.stop(); guide.clear('locked');
         brain.dropWarmClient();
         checkInDeadline = 0; tts.cancel();
         interestCollaboration.cancel();

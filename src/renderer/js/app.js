@@ -222,6 +222,17 @@ async function boot() {
     },
   });
   voice.spoken.configure(config);
+  // Walkthrough lines from main (sent only while main's TTS is allowed). Wait for her current reply to finish
+  // speaking instead of cutting it off; a newer line replaces one still waiting.
+  let guideSay = 0;
+  host.onGuideSay?.(async message => {
+    const text = message?.text;
+    if (typeof text !== 'string' || !text || text.length > 320) return;
+    const mine = ++guideSay, until = Date.now() + 20000;
+    const busy = () => voice.spoken.pending || voice.spoken.playing || voice.spoken.response;
+    while (busy() && Date.now() < until) { await new Promise(resolve => setTimeout(resolve, 250)); if (mine !== guideSay) return; }
+    if (mine === guideSay) voice.spoken.speak(text);
+  });
   host.onFullscreenState(state => {
     if (!state.active) return;
     if (voiceCall?.checkIn) voiceCall.end();

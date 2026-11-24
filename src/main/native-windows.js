@@ -35,6 +35,7 @@ function api() {
     post: bind(user, 'PostMessageW', 'int32', ['uintptr_t', 'uint32', 'uintptr_t', 'intptr_t']),
     keyState: bind(user, 'GetAsyncKeyState', 'int16', ['int32']),
     cursorPos: bind(user, 'GetCursorPos', 'int32', ['void *']),
+    metrics: bind(user, 'GetSystemMetrics', 'int32', ['int32']),
   };
   return cached;
 }
@@ -176,10 +177,11 @@ function consoleWindows() {
   return result;
 }
 
-// Polled, never hooked: reads the left button and cursor once and keeps nothing.
+// Polled, never hooked: reads the primary button and cursor once and keeps nothing.
+// GetAsyncKeyState reports physical buttons, so with swapped buttons (SM_SWAPBUTTON) the primary is VK_RBUTTON.
 function pointerState() {
   const a = api(), point = Buffer.alloc(8);
-  const down = Boolean(a.keyState(0x01) & 0x8000);
+  const down = Boolean(a.keyState(a.metrics(23) ? 0x02 : 0x01) & 0x8000);
   if (!a.cursorPos(point)) throw Error('Pointer position unavailable.');
   return { down, x: point.readInt32LE(0), y: point.readInt32LE(4) };
 }

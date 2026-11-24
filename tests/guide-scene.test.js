@@ -67,3 +67,11 @@ test('each display scene carries the annotated window in its own DIP space for t
   assert.deepEqual(scene.get(2).window, { x: -120, y: 100, width: 400, height: 300 }, 'partly off-display is kept as is');
   assert.equal(layoutScene({ marks: [], cards: [] }, { displays: [A], screenToDip: identity }).get(1).window, undefined);
 });
+
+test('a card with buttons reserves room for its button row', () => {
+  const { estimateCardHeight, CARD_BUTTONS_HEIGHT } = require('../src/main/guide-scene');
+  const card = { kind: 'steps', title: 'Walk', items: ['Click Display'] };
+  assert.equal(CARD_BUTTONS_HEIGHT, 36);
+  assert.equal(estimateCardHeight({ ...card, buttons: [{ id: 'next' }, { id: 'stop' }] }), estimateCardHeight(card) + 36);
+  assert.equal(estimateCardHeight({ ...card, buttons: [] }), estimateCardHeight(card));
+});

@@ -16,6 +16,7 @@ const CARD_LINE_HEIGHT = 18;
 const CARD_CHARS_PER_LINE = 36;
 const CARD_ITEM_GAP = 6;
 const CARD_ROW_HEIGHT = 24;  // table header and each table row
+const CARD_BUTTONS_HEIGHT = 36; // a walkthrough card's Next / Stop row
 
 const lines = (text) => Math.max(1, Math.ceil(String(text || '').length / CARD_CHARS_PER_LINE));
 
@@ -28,6 +29,7 @@ function estimateCardHeight(card) {
   } else {
     h += lines(card.text) * CARD_LINE_HEIGHT;
   }
+  if (Array.isArray(card.buttons) && card.buttons.length) h += CARD_BUTTONS_HEIGHT;
   return h;
 }
 
@@ -122,4 +124,4 @@ function layoutScene({ marks = [], cards = [], window: win }, { displays, screen
   return scene;
 }
 
-module.exports = { layoutScene, estimateCardHeight, CARD_WIDTH };
+module.exports = { layoutScene, estimateCardHeight, CARD_WIDTH, CARD_BUTTONS_HEIGHT };

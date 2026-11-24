@@ -102,4 +102,26 @@ function validateWalkthrough(args) {
   return { title: str(args.title, 'title', 80), steps };
 }
 
-module.exports = { MARK_KINDS, CARD_KINDS, LIMITS, validateTarget, validateDraw, validateWalkthrough };
+// JSON schema for capri_walkthrough and re-plans. Codex requires every field, so "" and 0 mean "none":
+// empty id/text/snapshotId/name/role/expectApp are ignored by the validator; nth 0 is dropped by walkthroughFromTool.
+const object = properties => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
+const string = maxLength => ({ type: 'string', maxLength });
+const number = { type: 'number' };
+const WALKTHROUGH_SCHEMA = object({
+  title: string(80),
+  steps: { type: 'array', minItems: 1, maxItems: LIMITS.walkSteps, items: object({
+    target: object({ type: { type: 'string', enum: ['name', 'text', 'control', 'snapshot'] }, id: string(200), text: string(200),
+      nth: { type: 'integer', minimum: 0, maximum: 50 }, snapshotId: string(100), x: number, y: number, width: number, height: number,
+      name: string(200), role: string(60) }),
+    say: string(LIMITS.say), action: { type: 'string', enum: ACTIONS }, expectApp: string(100) }) } });
+
+function walkthroughFromTool(args) {
+  if (!isObj(args) || !Array.isArray(args.steps)) return args;
+  return { ...args, steps: args.steps.map(s => {
+    if (!isObj(s) || !isObj(s.target) || s.target.nth !== 0) return s;
+    const { nth, ...target } = s.target;
+    return { ...s, target };
+  }) };
+}
+
+module.exports = { MARK_KINDS, CARD_KINDS, LIMITS, validateTarget, validateDraw, validateWalkthrough, WALKTHROUGH_SCHEMA, walkthroughFromTool };
