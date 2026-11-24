@@ -31,6 +31,7 @@ const { layoutScene } = require('./guide-scene');
 const { createGuideLayer } = require('./guide-layer');
 const { GuideSession } = require('./guide-session');
 const { WalkthroughController } = require('./walkthrough-controller');
+const { ExclusiveFullscreenGate, exclusiveFullscreen } = require('./exclusive-fullscreen');
 const { CognitiveFoundation } = require('./cognitive-foundation');
 const { GroundedCuriosity } = require('./grounded-curiosity');
 const { ReflectionEngine } = require('./cognitive-reflection');
@@ -309,6 +310,24 @@ const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
 app.on('before-quit', highlight.clear);
 // The guide layer is separate from her overlay: onFullscreen hides only the overlay, never this layer.
 const guideTargets = new GuideTargets({ accessibility, screen: screenAccess, foreground: externalForeground });
+// A guide line goes to the overlay's normal TTS path with a one-time voice grant (spoken while she is hidden in a game).
+const guideSay = text => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('guide:say', { text, grant: tts.grant('guide', text) }); };
+// Exclusive-fullscreen games: no guide can appear over them, so guides are refused there and she suggests borderless
+// window mode once per game session (exclusive-fullscreen.js; the shell's D3D exclusive-mode state, probed only in fullscreen).
+const exclusiveGate = new ExclusiveFullscreenGate({ fullscreen: () => fullscreenState.active,
+  exclusive: exclusiveFullscreen, speak: guideSay, lang: () => resolveLang(config.load().lang) });
+// Her body (capri_body actions on the overlay), shared by Codex's capri_body tool and walkthrough reactions.
+function bodyAction(action, { check = () => {}, signal = new AbortController().signal } = {}) {
+  return new Promise((resolve, reject) => {
+    check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Capri’s body is unavailable.'));
+    const id = randomBytes(12).toString('hex');
+    const finish = (error, result) => { clearTimeout(timer); signal.removeEventListener('abort', stop); bodyJobs.delete(id); error ? reject(error) : resolve(result); };
+    const stop = () => finish(Error('Body action cancelled.'));
+    const timer = setTimeout(() => finish(Error('Body action timed out.')), 10000);
+    bodyJobs.set(id, result => finish(null, result)); signal.addEventListener('abort', stop, { once: true });
+    overlay.webContents.send('companion:body', { id, action });
+  });
+}
 const guideLayer = createGuideLayer({ BrowserWindow, screen, preload: path.join(__dirname, '..', 'guide-preload.js'),
   page: path.join(__dirname, '..', 'renderer', 'guide.html') });
 const guide = new GuideSession({
@@ -317,19 +336,21 @@ const guide = new GuideSession({
   // Raw foreground: her own windows (pid) keep the drawing instead of clearing it.
   foreground: () => require('./native-windows').foregroundBounds(), ownPid: process.pid, yieldFocus: yieldOverlayFocus,
   // ScreenAccess reads agentConfig, which lifts Gaming mode only while a voice session is active.
-  allowed: () => screenAccess.enabled(),
+  allowed: () => screenAccess.enabled(), gate: exclusiveGate,
 });
 // One walkthrough at a time (walkthrough-controller.js). Re-plans use the decision brain with one fresh screenshot,
 // outside chat history. Each line goes to the overlay's normal TTS path with a one-time voice grant, so it is spoken while
 // she is hidden in a fullscreen game or Gaming mode (never when voice is off or muted). Commands-only listening follows it.
+// Her body comes over on each new step and shows her mood at the end, only while her overlay is visible and not fullscreen.
 const walkthroughs = new WalkthroughController({ targets: guideTargets, layer: guideLayer, guide, ownPid: process.pid,
   displays: () => screen.getAllDisplays(), screenToDip: rect => screen.screenToDipRect(null, rect),
   dipToScreen: rect => screen.dipToScreenRect(null, rect), cursor: () => screen.getCursorScreenPoint(),
   foreground: () => require('./native-windows').foregroundBounds(), pointer: () => require('./native-windows').pointerState(),
   processRows: () => require('./native-windows').processRows(), allowed: () => screenAccess.enabled(),
   lang: () => resolveLang(config.load().lang), busy: () => brain.busy || decisionBrain.busy,
-  speak: text => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('guide:say', { text, grant: tts.grant('guide', text) }); },
-  onActive: () => syncCommands(),
+  speak: guideSay, onActive: () => syncCommands(), gate: exclusiveGate,
+  body: action => bodyAction(action),
+  bodyAllowed: () => Boolean(overlay && !overlay.isDestroyed() && overlay.isVisible() && !fullscreenState.active && !config.load().gamingMode),
   snapshot: () => screenAccess.snapshot(),
   infer: async request => {
     decisionBrain.reset();
@@ -356,15 +377,7 @@ const currentContext = text => {
 };
 const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: resolveLang, context: pcContext,
   screen: screenAccess, accessibility, guide, walkthroughs, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
-  body: (action, { check, signal }) => new Promise((resolve, reject) => {
-    check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Capri’s body is unavailable.'));
-    const id = randomBytes(12).toString('hex');
-    const finish = (error, result) => { clearTimeout(timer); signal.removeEventListener('abort', stop); bodyJobs.delete(id); error ? reject(error) : resolve(result); };
-    const stop = () => finish(Error('Body action cancelled.'));
-    const timer = setTimeout(() => finish(Error('Body action timed out.')), 10000);
-    bodyJobs.set(id, result => finish(null, result)); signal.addEventListener('abort', stop, { once: true });
-    overlay.webContents.send('companion:body', { id, action });
-  }),
+  body: bodyAction,
   actions, store: memory, goals, curiosity: () => curiosity, state: settingsState, patch: updateConfig, confirm: confirmMemory });
 const brain = new CodexBrain({ settings: agentConfig, recentConversation,
   warmIdleMs: 3 * 60 * 1000, canKeepWarm: () => !config.load().gamingMode && sessionAvailable,
@@ -698,6 +711,7 @@ function onFullscreen(active) {
   if (active === fullscreenState.active) return;
   const revision = fullscreenState.revision + 1;
   fullscreenState = { active, revision };
+  exclusiveGate.onFullscreen(active); // a new game session may hear the borderless suggestion again
   if (active) { if (!['wake', 'commands'].includes(speech.current?.mode) && !speech.current?.wakeActivated) speech.cancel(); if (!voiceSession) tts.cancel(); }
   clearTimeout(fullscreenHideTimer);
   if (!overlay || overlay.isDestroyed()) return;

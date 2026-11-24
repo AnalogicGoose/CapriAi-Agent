@@ -26,10 +26,12 @@ const within = (p, b) => Boolean(p && b) && p.x >= b.x && p.x <= b.x + b.width &
 class WalkthroughController {
   constructor({ targets, layer, displays, screenToDip, dipToScreen, cursor, foreground, pointer, processRows, speak,
     lang = () => 'en', snapshot, infer, busy = () => false, guide = null, allowed = () => true, ownPid = process.pid, onActive = () => {},
+    body = null, bodyAllowed = () => false, gate = null,
     now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, every = setInterval, stopEvery = clearInterval,
     sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
     Object.assign(this, { targets, layer, displays, screenToDip, dipToScreen, cursor, foreground, pointer, processRows,
-      speakLine: speak, lang, snapshot, infer, busy, guide, allowed, ownPid, onActive, now, setTimer, clearTimer, every, stopEvery, sleep });
+      speakLine: speak, lang, snapshot, infer, busy, guide, allowed, ownPid, onActive, now, setTimer, clearTimer, every, stopEvery, sleep,
+      body, bodyAllowed, gate });
     this.current = null;
     this.awaiting = false;  // a request made during the walkthrough is being answered
     this.turn = null;       // the chat turn that started the walkthrough
@@ -41,6 +43,7 @@ class WalkthroughController {
     this.listening = false;  // commands-only listening is open: the card shows a mic badge (seen over fullscreen games)
     this.lastDraw = null;    // [marks, card] last drawn, to redraw the badge
     this.replacing = false;
+    this.reactedStep = null; // the step index her body last reacted to
   }
 
   get active() { return Boolean(this.current); }
@@ -48,6 +51,7 @@ class WalkthroughController {
   start(args, { request, turn = null } = {}) {
     if (this.current && !this.awaiting) throw Error('A walkthrough is already running.');
     if (!this.allowed()) throw Error('Screen awareness is off or paused, so on-screen guides are unavailable.');
+    this.gate?.check(); // exclusive fullscreen: refused, with her borderless suggestion once per game session
     const plan = validateWalkthrough(walkthroughFromTool(args));
     // Only once the new plan is accepted: the request made during the walkthrough became a new one, which replaces it.
     // Listening stays open across the replacement (no off/on flap that would close and cold-restart Whisper).
@@ -60,7 +64,7 @@ class WalkthroughController {
       replan: info => this.replan(info), lines: kind => guideLine(kind, this.lang()),
       now: this.now, setTimer: this.setTimer, clearTimer: this.clearTimer,
       onEnd: () => this.ended(walk) });
-    Object.assign(this, { current: walk, awaiting: false, turn, window: null, card: null });
+    Object.assign(this, { current: walk, awaiting: false, turn, window: null, card: null, reactedStep: null });
     this.apps.clear();
     this.hoverTimer = this.every(() => this.hover(), HOVER_MS);
     this.hoverTimer?.unref?.();
@@ -76,7 +80,15 @@ class WalkthroughController {
     this.setInteractive(null);
     Object.assign(this, { current: null, awaiting: false, turn: null, window: null, card: null, lastDraw: null });
     this.apps.clear();
-    if (!this.replacing) this.notifyActive(false);
+    if (!this.replacing) { this.notifyActive(false); this.react('mood'); }
+  }
+
+  // Her body reacts (spec 5.1) only while her overlay is visible and not fullscreen; any failure is ignored.
+  react(action) {
+    try {
+      if (!this.body || !this.bodyAllowed()) return;
+      Promise.resolve(this.body(action)).catch(() => {});
+    } catch { /* a body reaction never breaks a walkthrough */ }
   }
 
   // Main: the commands-only microphone opened or closed. Redraws the current card with or without its mic badge.
@@ -144,6 +156,9 @@ class WalkthroughController {
   async render(marks, card, extra = {}) {
     const lang = this.lang();
     this.lastDraw = [marks, card];
+    // A new step (its card is drawn first, while the target is found): she comes over. Redraws of a step don't count.
+    const step = this.current?.index;
+    if (card && Number.isInteger(step) && step !== this.reactedStep) { this.reactedStep = step; this.react('come'); }
     if (extra?.window && ['x', 'y', 'width', 'height'].every(k => Number.isFinite(extra.window[k]))) this.window = { ...extra.window };
     else if (card && !this.window) {
       const fg = this.foreground();

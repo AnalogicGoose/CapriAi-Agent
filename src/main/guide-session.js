@@ -34,9 +34,9 @@ function fromTool(args) {
 
 class GuideSession {
   constructor({ targets, layer, layout, foreground, now = Date.now, setInterval: every = setInterval,
-    clearInterval: stopEvery = clearInterval, allowed = () => true, ownPid = process.pid, yieldFocus = async () => {} }) {
+    clearInterval: stopEvery = clearInterval, allowed = () => true, ownPid = process.pid, yieldFocus = async () => {}, gate = null }) {
     // foreground is the raw foreground window; windows of ownPid (her overlay, chat panel, guide layer) never own a drawing.
-    Object.assign(this, { targets, layer, layout, foreground, now, every, stopEvery, allowed, ownPid, yieldFocus });
+    Object.assign(this, { targets, layer, layout, foreground, now, every, stopEvery, allowed, ownPid, yieldFocus, gate });
     this.marks = new Map(); // id -> { id, kind, target, to?, text?, bounds, toBounds? }
     this.cards = [];
     this.window = null;     // the annotated window, native px, as last seen
@@ -62,6 +62,7 @@ class GuideSession {
   async drawNow(args, ctx) {
     ctx.check?.();
     if (!this.allowed()) throw Error(`Screen awareness is off or paused, so ${DISPLAY_NAME} can’t draw on screen.`);
+    this.gate?.check(); // exclusive fullscreen: nothing can appear over it
     const drawing = validateDraw(fromTool(args));
     const wanted = new Map(drawing.marks.map(m => [m.id, m])); // a repeated id: the later mark wins
     if (drawing.clear) this.clear('redraw');

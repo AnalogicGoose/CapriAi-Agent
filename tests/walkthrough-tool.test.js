@@ -6,6 +6,8 @@ const { WalkthroughController, walkthroughCommand } = require('../src/main/walkt
 const { WALKTHROUGH_SCHEMA } = require('../src/main/guide-schema');
 const { guideLine, guideButton, KINDS } = require('../src/main/guide-lines');
 const { WATCH_MS, PAUSE_LIMIT_MS, RESOLVE_TIMEOUT_MS } = require('../src/main/walkthrough');
+const { ExclusiveFullscreenGate, QUNS_RUNNING_D3D_FULL_SCREEN } = require('../src/main/exclusive-fullscreen');
+const { GuideSession } = require('../src/main/guide-session');
 
 const box = (x, y, width, height) => ({ x, y, width, height });
 const flush = async () => { for (let i = 0; i < 8; i += 1) await new Promise(resolve => setImmediate(resolve)); };
@@ -15,7 +17,7 @@ const toolStep = (name, say, action = 'click') => ({ target: target(name), say, 
 const PLAN = { title: 'Change the refresh rate', steps: [toolStep('Display', 'Open Display'), toolStep('Advanced display', 'Now Advanced display')] };
 const SHOT = 'data:image/jpeg;base64,AAAA';
 
-function fixture({ lang = 'en', busy = () => false, infer = async () => null, snapshot, found = true, displays, dipToScreen } = {}) {
+function fixture({ lang = 'en', busy = () => false, infer = async () => null, snapshot, found = true, displays, dipToScreen, extra = {} } = {}) {
   const s = {
     now: 0, timers: new Map(), nextId: 1, spoken: [], renders: [], interactive: [], cleared: [], rows: 0,
     fg: { id: 5, pid: 9, ...box(0, 0, 800, 600) }, pointer: { down: false, x: -5000, y: -5000 }, cursor: { x: -5000, y: -5000 },
@@ -36,6 +38,7 @@ function fixture({ lang = 'en', busy = () => false, infer = async () => null, sn
     now: () => s.now, setTimer, clearTimer: id => { s.timers.delete(id); },
     sleep: async ms => { s.now += ms; },
     every: fn => { s.hover = fn; return 'hover'; }, stopEvery: () => { s.hover = null; },
+    ...extra,
   });
   const advance = async ms => {
     const end = s.now + ms;
@@ -387,4 +390,105 @@ test('the card carries the listening flag while commands listening is open, and 
   f.ctl.stop();
   assert.deepEqual(f.s.active, [true, true, false]);
   assert.equal(f.ctl.voiceCommand('next'), false, 'no walkthrough, no command');
+});
+
+test('body reactions are requested only when the overlay is visible and never in fullscreen', async () => {
+  const view = { visible: true, fullscreen: false };
+  const body = [];
+  const f = fixture({ extra: {
+    body: action => { body.push(action); return Promise.reject(Error('Capri’s body is unavailable.')); },
+    bodyAllowed: () => view.visible && !view.fullscreen,
+  } });
+  f.ctl.start(PLAN, {});
+  await f.advance(0);
+  assert.deepEqual(body, ['come'], 'she comes over when the walkthrough starts');
+  await f.advance(WATCH_MS * 2);
+  f.ctl.voiceCommand('repeat');
+  assert.deepEqual(body, ['come'], 'redraws of the same step are not a step change');
+  f.ctl.cardAction(1, 'next');
+  await f.advance(5000);
+  assert.deepEqual(body, ['come', 'come'], 'and again on the next step; a rejected body action is ignored');
+  view.fullscreen = true;
+  f.ctl.voiceCommand('back');
+  await f.advance(5000);
+  assert.deepEqual(body, ['come', 'come'], 'nothing in fullscreen');
+  view.fullscreen = false; view.visible = false;
+  f.ctl.voiceCommand('next');
+  await f.advance(5000);
+  assert.deepEqual(body, ['come', 'come'], 'nothing while her overlay is hidden');
+  view.visible = true;
+  f.ctl.cardAction(1, 'next');
+  await f.advance(0);
+  assert.equal(f.ctl.active, false);
+  assert.equal(f.s.spoken.at(-1), guideLine('done', 'en'), 'the walkthrough ends normally');
+  assert.deepEqual(body, ['come', 'come', 'mood'], 'a mood reaction at the end');
+
+  // A throwing body function never breaks a walkthrough either.
+  const g = fixture({ extra: { body: () => { throw Error('gone'); }, bodyAllowed: () => true } });
+  assert.deepEqual(g.ctl.start(PLAN, {}), { started: true, steps: 2 });
+  await g.advance(0);
+  assert.equal(g.ctl.current.state, 'waiting');
+  g.ctl.stop();
+  assert.equal(g.ctl.active, false);
+});
+
+test('the guide layer stays up in fullscreen while a requested walkthrough runs and closes at the end', async () => {
+  const body = [];
+  const gate = new ExclusiveFullscreenGate({ fullscreen: () => true, exclusive: () => false, speak: () => assert.fail('no notice for borderless') });
+  const f = fixture({ extra: { gate, body: action => { body.push(action); return Promise.resolve(); }, bodyAllowed: () => false } });
+  const drawn = scene => [...scene.values()].some(v => (v.marks || []).length || (v.cards || []).length);
+  assert.deepEqual(f.ctl.start(PLAN, {}), { started: true, steps: 2 });
+  await f.advance(0);
+  assert.ok(drawn(f.s.renders.at(-1)), 'the ring and card are drawn over the borderless game');
+  await f.advance(WATCH_MS * 4);
+  assert.ok(drawn(f.s.renders.at(-1)), 'and stay up while it runs');
+  f.ctl.cardAction(1, 'next');
+  await f.advance(5000);
+  f.ctl.cardAction(1, 'next');
+  await f.advance(0);
+  assert.equal(f.ctl.active, false);
+  assert.equal(drawn(f.s.renders.at(-1)), false, 'the layer is cleared at the end');
+  assert.deepEqual(body, [], 'her body stays hidden in fullscreen');
+});
+
+test('exclusive fullscreen refuses with one spoken suggestion per session', async () => {
+  const state = { fullscreen: true, exclusive: true, probes: 0 };
+  const spoken = [];
+  const gate = new ExclusiveFullscreenGate({ fullscreen: () => state.fullscreen,
+    exclusive: () => { state.probes += 1; return state.exclusive; }, speak: text => spoken.push(text), lang: () => 'es' });
+  const f = fixture({ lang: 'es', extra: { gate } });
+  assert.throws(() => f.ctl.start(PLAN, {}), /exclusive fullscreen/i);
+  assert.equal(f.ctl.active, false);
+  assert.equal(f.s.renders.length, 0, 'nothing is drawn');
+  assert.deepEqual(spoken, [guideLine('exclusive-fullscreen', 'es')]);
+  assert.throws(() => f.ctl.start(PLAN, {}), /do not suggest borderless again/i);
+  assert.deepEqual(spoken, [guideLine('exclusive-fullscreen', 'es')], 'said once per game session');
+
+  // The plain guide (capri_draw) is refused the same way, without speaking again.
+  const session = new GuideSession({ targets: {}, layer: { render: async () => assert.fail('no drawing') }, layout: () => new Map(),
+    foreground: () => ({ id: 1, pid: 9, ...box(0, 0, 800, 600) }), gate });
+  await assert.rejects(session.draw({ clear: false, marks: [], cards: [] }), /exclusive fullscreen/i);
+  assert.equal(spoken.length, 1);
+
+  // Fullscreen ended: a new game session may hear it once more.
+  state.fullscreen = false; gate.onFullscreen(false);
+  const probes = state.probes;
+  assert.deepEqual(f.ctl.start(PLAN, {}), { started: true, steps: 2 }, 'outside fullscreen nothing is probed or refused');
+  assert.equal(state.probes, probes);
+  f.ctl.stop();
+  state.fullscreen = true; gate.onFullscreen(true);
+  assert.throws(() => f.ctl.start(PLAN, {}), /exclusive fullscreen/i);
+  assert.equal(spoken.length, 2);
+
+  // Borderless (or a probe that fails) starts normally.
+  state.exclusive = false;
+  assert.deepEqual(f.ctl.start(PLAN, {}), { started: true, steps: 2 });
+  f.ctl.stop();
+  const broken = new ExclusiveFullscreenGate({ fullscreen: () => true, exclusive: () => { throw Error('no shell32'); }, speak: () => assert.fail() });
+  assert.doesNotThrow(() => broken.check());
+  assert.equal(QUNS_RUNNING_D3D_FULL_SCREEN, 3);
+  for (const lang of ['en', 'es', 'fr', 'pt', 'ru']) {
+    assert.match(guideLine('exclusive-fullscreen', lang), /borderless|sin bordes|sans bordure|sem bordas|без рамки/i, lang);
+    assert.doesNotMatch(guideLine('exclusive-fullscreen', lang), /Capri/);
+  }
 });
