@@ -13,7 +13,7 @@ function createCloseHandler({ config, apps, dialog }) {
       if (!target) return { error: 'App is unavailable or protected' };
       check();
       const { response } = await dialog.showMessageBox({
-        type: 'warning', title: 'Capri — confirm desktop action',
+        type: 'warning', title: 'Stella — confirm desktop action',
         message: `${force ? 'Force quit' : 'Close'} ${target.process}?`,
         detail: force ? 'Unsaved work can be lost. This affects all instances of this app.' : 'The app may ask you to save. This affects all instances of this app.',
         buttons: ['Cancel', force ? 'Force quit' : 'Close app'], defaultId: 0, cancelId: 0, noLink: true,

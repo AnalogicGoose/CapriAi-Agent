@@ -53,7 +53,7 @@ class MemoryAgent {
     if(!memoryIntent(text,!!this.recent)){if(!/^(thanks|thank you|ok|okay|gracias)[.!\s]*$/i.test(text))this.recent=null;return null;}
     if(text.length>2000)return {handled:true,text:'Please describe the memory change in a shorter message.'};
     const cfg=this.settings();
-    if(cfg.gamingMode)return {handled:true,text:'Resume Capri before changing memories.'};
+    if(cfg.gamingMode)return {handled:true,text:'Resume Stella before changing memories.'};
     if(!permissions(cfg.privacy).memoryEnabled)return {handled:true,text:'Personal memory is off. Enable it in Memory settings first. You can still remove saved entries with “forget” followed by their number.'};
     if(this.busy||!this.idle())return {handled:true,text:'I’m already working on something. Try again shortly.'};
     this.busy=true;this.abort=new AbortController();const abort=this.abort;
@@ -75,7 +75,7 @@ class MemoryAgent {
       if(plan.intent==='recall')return {handled:true,text:plan.selectedIds.length?plan.selectedIds.map(id=>rows.find(r=>r.id===id).text).join('\n'):'I don’t have a matching saved detail. Tell me what you’d like me to know.'};
       const expected=rows.filter(row=>plan.changes.some(c=>c.kind!=='add'&&c.id===row.id));
       const detail=plan.changes.map(change=>change.kind==='add'?`Remember: ${change.text}`:change.kind==='edit'?`Replace: ${rows.find(r=>r.id===change.id).text}\nWith: ${change.text}`:`Forget: ${rows.find(r=>r.id===change.id).text}`).join('\n\n');
-      const accepted=!permissions(this.settings().privacy).memoryConfirmChanges || await this.confirm('Update what Capri remembers about you?',detail+'\n\nReview these changes. They are saved locally only if you confirm. Existing retention settings apply.');check();
+      const accepted=!permissions(this.settings().privacy).memoryConfirmChanges || await this.confirm('Update what Stella remembers about you?',detail+'\n\nReview these changes. They are saved locally only if you confirm. Existing retention settings apply.');check();
       if(!accepted){this.recent.outcome='cancelled';this.receipt={outcome:'cancelled',changes:0,expires:this.now()+600000};return {handled:true,text:'No changes saved.'};}
       store.applyChanges(plan.changes,expected);this.recent.outcome='completed';
       this.receipt={outcome:'completed',changes:plan.changes.length,expires:this.now()+600000};

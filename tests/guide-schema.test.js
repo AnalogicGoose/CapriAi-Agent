@@ -7,7 +7,7 @@ const { DISPLAY_NAME } = require('../src/main/identity');
 const ctl = { type: 'control', id: 'c1' };
 const rep = n => 'x'.repeat(n);
 
-test('display name', () => assert.equal(DISPLAY_NAME, 'Capri'));
+test('display name', () => assert.equal(DISPLAY_NAME, 'Stella'));
 
 test('accepts every mark kind with control, text and snapshot targets', () => {
   const snap = { type: 'snapshot', snapshotId: 's1', x: 1, y: 2, width: 30, height: 40 };

@@ -54,11 +54,11 @@ export const LINES = {
     // lui parler (chat.js) : un modèle local via Ollama ; réponses et voix générées par IA, et c'est dit
     chat: {
       badge: 'IA · DIRECT', talk: 'Parle-moi',
-      hello: ['Salut, choom. Qu’est-ce qui te trotte dans la tête ?', 'La ligne est ouverte. Parle-nous.', 'Tu veux discuter ? On est tout ouïe. Toutes nos oreilles.'],
+      hello: ['Salut ! Qu’est-ce qui te trotte dans la tête ?', 'Je t’écoute.', 'On discute ? Je suis tout ouïe.'],
       again: ['On en était où ?', 'Déjà de retour ? Vas-y.'],
       placeholder: 'Écris-moi…', send: 'Envoyer', close: 'Fermer',
       noteTag: 'IA',
-      note: 'Réponses générées par Codex / OpenAI. Ce n’est pas la vraie Capri.',
+      note: 'Réponses générées par Codex / OpenAI.',
       offline: 'Je n’arrive pas à joindre Ollama.',
       offlineHow: 'Pour me parler, installe Ollama (ollama.com) et ouvre-le, puis dans un terminal : ollama pull llama3.2\nTout reste sur ton PC.',
       noModel: 'Ollama n’a encore aucun modèle.',
@@ -209,11 +209,11 @@ export const LINES = {
     // talking to her (chat.js): a local model through Ollama; replies and voice are AI-generated, and she says so
     chat: {
       badge: 'AI · LIVE', talk: 'Talk to me',
-      hello: ['Hey, choom. What’s on your mind?', 'Line’s open. Talk to us.', 'You want to chat? We’re all ears. All of ours.'],
+      hello: ['Hey! What’s on your mind?', 'I’m listening.', 'Want to chat? I’m all ears.'],
       again: ['Where were we?', 'Back already? Go on.'],
       placeholder: 'Say something…', send: 'Send', close: 'Close',
       noteTag: 'AI',
-      note: 'Replies generated through Codex / OpenAI. Not the real Capri.',
+      note: 'Replies generated through Codex / OpenAI.',
       offline: 'I can’t reach Ollama.',
       offlineHow: 'To talk with me, install Ollama (ollama.com) and open it, then in a terminal: ollama pull llama3.2\nEverything stays on your PC.',
       noModel: 'Ollama has no model yet.',
@@ -363,11 +363,11 @@ export const LINES = {
     // hablar con ella (chat.js): un modelo local con Ollama; respuestas generadas por IA, y lo dice
     chat: {
       badge: 'IA · EN VIVO', talk: 'Háblame',
-      hello: ['Hola, choom. ¿Qué tienes en mente?', 'La línea está abierta. Háblanos.', '¿Quieres charlar? Somos todo oídos. Todos los nuestros.'],
+      hello: ['¡Hola! ¿Qué tienes en mente?', 'Te escucho.', '¿Charlamos? Soy toda oídos.'],
       again: ['¿Dónde estábamos?', '¿Ya de vuelta? Dale.'],
       placeholder: 'Dime algo…', send: 'Enviar', close: 'Cerrar',
       noteTag: 'IA',
-      note: 'Respuestas generadas con Codex / OpenAI. No es la Capri real.',
+      note: 'Respuestas generadas con Codex / OpenAI.',
       offline: 'No consigo contactar con Ollama.',
       offlineHow: 'Para hablar conmigo, instala Ollama (ollama.com) y ábrelo; luego, en una terminal: ollama pull llama3.2\nTodo se queda en tu PC.',
       noModel: 'Ollama aún no tiene ningún modelo.',
@@ -516,11 +516,11 @@ export const LINES = {
     // falar com ela (chat.js): um modelo local pelo Ollama; respostas geradas por IA, e ela avisa
     chat: {
       badge: 'IA · AO VIVO', talk: 'Fala comigo',
-      hello: ['E aí, choom. O que você tem em mente?', 'A linha está aberta. Fala com a gente.', 'Quer conversar? Somos todo ouvidos. Todos os nossos.'],
+      hello: ['Oi! O que você tem em mente?', 'Estou ouvindo.', 'Vamos conversar? Sou toda ouvidos.'],
       again: ['Onde a gente parou?', 'Já voltou? Manda.'],
       placeholder: 'Diga algo…', send: 'Enviar', close: 'Fechar',
       noteTag: 'IA',
-      note: 'Respostas geradas por Codex / OpenAI. Não é a Capri de verdade.',
+      note: 'Respostas geradas por Codex / OpenAI.',
       offline: 'Não consigo falar com o Ollama.',
       offlineHow: 'Para falar comigo, instale o Ollama (ollama.com) e abra-o; depois, num terminal: ollama pull llama3.2\nTudo fica no seu PC.',
       noModel: 'O Ollama ainda não tem nenhum modelo.',
@@ -669,11 +669,11 @@ export const LINES = {
     // поговорить с ней (chat.js): локальная модель через Ollama; ответы генерирует ИИ, и она это говорит
     chat: {
       badge: 'ИИ · ЭФИР', talk: 'Поговори со мной',
-      hello: ['Привет, чумба. О чём думаешь?', 'Линия открыта. Говори с нами.', 'Хочешь поболтать? Мы все во внимании. Все до одной.'],
+      hello: ['Привет! О чём думаешь?', 'Я слушаю.', 'Поболтаем? Я вся во внимании.'],
       again: ['На чём мы остановились?', 'Уже вернулся? Давай.'],
       placeholder: 'Напиши…', send: 'Отправить', close: 'Закрыть',
       noteTag: 'ИИ',
-      note: 'Ответы генерирует локальный ИИ. Это не настоящая Капри.',
+      note: 'Ответы генерирует ИИ (Codex / OpenAI).',
       offline: 'Не могу достучаться до Ollama.',
       offlineHow: 'Чтобы поговорить со мной, установи Ollama (ollama.com) и запусти её, потом в терминале: ollama pull llama3.2\nВсё остаётся на твоём ПК.',
       noModel: 'В Ollama пока нет ни одной модели.',

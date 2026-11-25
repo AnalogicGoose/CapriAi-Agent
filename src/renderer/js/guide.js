@@ -90,7 +90,7 @@ export class Guide {
     const spanish = this.brain.lang === 'es';
     const id = await this.ask({
       face: 'look',
-      line: spanish ? 'Soy Capri, tu compañera para trabajar con ChatGPT y Codex.' : 'I’m Capri, your companion for working with ChatGPT and Codex.',
+      line: spanish ? 'Soy Stella, tu compañera para trabajar con ChatGPT y Codex.' : 'I’m Stella, your companion for working with ChatGPT and Codex.',
       quote: spanish
         ? 'Conversamos con Codex; los mensajes y el contexto seleccionado se envían a OpenAI. Puedo recibir avisos de Codex cuando revises y confíes en los hooks. Las aprobaciones se responden en Codex. Los chats normales de ChatGPT no están conectados. El modo juego pausa la IA y me oculta.'
         : 'We chat through Codex; messages and selected context are sent to OpenAI. I can receive Codex notifications after you review and trust the hooks. Answer approvals in Codex. Regular ChatGPT chats are not connected. Gaming mode pauses AI and hides me.',

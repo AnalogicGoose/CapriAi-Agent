@@ -24,7 +24,7 @@ export class IntegrationCompanion {
     brain.integrationActivity = () => this.activityLine();
   }
   context() {
-    if (!this.snapshot.lastSeen) return 'Codex notification hooks are available but no real Codex event has been received in this Capri run. Current Codex activity is unknown. Regular ChatGPT conversations are not connected.';
+    if (!this.snapshot.lastSeen) return 'Codex notification hooks are available but no real Codex event has been received in this Stella run. Current Codex activity is unknown. Regular ChatGPT conversations are not connected.';
     const tasks = this.snapshot.sessions.filter((event) => !event.demo && event.stage !== 'ready').slice(-6);
     return `Codex lifecycle notifications have been received locally. These are observed events, not a continuous live view. Last observed states: ${tasks.map((event) => `${event.project}: ${event.stage}${event.tool ? ` (${event.tool})` : ''}`).join('; ') || 'session ready'}. Regular ChatGPT conversations are not connected. No prompts, answers, commands or files were received.`;
   }

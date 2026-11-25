@@ -74,7 +74,7 @@ class RequestInterpreter {
     // Exact discovered app commands remain available offline. Compound requests
     // never enter the old app-name extraction/clarification path.
     if(!this.pending&&this.actions.launchName(text))return this.actions.route(text,id);
-    if(!this.actions.enabled())return actionIntent(text)?{handled:true,text:'Resume Capri and enable desktop actions before asking me to act.'}:null;
+    if(!this.actions.enabled())return actionIntent(text)?{handled:true,text:'Resume Stella and enable desktop actions before asking me to act.'}:null;
     if(this.busy||!this.actions.idle())return {handled:true,text:'I’m already working on a request. Try again shortly.'};
     if(typeof text!=='string'||!text.trim()||text.length>2000)return null;
     this.busy=true;this.abort=new AbortController();let finish;
@@ -137,7 +137,7 @@ class RequestInterpreter {
         while(Buffer.byteLength(JSON.stringify(input))>18000&&input.availableApps.length)input.availableApps.pop();
         if(Buffer.byteLength(JSON.stringify(input))>22000)throw Error('The request context is too large. Please narrow the task.');
         const raw=await this.infer({model:AGENT_MODEL,schema:SCHEMA,messages:[
-          {role:'system',content:`You are Capri, the user's warm, mischievous local desktop agent. ${TOOL_GUIDE}\n${mediaInstructions(this.settings())}`},
+          {role:'system',content:`You are Stella, the user's warm, mischievous local desktop agent. ${TOOL_GUIDE}\n${mediaInstructions(this.settings())}`},
           {role:'user',content:JSON.stringify(input)},
         ]},signal);check();
         const existingType={youtube:'youtube_latest',news:'search_news',steam:'steam_deals',search:'search_web'}[previous?.type]||null;

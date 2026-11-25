@@ -10,7 +10,7 @@ const WORDS = {
     'speech-too-fast':'Speech processing fell behind. Stop, review the draft, then try a shorter phrase.',
     processing:'Just a moment...',setup:'Setting up speech',opening:'Connecting microphone...',auto:'Auto-detect',
     'recognizer-failed':'Speech recognition stopped unexpectedly. Try again.',
-    'speech-paused':'Resume Capri before using the microphone.', 'speech-busy':'Dictation is already running.'},
+    'speech-paused':'Resume Stella before using the microphone.', 'speech-busy':'Dictation is already running.'},
   es: {mic:'Dictar con tu micrófono predeterminado',stop:'Detener dictado',starting:'Preparando...',
     listening:'Escuchando',finishing:'Terminando...',done:'Listo para enviar.',empty:'No capté palabras. Inténtalo de nuevo.',
     full:'El mensaje está lleno. Revísalo antes de enviarlo.',
@@ -20,7 +20,7 @@ const WORDS = {
     'speech-too-fast':'El dictado va más rápido que el reconocimiento. Revisa el texto e intenta una frase más corta.',
     processing:'Un momento...',setup:'Preparando la voz',opening:'Conectando el microfono...',auto:'Detección automática',
     'recognizer-failed':'El reconocimiento se detuvo. Inténtalo de nuevo.',
-    'speech-paused':'Reanuda Capri antes de usar el micrófono.', 'speech-busy':'El dictado ya está activo.'},
+    'speech-paused':'Reanuda Stella antes de usar el micrófono.', 'speech-busy':'El dictado ya está activo.'},
 };
 
 export class Dictation {

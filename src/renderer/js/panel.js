@@ -240,7 +240,7 @@ export class Panel {
       parts.push(longest);
     }
     const foot = el('footer', 'report__foot');
-    foot.append(el('span', '', report.foot), el('span', 'report__sign', 'CAPRI // PROJECT CAPRICORN'));
+    foot.append(el('span', '', report.foot), el('span', 'report__sign', 'STELLA'));
     parts.push(foot);
     this.report.replaceChildren(...parts);
 

@@ -41,8 +41,8 @@ export class VoiceCall {
     if (this.phase !== value && (this.phase === 'thinking' || value === 'thinking')) this.onThinking(value === 'thinking');
     this.phase = value; this.indicator.hidden = !this.active;
     this.indicator.dataset.state = value;
-    this.indicator.setAttribute('aria-label', message || ({ listening: 'Capri is listening. Click to end voice conversation.',
-      thinking: 'Capri is thinking. You can interrupt.', speaking: 'Capri is speaking. You can interrupt.',
+    this.indicator.setAttribute('aria-label', message || ({ listening: 'Stella is listening. Click to end voice conversation.',
+      thinking: 'Stella is thinking. You can interrupt.', speaking: 'Stella is speaking. You can interrupt.',
       starting: 'Preparing voice conversation.', error: 'Voice conversation unavailable.' }[value]));
     this.indicator.title = this.indicator.getAttribute('aria-label');
   }

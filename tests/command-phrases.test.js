@@ -22,6 +22,7 @@ test('command phrases in five languages map to the same commands', () => {
     }
   }
   assert.equal(said('Hey Capri, next'), 'next');
+  assert.equal(said('Hey Stella, next'), 'next');
   assert.equal(said('siguiente por favor'), 'next');
   for (const remark of ['what a nice day', 'next time remind me', 'I clicked it', 'please', 'stop the music', 'done with lunch soon', '', null, 42])
     assert.equal(commandPhrase(remark), null, String(remark));

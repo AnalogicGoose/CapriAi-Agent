@@ -6,7 +6,7 @@ const words = text => new Set(text.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, ' '
 const OBSERVATION_NAMES = new Set(['capri_context', 'capri_apps', 'capri_screen', 'capri_memory_lookup']);
 function observationTools(tools) {
   return { specs: () => tools.specs().filter(row => OBSERVATION_NAMES.has(row.name)),
-    instructions: () => 'You are Capri in a background observation-only turn. Only inspect permitted context/screens/memories. Never take actions. Speak only when useful or naturally timely. Be quiet instead of repeating yourself.',
+    instructions: () => 'You are Stella in a background observation-only turn. Only inspect permitted context/screens/memories. Never take actions. Speak only when useful or naturally timely. Be quiet instead of repeating yourself.',
     run: (name, args, ctx) => { if (!OBSERVATION_NAMES.has(name)) throw Error('Background actions are unavailable.'); return tools.run(name, args, ctx); },
     cancel: () => {}, endTurn: () => tools.endTurn() };
 }

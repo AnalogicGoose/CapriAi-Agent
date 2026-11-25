@@ -6,7 +6,7 @@
 const TRAY = {
   fr: {
     name: 'Français',
-    online: (port) => `Capri — à l'écoute sur ${port}`,
+    online: (port) => `Stella — à l'écoute sur ${port}`,
     teleport: 'Téléporter', satellite: 'Regarder le satellite', demo: 'Lancer la démo', help: 'Comment ça marche ?',
     report: 'Rapport de mission', talk: 'Lui parler', chatModel: 'Modèle IA (Ollama)', noOllama: 'Ollama introuvable',
     show: 'La faire revenir', hide: 'La ranger',
@@ -18,7 +18,7 @@ const TRAY = {
   },
   en: {
     name: 'English',
-    online: (port) => `Capri — listening on ${port}`,
+    online: (port) => `Stella — listening on ${port}`,
     teleport: 'Teleport', satellite: 'Look at the satellite', demo: 'Play demo', help: 'How does it work?',
     report: 'Mission report', talk: 'Talk to her', chatModel: 'AI model (Ollama)', noOllama: 'Ollama not found',
     show: 'Bring her back', hide: 'Put her away',
@@ -30,7 +30,7 @@ const TRAY = {
   },
   es: {
     name: 'Español',
-    online: (port) => `Capri — escuchando en ${port}`,
+    online: (port) => `Stella — escuchando en ${port}`,
     teleport: 'Teletransportar', satellite: 'Mirar el satélite', demo: 'Ver la demo', help: '¿Cómo funciona?',
     report: 'Informe de misión', talk: 'Hablar con ella', chatModel: 'Modelo de IA (Ollama)', noOllama: 'Ollama no encontrado',
     show: 'Traerla de vuelta', hide: 'Guardarla',
@@ -42,7 +42,7 @@ const TRAY = {
   },
   pt: {
     name: 'Português (Brasil)',
-    online: (port) => `Capri — ouvindo na porta ${port}`,
+    online: (port) => `Stella — ouvindo na porta ${port}`,
     teleport: 'Teletransportar', satellite: 'Olhar o satélite', demo: 'Ver a demo', help: 'Como funciona?',
     report: 'Relatório de missão', talk: 'Falar com ela', chatModel: 'Modelo de IA (Ollama)', noOllama: 'Ollama não encontrado',
     show: 'Trazer de volta', hide: 'Guardar',
@@ -54,7 +54,7 @@ const TRAY = {
   },
   ru: {
     name: 'Русский',
-    online: (port) => `Capri — слушаю порт ${port}`,
+    online: (port) => `Stella — слушаю порт ${port}`,
     teleport: 'Телепортироваться', satellite: 'Посмотреть на спутник', demo: 'Запустить демо', help: 'Как это работает?',
     report: 'Отчёт о миссиях', talk: 'Поговорить с ней', chatModel: 'ИИ-модель (Ollama)', noOllama: 'Ollama не найдена',
     show: 'Вернуть её', hide: 'Спрятать',

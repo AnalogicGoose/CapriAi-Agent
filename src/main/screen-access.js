@@ -55,7 +55,7 @@ class ScreenAccess {
     validateFrame();
     if (!['routine', 'consequential'].includes(args.risk)) throw Error('Classify the action risk.');
     if (args.risk === 'consequential' || (args.kind === 'key' && /(?:delete|alt\+f4|ctrl\+w)/i.test(args.key || ''))) {
-      if (!await this.confirm('Review Capri’s desktop action', `${args.summary}\n\nCurrent request: ${text}\nAction: ${args.kind}${args.key ? ` (${args.key})` : ''}`)) return { inputSent: false, cancelled: true };
+      if (!await this.confirm('Review Stella’s desktop action', `${args.summary}\n\nCurrent request: ${text}\nAction: ${args.kind}${args.key ? ` (${args.key})` : ''}`)) return { inputSent: false, cancelled: true };
     }
     check();
     if (!this.enabled() || this.settings().systemAccess !== true || this.settings().desktopActions === false) throw Error('Desktop control was revoked.');

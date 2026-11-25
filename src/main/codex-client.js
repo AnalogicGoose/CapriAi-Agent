@@ -59,7 +59,7 @@ class CodexClient {
     if (message.method) {
       if (message.id !== undefined) {
         Promise.resolve().then(() => this.onRequest(message)).catch(() => {
-          this.respond(message.id, null, { code: -32603, message: 'Capri tool request failed.' });
+          this.respond(message.id, null, { code: -32603, message: 'Stella tool request failed.' });
         });
       } else this.onNotification(message.method, message.params || {});
       return;

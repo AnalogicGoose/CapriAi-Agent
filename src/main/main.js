@@ -175,7 +175,7 @@ const goals = () => {
   if (!goalStore) goalStore = new CompanionGoals({
     file: path.join(app.getPath('userData'), 'companion-goals.sqlite'), settings: () => config.load(),
     choose: async () => {
-      const result = await dialog.showOpenDialog({ title: 'Choose Capri’s project folder', properties: ['openDirectory'] });
+      const result = await dialog.showOpenDialog({ title: 'Choose Stella’s project folder', properties: ['openDirectory'] });
       return result.canceled ? null : result.filePaths[0];
     },
     confirm: confirmMemory,
@@ -245,7 +245,7 @@ const settingsRequests = new SettingsAgent({ localOnly: true, state: settingsSta
   infer: inferDecision,
 });
 const confirmMemory = async (message, detail) => (await dialog.showMessageBox({ type: 'question',
-  title: 'Capri — Personal memory', message, detail, buttons: ['Cancel', 'Confirm'],
+  title: 'Stella — Personal memory', message, detail, buttons: ['Cancel', 'Confirm'],
   defaultId: 0, cancelId: 0, noLink: true })).response === 1;
 const memoryRequests = new MemoryAgent({settings: () => config.load(), store: memory,
   models: decisionModels, infer: inferDecision,
@@ -307,7 +307,7 @@ const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
   settings: () => config.load(), foreground: externalForeground,
   highlight: (bounds, window, check, label) => highlight.show(bounds, window, check, label, { focus: true }), readLift: guideReadLift,
   yieldFocus: yieldOverlayFocus,
-  confirm: async (message, detail) => (await dialog.showMessageBox({ type: 'question', title: 'Capri - Desktop action', message,
+  confirm: async (message, detail) => (await dialog.showMessageBox({ type: 'question', title: 'Stella - Desktop action', message,
     detail, buttons: ['Cancel', 'Confirm'], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
   captureWindow: async ({ x, y, width, height }) => {
     const display = screen.getDisplayMatching(screen.screenToDipRect(null, { x, y, width, height }));
@@ -336,7 +336,7 @@ const exclusiveGate = new ExclusiveFullscreenGate({ fullscreen: () => fullscreen
 // Her body (capri_body actions on the overlay), shared by Codex's capri_body tool and walkthrough reactions.
 function bodyAction(action, { check = () => {}, signal = new AbortController().signal } = {}) {
   return new Promise((resolve, reject) => {
-    check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Capri’s body is unavailable.'));
+    check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Stella’s body is unavailable.'));
     const id = randomBytes(12).toString('hex');
     const finish = (error, result) => { clearTimeout(timer); signal.removeEventListener('abort', stop); bodyJobs.delete(id); error ? reject(error) : resolve(result); };
     const stop = () => finish(Error('Body action cancelled.'));
@@ -458,7 +458,7 @@ function checkInBlock() {
   if (voiceSession || (speech.current && speech.current.mode !== 'wake') || presentation.chatOpen) {
     return 'A voice or text conversation was active.';
   }
-  if (!cognitiveIdle() || reflection.busy || presentation.canSpeak === false) return 'Capri was busy.';
+  if (!cognitiveIdle() || reflection.busy || presentation.canSpeak === false) return 'Stella was busy.';
   if (!overlay || overlay.isDestroyed() || !overlay.isVisible()) return 'The overlay was unavailable.';
   if (powerMonitor.getSystemIdleTime() >= 300) return 'The PC was idle.';
   return '';
@@ -936,7 +936,7 @@ function settingsState() {
 }
 
 function rebuildTray() {
-  tray?.setToolTip(config.load().gamingMode ? 'Capri — paused · right-click to resume' : 'Capri — control room');
+  tray?.setToolTip(config.load().gamingMode ? 'Stella — paused · right-click to resume' : 'Stella — control room');
   settingsRoom?.update();
 }
 
@@ -1025,8 +1025,8 @@ async function settingsAction(name, value) {
     case 'visibility': toggleVisible(value); break;
     case 'startup': app.setLoginItemSettings({ ...loginItemOptions(), openAtLogin: value }); break;
     case 'voice-preview': {
-      if (!config.load().ttsEnabled || config.load().muted) return 'Enable spoken replies and unmute Capri to preview her voice.';
-      if (!overlay || overlay.isDestroyed() || !overlay.isVisible()) return 'Bring Capri back to preview her voice.';
+      if (!config.load().ttsEnabled || config.load().muted) return 'Enable spoken replies and unmute Stella to preview her voice.';
+      if (!overlay || overlay.isDestroyed() || !overlay.isVisible()) return 'Bring Stella back to preview her voice.';
       overlay.webContents.send('tts:state', { type: 'preview', mood: deliveryStyle(value),
         text: "There you are, sweetheart. Come here for a second. I have something to show you." });
       return 'Preparing her voice. The first preview needs a little time to warm up.';
@@ -1047,22 +1047,22 @@ async function settingsAction(name, value) {
       break;
     }
     case 'clear-recent-chat': {
-      if (!await confirmMemory('Clear recent conversations?', 'This removes the recent chat text Capri can use to continue voice and text conversations.')) return 'Clear cancelled.';
+      if (!await confirmMemory('Clear recent conversations?', 'This removes the recent chat text Stella can use to continue voice and text conversations.')) return 'Clear cancelled.';
       brain.cancel(); brain.reset({ keepRecent: true });
       recentConversation()?.clear();
       return 'Recent conversations cleared.';
     }
-    case 'memory-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing memory.'); sendCommand('memory'); break;
-    case 'interests-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing interests.'); sendCommand('interests'); break;
-    case 'reviews-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing your day.'); sendCommand('reviews'); break;
-    case 'curiosity-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing questions.'); sendCommand('curiosity'); break;
-    case 'routines-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing routines.'); sendCommand('routines'); break;
+    case 'memory-open': if (config.load().gamingMode) throw Error('Resume Stella before reviewing memory.'); sendCommand('memory'); break;
+    case 'interests-open': if (config.load().gamingMode) throw Error('Resume Stella before reviewing interests.'); sendCommand('interests'); break;
+    case 'reviews-open': if (config.load().gamingMode) throw Error('Resume Stella before reviewing your day.'); sendCommand('reviews'); break;
+    case 'curiosity-open': if (config.load().gamingMode) throw Error('Resume Stella before reviewing questions.'); sendCommand('curiosity'); break;
+    case 'routines-open': if (config.load().gamingMode) throw Error('Resume Stella before reviewing routines.'); sendCommand('routines'); break;
     case 'initiative-start': return startInitiativeTrial();
-    case 'initiative-open': if (config.load().gamingMode) throw Error('Resume Capri before reviewing check-ins.'); sendCommand('initiative'); break;
+    case 'initiative-open': if (config.load().gamingMode) throw Error('Resume Stella before reviewing check-ins.'); sendCommand('initiative'); break;
     case 'initiative-resume': return initiativeCommand('/companion trial resume').text;
     case 'project-choose': return (await foreground.run(() => projectCommand('/project choose'))).text;
     case 'project-off': return (await foreground.run(() => projectCommand('/project off'))).text;
-    case 'refresh': return runtime().currentSource ? 'Current local source is loaded.' : 'Local changes found. Restart Capri to load them.';
+    case 'refresh': return runtime().currentSource ? 'Current local source is loaded.' : 'Local changes found. Restart Stella to load them.';
     case 'restart': app.relaunch(); app.quit(); break;
     case 'quit': app.quit(); break;
   }
@@ -1077,7 +1077,7 @@ function loginItemOptions() {
 function createTray() {
   const icon = nativeImage.createFromPath(path.join(ROOT, 'assets', 'icons', 'tray.png'));
   tray = new Tray(icon);
-  tray.setToolTip('Capri — local only');
+  tray.setToolTip('Stella — local only');
   tray.on('click', openSettings);
   tray.on('right-click', openSettings);
   rebuildTray();
@@ -1281,7 +1281,7 @@ function registerIpc() {
     const current = messages?.at(-1);
     if (!Number.isSafeInteger(id) || current?.role !== 'user' || typeof current.content !== 'string') return { ok: false, error: 'Invalid chat request.' };
     if (projectRouting) return { ok: false, error: 'Finish choosing your project before sending a request.' };
-    if (chats.size || brain.busy || actions.busy) return { ok: false, error: 'One Capri request at a time.' };
+    if (chats.size || brain.busy || actions.busy) return { ok: false, error: 'One Stella request at a time.' };
     if (config.load().speakTypedReplies && tts.allowed()) tts.warm();
     const abort = new AbortController();
     let finish;

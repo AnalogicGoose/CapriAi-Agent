@@ -89,7 +89,7 @@ class CompanionGoals {
     const update = /^(pause|resume|done)\s+#?(\d+)$/i.exec(arg);
     if (!add && !next && !update) return reply(help);
     const cfg = this.settings();
-    if (cfg.gamingMode) return reply('Resume Capri before changing goals.');
+    if (cfg.gamingMode) return reply('Resume Stella before changing goals.');
     if (!permissions(cfg.privacy).memoryEnabled) return reply('Enable Memory in the control room before saving goals. Listing, export and deletion remain available.');
     this.prune();
     const at = this.now();

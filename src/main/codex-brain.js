@@ -113,7 +113,7 @@ class CodexBrain {
   }
   async chat(text, onDelta = () => {}, onProgress = () => {}, options = {}) {
     if (typeof text !== 'string' || !text.trim() || text.length > 12000) throw Error('Use a message up to 12000 characters.');
-    if (this.busy) throw Error('One Capri request at a time.');
+    if (this.busy) throw Error('One Stella request at a time.');
     if (this.settings().gamingMode) throw Error('Gaming mode is on.');
     let savedTask = this.tools.resumeTask?.(text);
     if (savedTask?.message) return savedTask.message;
@@ -212,7 +212,7 @@ class CodexBrain {
       }
       else if (method === 'item/started' && params.item?.type === 'dynamicToolCall') onProgress(`Using ${params.item.tool}.`);
       else if (method === 'item/started' && ['commandExecution', 'fileChange', 'mcpToolCall', 'webSearch', 'imageView', 'collabAgentToolCall'].includes(params.item?.type)) {
-        if (!nativeTools) { fail(Error('Codex attempted a tool outside Capri’s configured tool boundary. Request stopped.')); this.cancel(); }
+        if (!nativeTools) { fail(Error('Codex attempted a tool outside Stella’s configured tool boundary. Request stopped.')); this.cancel(); }
         else onProgress(`Codex: ${params.item.type}.`);
       } else if (method === 'turn/completed') {
         if (this.turnId && params.turn?.id !== this.turnId) return;
@@ -236,7 +236,7 @@ class CodexBrain {
       }
       if (message.method !== 'item/tool/call') {
         if (!diagnostics.rejectedMethods.includes(message.method)) diagnostics.rejectedMethods.push(message.method);
-        client.respond(message.id, null, { code: -32601, message: 'This Capri client does not grant external approvals or tools.' });
+        client.respond(message.id, null, { code: -32601, message: 'This Stella client does not grant external approvals or tools.' });
         return;
       }
       toolQueue = toolQueue.then(async () => {
@@ -248,7 +248,7 @@ class CodexBrain {
           let receipt = dedupe.get(p.callId);
           if (receipt && receipt.fingerprint !== fingerprint) throw Error('Conflicting duplicate tool call.');
           if (!receipt) {
-            if (++calls > (nativeTools || routineTurn ? 40 : 10)) throw Error('Capri tool budget exceeded.');
+            if (++calls > (nativeTools || routineTurn ? 40 : 10)) throw Error('Stella tool budget exceeded.');
             diagnostics.calls++;
             onProgress(`Using ${p.tool}.`);
             const value = await this.tools.run(p.tool, p.arguments, {
@@ -361,7 +361,7 @@ class CodexBrain {
       const threadId = this.threadId;
       this.threadId = this.turnId = null;
       client.onFailure = client.onNotification = () => {};
-      client.onRequest = ({ id }) => client.respond(id, null, { code: -32603, message: 'No Capri turn is active.' });
+      client.onRequest = ({ id }) => client.respond(id, null, { code: -32603, message: 'No Stella turn is active.' });
       const turns = (parked?.turns || 0) + 1;
       let released = false;
       if (completed && threadId && retainClient && this.canKeepWarm() && epoch === this.epoch && !client.closed && turns < MAX_WARM_TURNS) {

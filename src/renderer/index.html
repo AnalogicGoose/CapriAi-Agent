@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self' capri: blob:; connect-src 'self' capri:">
-  <title>Capri</title>
+  <title>Stella</title>
   <link rel="stylesheet" href="styles/stella-theme.css">
   <link rel="stylesheet" href="styles/capri.css">
 </head>
@@ -15,15 +15,15 @@
 
   <canvas id="fx" class="fx" aria-hidden="true"></canvas>
 
-  <canvas id="chip" class="chip" hidden aria-label="Capri’s biochip"></canvas>
-  <canvas id="mask" class="chip" hidden aria-label="Capri, asleep"></canvas>
+  <canvas id="chip" class="chip" hidden aria-label="Stella, tucked away"></canvas>
+  <canvas id="mask" class="chip" hidden aria-label="Stella, asleep"></canvas>
 
-  <button id="wake-indicator" class="wake-indicator" type="button" hidden aria-pressed="false" aria-live="polite">Hey Capri: starting</button>
+  <button id="wake-indicator" class="wake-indicator" type="button" hidden aria-pressed="false" aria-live="polite">Hey Stella: starting</button>
   <button id="voice-indicator" class="voice-indicator" type="button" hidden aria-label="Voice conversation" title="End voice conversation">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>
   </button>
 
-  <nav id="talk-menu" class="talk-menu" hidden aria-label="Talk to Capri">
+  <nav id="talk-menu" class="talk-menu" hidden aria-label="Talk to Stella">
     <p class="talk-menu__hello orbit-pill" aria-live="polite"></p>
     <div class="talk-menu__choices">
       <button type="button" class="orbit-icon orbit-icon--46 icon-chat" data-talk="text" aria-label="Text chat" title="Text chat">
@@ -41,7 +41,7 @@
         <div class="panel__body">
           <header class="panel__meta">
             <span class="panel__dot" aria-hidden="true"></span>
-            <span class="panel__who">Capri</span>
+            <span class="panel__who">Stella</span>
             <span class="panel__tag"></span>
             <span class="panel__state"></span>
             <button class="panel__close orbit-icon orbit-icon--30" type="button" aria-label="Close conversation"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>

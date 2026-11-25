@@ -1,45 +1,31 @@
-# Capri control room
+# Stella's control room
 
-Right-click Capri or her tray icon to open her custom settings window. The tray’s
-left click opens it too. Close with Escape or the top-right X; Capri stays running.
+Right-click Stella or her tray icon to open her control room; the tray's left click opens it too.
+Close with Escape (Escape first leaves a sub-view) or the ✕; she keeps running.
 
-The window shares her existing fonts, dark violet palette, green accents, cut
-corners and character portrait. It has seven sections:
+It is one small rounded window in her Orbit style:
 
-| Section | Controls |
-| --- | --- |
-| Overview | Agent status, local brain, memory state, gaming pause, put away/bring back |
-| Appearance | Character size, display, wandering, sitting on windows, window mischief |
-| Sound | Mute, volume, custom sound folder |
-| Memory | Confirmed memories, suggestions, recall, retention, review/export/delete |
-| PC awareness | Active app, titles, process names, event refresh, time, power, performance |
-| Connections | Codex notification status and where approvals belong |
-| Updates & app | Local source/version check, restart, Windows startup, language, build details |
+- **Quick tiles:** Gaming mode, Size (S / M / L), Put away / Bring back (Ctrl + Alt + C).
+- **Folding sections**, one line each with a short summary; one opens at a time:
 
-Changes save automatically and update the overlay. The control room remains
-available while gaming mode hides Capri, so pausing never removes the resume
-control. Ctrl+Alt+C still puts her away/brings her back. Click Capri to chat.
+| Section | In the section | One click deeper |
+| --- | --- | --- |
+| Sound & voice | Volume + mute, Hey Stella, spoken replies, speak typed replies, speak check-ins, reply to check-ins, voice preview | Voice engine & files: engine, model folder / processing, Python, reference WAV and words, custom sounds |
+| Memory | Recent chats, personal memory (and, when on: learn, review changes, offer to remember, recall, keep for), review/export, clear | — |
+| Reminders | Upcoming reminders with Move / Cancel | — |
+| Behavior & awareness | Wander, idle gestures, mood, notice window changes, evening recap card, start conversations, companion check-ins, "She can see" chips, system tools, screen vision | Her initiative: reflection, quiet trial, routines, project evidence, daily review + recap, interests |
+| Codex & project | Connection, project folder, model, reasoning effort | Advanced: Codex path |
+| App | Version + check/restart, display, preferred browser, language, start with Windows | More: Crunchyroll profile, build info |
 
-The old Windows menu is no longer used. Teleport, demo, guide, mission report,
-chat handoff and redundant Talk/agent/action controls were removed from the menu.
-Agent and app-closing support default on; native confirmation is still required
-before closing an app. New apps remain automatically included in PC awareness.
+- **Footer:** save notices and **Quit**.
 
-Qwen 3.5 9B is selected by default. Llama 3.2 3B was deleted through Ollama’s
-model API after verifying Qwen was installed. Existing appearances and gaming
-pause preferences are preserved by the settings migration.
+Every row is one line; explanations live in tooltips. The list of rows is data in
+`src/renderer/js/settings-schema.js`; `settings.js` draws it. Changes save automatically through the narrow
+settings preload, and the main process (`settings-policy.js`) still validates every key and action.
 
-Legacy Claude event ingestion, renderer subscription, hook setup endpoints and
-menu entries were removed. Existing hook settings were checked; this account had
-no Capri hooks installed in Claude. Archived upstream guide/installer files stay
-in the repository but are not connected to the running application.
+Removed from the UI because they no longer do anything with Stella's body: window mischief, rare surprises and
+pointer reactions (their stored values are kept).
 
-Settings run in a separate sandboxed window with a restricted preload. Only the
-displayed preferences and named actions are accepted by its main-process API;
-hidden agent/action switches, arbitrary commands and navigation are rejected.
-Memory export/deletion retain the existing review dialogs.
-
-Validation: `npm test`, `npm run test:settings`, and the existing Electron smoke
-checks. Settings tests exercise all seven rendered sections, appearance/sound
-persistence, removed legacy endpoints, pause/resume while controls remain visible,
-and close/reopen behavior. Screenshots are saved under ignored `captures/`.
+Validation: `npm test` (schema, renderer and policy tests) and `npm run test:settings` (Electron: every section and
+sub-view without sideways overflow, saving, gaming pause/resume while controls stay visible, close/reopen).
+Screenshots are saved under ignored `captures/`.

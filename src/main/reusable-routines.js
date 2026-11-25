@@ -84,7 +84,7 @@ class ReusableRoutines {
     const c = this.settings(), p = permissions(c.privacy);
     return c.routinesEnabled !== false && c.agentEnabled !== false && !c.gamingMode && p.memoryEnabled && p.memoryRecall;
   }
-  readable() { if (!this.enabled()) throw Error('Enable Memory, recall and routines, and resume Capri before using a saved routine.'); }
+  readable() { if (!this.enabled()) throw Error('Enable Memory, recall and routines, and resume Stella before using a saved routine.'); }
   pruneRecords() {
     const days = permissions(this.settings().privacy).retentionDays;
     if (days > 0) {
@@ -132,7 +132,7 @@ class ReusableRoutines {
     if (args.scope === 'project' && !scope) throw Error('Choose a project before saving a project routine.');
     if (!interpreted && !teaching(text, name, args.id)) throw Error('Learning a routine requires a direct current teaching request naming the process.');
     const c = this.settings();
-    if (c.routinesEnabled === false || c.gamingMode || !permissions(c.privacy).memoryEnabled) throw Error('Enable Memory and routines, and resume Capri before saving.');
+    if (c.routinesEnabled === false || c.gamingMode || !permissions(c.privacy).memoryEnabled) throw Error('Enable Memory and routines, and resume Stella before saving.');
     const old = args.id ? observed.get(args.id) : null;
     if (args.id && (!old || old.scope_id !== scope)) throw Error('Look up this routine in the current project before editing it.');
     if (old && !interpreted && !key(text).includes(old.name_key) && !new RegExp(`(?:#|routine\\s+|rutina\\s+)${old.id}\\b`).test(key(text))) throw Error('Name the existing routine or its #ID when editing it.');

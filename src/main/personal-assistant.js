@@ -15,7 +15,7 @@ function namedAppQuestion(text, followUp) {
   return Object.entries(NAMES).find(([name, label]) => simple(name) === key || simple(label) === key)?.[0] || match[1];
 }
 
-const HELP = 'Local commands: remember <fact>; forget <ID>; edit memory <ID>: <fact>; recall <words>; /memory list; /memory topics; /memory export; /memory delete-all; /context; /context event; /privacy status. Say “talk less about <topic>” or “bring up <topic> again” to change a topic preference. Right-click Capri for Memory and PC awareness settings.';
+const HELP = 'Local commands: remember <fact>; forget <ID>; edit memory <ID>: <fact>; recall <words>; /memory list; /memory topics; /memory export; /memory delete-all; /context; /context event; /privacy status. Say “talk less about <topic>” or “bring up <topic> again” to change a topic preference. Right-click Stella for Memory and PC awareness settings.';
 const format = rows => rows.length ? rows.map(r => `#${r.id}: ${r.text} [${r.source}; updated ${r.updated_at}]`).join('\n') : 'No matching memories.';
 
 class PersonalAssistant {
@@ -76,7 +76,7 @@ class PersonalAssistant {
       return reply(await this.exportFile(this.store().export()) ? 'Memories exported to the file you selected.' : 'Export cancelled.');
     }
     if (/^\/memory delete-all$/i.test(input)) {
-      if (!await this.confirm('Delete all personal memories?', 'This permanently removes all saved personal memories from Capri’s database. Existing exports and backups are separate.')) return reply('Deletion cancelled.');
+      if (!await this.confirm('Delete all personal memories?', 'This permanently removes all saved personal memories from Stella’s database. Existing exports and backups are separate.')) return reply('Deletion cancelled.');
       this.store().clear(); return reply('All personal memories deleted.');
     }
     let match = /^(?:forget|olvida)(?: memory| recuerdo)?\s+#?(\d+)\s*[.!]?$/i.exec(input);

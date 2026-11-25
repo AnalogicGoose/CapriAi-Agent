@@ -147,7 +147,7 @@ class WindowsAccessibility {
     if (effect && (!control.enabled || !control.operations.includes(operation))) throw Error('This control does not support that action.');
     if (effect) {
       const detail = `${operation === 'invoke' ? 'Activate' : 'Set value of'} ${control.role} ${JSON.stringify(control.name)}${operation === 'set-value' ? ` to ${JSON.stringify(value)}` : ''}\n\nCurrent request: ${text}`;
-      if (!await this.confirm('Review Capri’s desktop action', detail)) return { dispatched: false, verified: false, reason: 'User cancelled.' };
+      if (!await this.confirm('Review Stella’s desktop action', detail)) return { dispatched: false, verified: false, reason: 'User cancelled.' };
       validate();
       this.observation = null;
     }

@@ -15,7 +15,7 @@ async function readPublic(url, signal, { fetchImpl = fetch, maxBytes = 2500000 }
   for (let redirects=0; redirects<4; redirects++) {
     if (!allowed.has(new URL(current).hostname)) throw Error('Unexpected data provider.');
     const res = await fetchImpl(current, { redirect:'manual', signal:deadline,
-      headers:{ 'user-agent':'Mozilla/5.0 Capri/0.4 LocalAssistant', 'accept-language':'en-US,en;q=0.8' } });
+      headers:{ 'user-agent':'Mozilla/5.0 Stella/0.4 LocalAssistant', 'accept-language':'en-US,en;q=0.8' } });
     if ([301,302,303,307,308].includes(res.status)) {
       const location = res.headers.get('location'); await res.body?.cancel();
       if (!location) throw Error('Provider returned an empty redirect.');

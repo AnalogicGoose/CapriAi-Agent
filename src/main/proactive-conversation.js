@@ -46,7 +46,7 @@ function reasonFor(selected, revisit) {
 }
 class ProactiveConversation {
   constructor({ settings, journal, observe, memories = () => [], models, infer, canRun = () => true,
-    notify, interests = null, trial = null, blockedReason = () => 'Capri’s availability checks kept her quiet.',
+    notify, interests = null, trial = null, blockedReason = () => 'Stella’s availability checks kept her quiet.',
     sharedContext = () => null, canBringUp = () => true, quietTopics = () => [], warmVoice = () => {},
     now = Date.now, random = Math.random, model = AGENT_MODEL }) {
     Object.assign(this, { settings, journal, observe, memories, models, infer, canRun, notify, interests, trial, blockedReason, sharedContext, canBringUp, quietTopics, warmVoice, now, random, model });

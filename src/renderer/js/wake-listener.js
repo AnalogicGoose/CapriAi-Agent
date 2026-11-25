@@ -14,9 +14,9 @@ export class WakeListener {
   configure(config) { this.enabled = config.wakeWordEnabled === true; if (!this.enabled) { this.pause(); this.endSession(); } this.tick(); }
   render(message) {
     this.indicator.hidden = true; // Background wake listening needs no permanent desktop badge.
-    this.indicator.textContent = message || (!this.enabled ? 'Hey Capri: off' : this.id ? 'Hey Capri: listening' : 'Hey Capri: paused');
+    this.indicator.textContent = message || (!this.enabled ? 'Hey Stella: off' : this.id ? 'Hey Stella: listening' : 'Hey Stella: paused');
     this.indicator.setAttribute('aria-pressed', String(this.enabled));
-    this.indicator.title = this.enabled ? 'Local wake listener. Click to turn off.' : 'Click to enable local Hey Capri listening.';
+    this.indicator.title = this.enabled ? 'Local wake listener. Click to turn off.' : 'Click to enable local Hey Stella listening.';
     this.indicator.dataset.listening = String(Boolean(this.id));
   }
   tick() {
@@ -24,12 +24,12 @@ export class WakeListener {
     if (!this.id && !this.transferring && this.now() >= this.retryAt) this.start();
   }
   async start() {
-    const id = this.id = crypto.randomUUID(); this.capture = this.captureFactory(); this.render('Hey Capri: loading local listener');
+    const id = this.id = crypto.randomUUID(); this.capture = this.captureFactory(); this.render('Hey Stella: loading local listener');
     try {
       const result = await this.host.speechStart({ id, mode: 'wake' });
       if (this.id !== id) { this.host.speechCancel({ id }); return; }
       if (!result.ok) throw Error(result.error);
-    } catch { if (this.id === id) this.fail('Hey Capri: unavailable — check microphone / speech setup'); }
+    } catch { if (this.id === id) this.fail('Hey Stella: unavailable — check microphone / speech setup'); }
   }
   pause() {
     if (!this.id) return;
@@ -39,7 +39,7 @@ export class WakeListener {
   fail(message) { this.pause(); this.retryAt = this.now() + 30000; this.render(message); }
   // A wake address heard here, or by commands-only listening (CommandListener hands its stream over): same session flow.
   async adopt(event, capture) {
-    this.transferring = true; this.session = true; this.render('Capri is listening to your request');
+    this.transferring = true; this.session = true; this.render('Stella is listening to your request');
     try { await this.onWake({ ...event, capture }); }
     catch { capture?.cancel(); this.host.speechCancel({ id: event.id }); this.endSession(); }
     finally { this.transferring = false; }
@@ -49,14 +49,14 @@ export class WakeListener {
     if (!this.id || event.id !== this.id) return;
     if (event.type === 'ready') {
       const id = this.id;
-      try { await this.capture.start(samples => this.host.speechAudio({ id, samples }), () => { if (this.id === id) this.fail('Hey Capri: microphone disconnected'); }); if (this.id === id) this.render(); }
-      catch { if (this.id === id) this.fail('Hey Capri: microphone unavailable'); }
+      try { await this.capture.start(samples => this.host.speechAudio({ id, samples }), () => { if (this.id === id) this.fail('Hey Stella: microphone disconnected'); }); if (this.id === id) this.render(); }
+      catch { if (this.id === id) this.fail('Hey Stella: microphone unavailable'); }
     } else if (event.type === 'setup') {
-      this.render(`Hey Capri: setting up local speech ${Math.round(event.percent || 0)}%`);
+      this.render(`Hey Stella: setting up local speech ${Math.round(event.percent || 0)}%`);
     } else if (event.type === 'wake') {
       const capture = this.capture; this.id = null; this.capture = null;
       await this.adopt(event, capture);
-    } else if (event.type === 'error') this.fail('Hey Capri: local speech unavailable');
+    } else if (event.type === 'error') this.fail('Hey Stella: local speech unavailable');
     else if (event.type === 'stopped') { this.pause(); this.retryAt = this.now() + 1500; }
   }
 }

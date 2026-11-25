@@ -158,7 +158,7 @@ class CompanionContinuity {
     const { action, id } = args;
     if (!interpreted && !explicitRequest(request, action)) throw Error('Continuity changes require an explicit current request; ask for clarification.');
     const cfg = this.settings();
-    if (cfg.gamingMode || !permissions(cfg.privacy).memoryEnabled) throw Error('Enable Memory and resume Capri before saving continuity.');
+    if (cfg.gamingMode || !permissions(cfg.privacy).memoryEnabled) throw Error('Enable Memory and resume Stella before saving continuity.');
     this.prune();
     const scope = this.goals.projects.scope();
     const isGoal = /goal$|^next-step$/.test(action), isNote = ['edit-decision', 'delete-note'].includes(action);
@@ -201,7 +201,7 @@ class CompanionContinuity {
       if (checkpointBasis !== null && checkpointBasis !== this.basis(scope)) throw Error('Project context changed; review the resume point again.');
     };
     verify();
-    if (permissions(cfg.privacy).memoryConfirmChanges && !await this.confirm('Update Capri’s saved project context?', JSON.stringify({ action, before: existing || checkpoint, after: value || action }, null, 2))) return { changed: false, reason: 'User cancelled.' };
+    if (permissions(cfg.privacy).memoryConfirmChanges && !await this.confirm('Update Stella’s saved project context?', JSON.stringify({ action, before: existing || checkpoint, after: value || action }, null, 2))) return { changed: false, reason: 'User cancelled.' };
     verify();
     let result;
     if (action === 'add-goal') result = this.goals.route('/goals add ' + value);

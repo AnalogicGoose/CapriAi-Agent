@@ -89,7 +89,7 @@ test('the tool starts one walkthrough and refuses a second', async () => {
   assert.deepEqual(f.s.spoken, ['Open Display']);
   await assert.rejects(t.execute('capri_walkthrough', PLAN, ctx()), /A walkthrough is already running\./);
   await assert.rejects(t.execute('capri_draw', { marks: [], cards: [], clear: true }, ctx()), /walkthrough/i);
-  await assert.rejects(t.execute('capri_walkthrough', { title: 'x' }, ctx()), /Invalid Capri tool arguments/);
+  await assert.rejects(t.execute('capri_walkthrough', { title: 'x' }, ctx()), /Invalid Stella tool arguments/);
 
   // The card carries localized buttons, and its native bounds come back to the walkthrough.
   const scene = f.s.renders.at(-1).get(1);

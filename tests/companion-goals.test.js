@@ -58,7 +58,7 @@ test('goals reject secrets and control characters and cannot bypass gaming mode 
   assert.match(f.store.route('/goals add Overflow').text, /full/);
   f.config({ gamingMode: true, privacy: { memoryEnabled: true } });
   assert.deepEqual(f.store.context(), []);
-  assert.match(f.store.route('/goals done 1').text, /Resume Capri/);
+  assert.match(f.store.route('/goals done 1').text, /Resume Stella/);
   assert.equal(f.store.list().find(row => row.id === 1).status, 'active');
 });
 

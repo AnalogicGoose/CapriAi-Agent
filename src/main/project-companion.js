@@ -137,12 +137,12 @@ class ProjectCompanion {
       } catch (error) { this.db.exec('ROLLBACK'); throw error; }
       return reply('Saved project, notes and goals deleted. Project files were not changed.');
     }
-    if (this.settings().gamingMode) return reply('Resume Capri before changing project context.');
+    if (this.settings().gamingMode) return reply('Resume Stella before changing project context.');
     const open = /^open\s+([\s\S]+)$/i.exec(arg);
     if (open || /^choose$/i.test(arg)) {
       const folder = open ? open[1].trim().replace(/^"(.*)"$/, '$1') : await this.choose();
       if (!folder) return reply('Project selection cancelled.');
-      if (this.settings().gamingMode) return reply('Project selection cancelled while Capri is paused.');
+      if (this.settings().gamingMode) return reply('Project selection cancelled while Stella is paused.');
       const project = this.select(folder);
       return reply(`Selected project #${project.id}: ${project.name}\nFolder: ${project.root}`);
     }

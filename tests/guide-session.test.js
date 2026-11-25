@@ -215,7 +215,7 @@ test('tool descriptions for capri_draw stay within budget', async () => {
   assert.equal(calls[0][0], args);
   assert.equal(calls[0][1].check, check);
   assert.equal(calls[0][1].signal, signal);
-  await assert.rejects(tools.execute('capri_draw', { marks: [], cards: [] }, { check, signal }), /Invalid Capri tool arguments/);
+  await assert.rejects(tools.execute('capri_draw', { marks: [], cards: [] }, { check, signal }), /Invalid Stella tool arguments/);
 });
 
 test('a draw right after typing in her own window yields focus, then draws on the window behind', async () => {
