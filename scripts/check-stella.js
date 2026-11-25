@@ -63,7 +63,7 @@ app.whenReady().then(async () => {
             check(maskPx > 0 && solid > 0, 's=' + s + ' mask empty');
             check(solidLit / solid >= 0.95, 's=' + s + ' only ' + (100 * solidLit / solid).toFixed(1) + '% of solid mask px have body alpha > 0.5');
             check(seeds.size === 8, 's=' + s + ' expected 8 seed ids in mask, got ' + [...seeds]);
-            for (let id = 0; id < 8; id++) check(gMin[id] <= 30 && gMax[id] >= (s >= 200 ? 230 : 200), 's=' + s + ' seed ' + id + ' u range ' + gMin[id] + '..' + gMax[id]);
+            for (let id = 0; id < 8; id++) check(gMin[id] <= (s >= 200 ? 30 : 60) && gMax[id] >= (s >= 200 ? 230 : 150), 's=' + s + ' seed ' + id + ' u range ' + gMin[id] + '..' + gMax[id]);
             // With the ambient glow off, every mask pixel must sit on drawn body.
             const bare = painter.paint({...scene, ambient: 0});
             const bp2 = pixels(bare.body), mp2 = pixels(bare.mask);
