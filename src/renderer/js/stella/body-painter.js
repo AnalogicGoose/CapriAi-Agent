@@ -2,6 +2,10 @@
 // sticks, dots, ring) with Canvas 2D from Scene data, plus a mask the WebGL
 // finish reads. Mask encoding per blade/stick: R = 255*coverage, G = 255*u
 // (0 at the inner end, 1 at the tip), B = 255*seed/8, A = coverage.
+// The mask is pure shape coverage: it does NOT follow per-item fade. Task 8
+// must multiply sheen/edges by scene.brightness and each blade/stick's alpha.
+// Edge pixels are premultiplied (R/G/B scaled by coverage), so decode u and
+// seed only where A is about 1, and sample with NEAREST.
 import {TAU, clamp} from './math.js';
 import {P} from './params.js';
 
@@ -34,7 +38,9 @@ export class BodyPainter {
   }
 
   resize(size) {
-    this.size = Math.max(1, Math.round(size));
+    const n = Math.max(1, Math.round(size));
+    if (this.body && n === this.size) return;
+    this.size = n;
     this.body = makeCanvas(this.size);
     this.mask = makeCanvas(this.size);
     this.bctx = this.body.getContext('2d');
@@ -103,7 +109,8 @@ export class BodyPainter {
       ctx.beginPath(); ctx.arc(cx, cy, rr, 0, TAU); ctx.stroke();
       const g = ctx.createRadialGradient(cx, cy, rr * 0.85, cx, cy, rr * 1.25);
       g.addColorStop(0, 'rgba(240,200,190,0)');
-      g.addColorStop(0.5, `rgba(240,200,190,${(0.14 * ring.alpha).toFixed(4)})`);
+      const glow = typeof ring.glow === 'number' ? ring.glow : 0.14 * ring.alpha;
+      g.addColorStop(0.5, `rgba(240,200,190,${clamp(glow, 0, 1).toFixed(4)})`);
       g.addColorStop(1, 'rgba(240,200,190,0)');
       ctx.globalAlpha = 1;
       ctx.fillStyle = g;
@@ -142,8 +149,8 @@ export class BodyPainter {
     ctx.clearRect(0, 0, s, s);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    for (const b of [...sc.blades, ...sc.sticks]) {
-      if (b.alpha <= 0 || b.rOut <= b.rIn) continue;
+    const shape = b => {
+      if (b.alpha <= 0 || b.rOut <= b.rIn) return;
       const ca = Math.cos(b.angle), sa = Math.sin(b.angle);
       const x0 = cx + ca * b.rIn * k, y0 = cy + sa * b.rIn * k;
       const x1 = cx + ca * b.rOut * k, y1 = cy + sa * b.rOut * k;
@@ -152,6 +159,8 @@ export class BodyPainter {
       g.addColorStop(0, `rgb(255,0,${bl})`); g.addColorStop(1, `rgb(255,255,${bl})`);
       ctx.fillStyle = g;
       taper(ctx, x0, y0, x1, y1, b.wIn * k, b.wOut * k);
-    }
+    };
+    sc.blades.forEach(shape);
+    sc.sticks.forEach(shape);
   }
 }

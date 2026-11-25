@@ -45,21 +45,33 @@ app.whenReady().then(async () => {
             const {body, mask} = painter.paint(scene);
             check(body.width === s && mask.width === s, 'canvas size ' + s);
             const bp = pixels(body), mp = pixels(mask);
-            let lit = 0, maskPx = 0, stray = 0, badSeed = 0;
+            let lit = 0, maskPx = 0, solid = 0, solidLit = 0;
+            const gMin = Array(8).fill(255), gMax = Array(8).fill(0), seeds = new Set();
             for (let i = 0; i < bp.length; i += 4) {
               if (bp[i + 3] > 0) lit++;
-              if (mp[i + 3] > 0) { maskPx++; if (bp[i + 3] === 0) stray++; }
+              if (mp[i + 3] > 0) maskPx++;
+              if (mp[i + 3] === 255) {
+                solid++;
+                if (bp[i + 3] > 127) solidLit++;
+                const id = Math.round(mp[i + 2] * 8 / 255);
+                check(id >= 0 && id < 8, 'bad seed id ' + id);
+                seeds.add(id); gMin[id] = Math.min(gMin[id], mp[i + 1]); gMax[id] = Math.max(gMax[id], mp[i + 1]);
+              }
             }
             const frac = lit / (s * s);
             check(frac > 0.04, 's=' + s + ' body coverage ' + frac.toFixed(3) + ' <= 4%');
-            check(maskPx > 0, 's=' + s + ' mask empty');
-            check(stray === 0, 's=' + s + ' mask pixels without body: ' + stray);
-            // mask encoding: opaque pixels carry seed 0..7 in B and u in G
-            for (let i = 0; i < mp.length; i += 4) if (mp[i + 3] === 255 && mp[i + 2] > 255) badSeed++;
-            const hist = new Set();
-            for (let i = 0; i < mp.length; i += 4) if (mp[i + 3] === 255) hist.add(Math.round(mp[i + 2] * 8 / 255));
-            check(hist.size === 8, 's=' + s + ' expected 8 seed ids in mask, got ' + [...hist]);
-            notes.push('s=' + s + ' body=' + (frac * 100).toFixed(1) + '% mask=' + maskPx + 'px seeds=' + hist.size);
+            check(maskPx > 0 && solid > 0, 's=' + s + ' mask empty');
+            check(solidLit / solid >= 0.95, 's=' + s + ' only ' + (100 * solidLit / solid).toFixed(1) + '% of solid mask px have body alpha > 0.5');
+            check(seeds.size === 8, 's=' + s + ' expected 8 seed ids in mask, got ' + [...seeds]);
+            for (let id = 0; id < 8; id++) check(gMin[id] <= 30 && gMax[id] >= (s >= 200 ? 230 : 200), 's=' + s + ' seed ' + id + ' u range ' + gMin[id] + '..' + gMax[id]);
+            // With the ambient glow off, every mask pixel must sit on drawn body.
+            const bare = painter.paint({...scene, ambient: 0});
+            const bp2 = pixels(bare.body), mp2 = pixels(bare.mask);
+            let stray = 0;
+            for (let i = 0; i < mp2.length; i += 4) if (mp2[i + 3] > 0 && bp2[i + 3] === 0) stray++;
+            check(stray === 0, 's=' + s + ' mask pixels without body (ambient off): ' + stray);
+            notes.push('s=' + s + ' body=' + (frac * 100).toFixed(1) + '% mask=' + maskPx + 'px solidLit=' + (100 * solidLit / solid).toFixed(1) + '% seeds=' + seeds.size);
+            painter.paint(scene);
             files['body-' + s + '.png'] = await png(body);
             files['mask-' + s + '.png'] = await png(mask);
             if (s === 360) { files['body.png'] = files['body-360.png']; files['mask.png'] = files['mask-360.png']; }
