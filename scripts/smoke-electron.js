@@ -1034,8 +1034,8 @@ app.whenReady().then(async () => {
       fullscreenProbe=fullscreen;await until(async()=>(await state()).active,'fullscreen during Gaming mode');
       await gaming(false);assert.equal(win.isVisible(),false);
       fullscreenProbe=null;await until(async()=>await shown()&&win.isVisible(),'gaming then fullscreen return');
-      await pause(400);
-      assert.equal(await js(`(() => {const p=window.fullscreenPet,r=document.querySelector('#stella');return p.fold===0&&Number(r.style.opacity||1)>0.5&&r.style.visibility!=='hidden';})()`),true,'Combined gaming/fullscreen transitions leave her visible');
+      // Stella unfolds over ~600 ms (Capri's teleport-in was shorter): wait for her to finish, not a fixed delay.
+      await until(()=>js(`(() => {const p=window.fullscreenPet,r=document.querySelector('#stella');return p.fold===0&&Number(r.style.opacity||1)>0.5&&r.style.visibility!=='hidden';})()`),'Combined gaming/fullscreen transitions leave her visible');
       fullscreenProbe=fullscreen;await until(away,'second departure');
       await js('host.setConfig({visible:false})');
       win.webContents.send('capri:command',{name:'stow',on:true});

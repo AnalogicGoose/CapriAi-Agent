@@ -79,6 +79,11 @@ export class Panel {
       if (this.current?.chat) { this.onFocus?.(); this.chatInput.focus(); } // a chat stays until you close it
       else this.hide('user');
     });
+    // Text arriving (a streamed answer, a wrapping greeting) changes the panel's size: re-place it so the
+    // edge next to her stays put. The character no longer moves every frame, so it can't do this for us.
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(() => { if (this.anchor && this.view && !this.el.hidden) this.place(); }).observe(this.el);
+    }
   }
 
   get visible() {

@@ -397,6 +397,19 @@ window.host = new Proxy({}, { get(_, key) {
       const patch = S.patches.find(p => p && p.stellaAnchor);
       check(patch && Number.isFinite(patch.stellaAnchor.x) && Number.isFinite(patch.stellaAnchor.y), 'no stellaAnchor patch: ' + JSON.stringify(S.patches));
       notes.push('drag moved ' + moved.toFixed(0) + ' px, anchor ' + Math.round(patch.stellaAnchor.x) + ',' + Math.round(patch.stellaAnchor.y));
+      // A chat panel keeps the edge next to her in place while its text grows (Stella stands still,
+      // so nothing but the panel itself can notice it grew).
+      for (const f of S.listeners.onCommand || []) f({ name: 'chat' });
+      const panelEl = document.getElementById('panel');
+      await until(() => panelEl.classList.contains('is-chat') && !panelEl.hidden, 3000, 'chat panel opens');
+      await wait(1500); // greeting decoded
+      const edge = () => { const r = panelEl.querySelector('.panel__frame').getBoundingClientRect(); return panelEl.dataset.below === 'true' ? r.top : r.bottom; };
+      const before = edge(), heightBefore = panelEl.offsetHeight;
+      for (const f of S.listeners.onAgentSuggestion || []) f('A much longer reply that wraps across several lines so the panel has to grow taller than it was when the conversation opened, which is exactly what happens while an answer streams in.');
+      await wait(100);
+      check(panelEl.offsetHeight > heightBefore + 10, 'panel did not grow (' + heightBefore + ' -> ' + panelEl.offsetHeight + ')');
+      check(Math.abs(edge() - before) <= 2, 'panel edge next to her moved ' + (edge() - before).toFixed(1) + ' px when its text grew');
+      notes.push('chat panel grows away from her (' + heightBefore + ' -> ' + panelEl.offsetHeight + ' px)');
       return { notes: notes.join('; '), png: full.k.toDataURL('image/png') };
     })()`); } catch (error) {
       throw Error(String(error && error.message || error) + (errors.length ? ' [console errors: ' + errors.join(' | ') + ']' : ''));
