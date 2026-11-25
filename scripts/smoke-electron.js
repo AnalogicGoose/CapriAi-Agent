@@ -547,8 +547,8 @@ app.whenReady().then(async () => {
       assert.match((await route('/goals add Wrong scope during selection')).text, /Finish choosing/);
       choose({ canceled: false, filePaths: [alpha] });
       assert.match((await selecting).message, /Selected project/);
-      await controls.webContents.executeJavaScript('document.querySelector("[data-page=connections]").click()');
-      assert.match(await controls.webContents.executeJavaScript('document.querySelector("#content").textContent'), /Working with alpha/);
+      await controls.webContents.executeJavaScript('document.querySelector("[data-section=codex]").click()');
+      assert.match(await controls.webContents.executeJavaScript('document.querySelector("#content").textContent'), /Project · alpha/);
       controls.hide();
       await route('/goals add Keep the project scoped');
       await route('/project decision Preserve original animations');
@@ -573,7 +573,7 @@ app.whenReady().then(async () => {
       assert.equal(recap.ok, true); assert.match(recap.text, /user-marked/);
       const daily = JSON.parse((await route('/review export')).text);
       assert.equal(daily.reviews[0].groups.completed[0].text, 'Review the handoff');
-      await controls.webContents.executeJavaScript('document.querySelector("[data-page=awareness]").click()');
+      await controls.webContents.executeJavaScript('document.querySelector("[data-section=behavior]").click(); document.querySelector("[data-deeper=initiative]").click()');
       assert.equal(await controls.webContents.executeJavaScript('Boolean(document.querySelector("[data-key=dailyReviewEnabled]"))'), true);
       assert.equal(await controls.webContents.executeJavaScript('document.querySelector("[data-key=dailyReviewNotify]").checked'), false);
       await controls.webContents.executeJavaScript('settingsHost.action("reviews-open")');
@@ -1202,10 +1202,7 @@ app.whenReady().then(async () => {
     if (process.argv.includes('--settings-only') || process.argv.includes('--settings-pointer')) {
       // Settings checks must not unload models from the user's running Ollama server.
       require('../src/main/ollama').unload = async () => {};
-      assert.equal(await js(`(() => {
-        const canvas=document.querySelector('.panel__face canvas');
-        return Boolean(canvas && canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data.some(value=>value>0));
-      })()`),true,'Animated portrait loads and paints through the production app protocol');
+      assert.equal(await js(`document.querySelector('.panel__face')`),null,'The chat panel no longer carries a portrait');
       await js('host.openMenu()');
       let controls;
       for (let i=0;i<60;i++) {
@@ -1217,7 +1214,7 @@ app.whenReady().then(async () => {
       controls.show(); // Explicitly show after readiness, including hidden test-process launches.
       const run = source => controls.webContents.executeJavaScript(source);
       assert.equal(await run('document.documentElement.dataset.settingsReady'), 'true');
-      assert.equal(await run('document.querySelector("main").dataset.page'),'home');
+      assert.equal(await run('document.querySelector("main").dataset.page'),'null/null');
       if (process.argv.includes('--settings-pointer')) {
         await run('window.realClicks=0; document.addEventListener("pointerdown",event=>{if(event.isTrusted) window.realClicks++;})');
         console.log('READY: use real pointer input to select Appearance/Large and Sound/Mute.');
@@ -1241,21 +1238,23 @@ app.whenReady().then(async () => {
       assert.equal((await js('host.getConfig()')).desktopActions, true);
       const legacy = await fetch('http://127.0.0.1:47824/event',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({hook_event_name:'Stop'})});
       assert.equal(legacy.status,404,'Legacy unauthenticated Claude events must no longer be accepted');
-      await run("document.querySelector('[data-page=appearance]').click()");
-      for (const key of ['idleAnimations','cursorInteractions','personality','dailyRoutine','surpriseAnimations']) {
+      await run("document.querySelector('[data-section=behavior]').click()");
+      for (const key of ['cursorInteractions','surpriseAnimations','possess'])
+        assert.equal(await run(`Boolean(document.querySelector('[data-key=${key}]'))`),false,`${key} no longer shown`);
+      for (const key of ['idleAnimations','personality','dailyRoutine']) {
         assert.equal(await run(`document.querySelector('[data-key=${key}]').checked`),true,`${key} defaults on`);
         await run(`document.querySelector('[data-key=${key}]').click()`);await pause(100);
         assert.equal((await js('host.getConfig()'))[key],false,`${key} saves through settings IPC`);
         await run(`document.querySelector('[data-key=${key}]').click()`);await pause(100);
         assert.equal((await js('host.getConfig()'))[key],true,`${key} restores`);
       }
-      await run("document.querySelector('[data-scale=\"0.8\"]').click()"); await pause(200);
+      await run("document.querySelector('[data-segment=scale][data-value=\"0.8\"]').click()"); await pause(200);
       assert.equal((await js('host.getConfig()')).scale,0.8);
-      await run("document.querySelector('[data-page=sound]').click(); const el=document.querySelector('[data-key=volume]'); el.value='35'; el.dispatchEvent(new Event('change',{bubbles:true}))"); await pause(200);
+      await run("document.querySelector('[data-section=sound]').click(); const el=document.querySelector('[data-key=volume]'); el.value='35'; el.dispatchEvent(new Event('change',{bubbles:true}))"); await pause(200);
       assert.equal((await js('host.getConfig()')).volume,0.35);
       await assert.rejects(run('settingsHost.patch({agentEnabled:false})'), /Unknown/);
       await assert.rejects(run('settingsHost.action("shell", "bad")'), /Unknown/);
-      await run("document.querySelector('[data-page=memory]').click()");
+      await run("document.querySelector('[data-section=memory]').click()");
       const chatSwitch = "document.querySelector('[data-action-switch=remember-chat]')";
       assert.equal(await run(`${chatSwitch}.checked`), false, 'Recent chat is opt-in');
       for (const enabled of [true, false]) {
@@ -1264,14 +1263,20 @@ app.whenReady().then(async () => {
         assert.equal((await js('host.getConfig()')).rememberRecentChat, enabled);
       }
       const captureDir = path.resolve(__dirname,'..','captures');fs.mkdirSync(captureDir,{recursive:true});
-      for (const page of ['home','appearance','sound','memory','awareness','reminders','connections','updates']) {
-        await run(`document.querySelector('[data-page=${page}]').click(); document.fonts.ready`);
-        assert.equal(await run('document.querySelector("main").scrollWidth <= document.querySelector("main").clientWidth'),true, `Horizontal overflow on ${page}`);
+      // Every section open, then every deeper view: no sideways overflow anywhere in the small window.
+      const views = [['home', "document.querySelector('[aria-expanded=true]')?.click()"],
+        ...['sound','memory','reminders','behavior','codex','app'].map(id => [id, `document.querySelector('[aria-expanded=true]')?.click(); document.querySelector('[data-section=${id}]').click()`]),
+        ...[['sound','voice-files'],['behavior','initiative'],['codex','codex-advanced'],['app','app-more']].map(([id, deeper]) => [deeper,
+          `document.querySelector('[data-back]')?.click(); document.querySelector('[aria-expanded=true]')?.click(); document.querySelector('[data-section=${id}]').click(); document.querySelector('[data-deeper=${deeper}]').click()`])];
+      for (const [name, open] of views) {
+        await run(`${open}; document.fonts.ready`);
+        assert.equal(await run('document.querySelector("main").scrollWidth <= document.querySelector("main").clientWidth'),true, `Horizontal overflow on ${name}`);
         await pause(100);
-        fs.writeFileSync(path.join(captureDir,`settings-${page}.png`),(await controls.webContents.capturePage()).toPNG());
+        fs.writeFileSync(path.join(captureDir,`settings-${name}.png`),(await controls.webContents.capturePage()).toPNG());
       }
+      await run("document.querySelector('[data-back]')?.click()");
       assert.doesNotMatch(await run('document.body.innerText'), /Legacy Claude|Teleport|Play demo|Talk to her|Copy chat handoff|Allow app closing/);
-      await run("document.querySelector('[data-page=home]').click()");
+      await run("document.querySelector('[aria-expanded=true]')?.click()");
       await js(`(async()=>{const {Stella}=await import('./js/stella/stella.js');const draw=Stella.prototype.drawFrame;
         Stella.prototype.drawFrame=function(...args){window.settingsPet=this;return draw.apply(this,args);};})()`);
       for (let i=0;i<40 && !await js('Boolean(window.settingsPet)');i++) await pause(50);
@@ -1309,7 +1314,7 @@ app.whenReady().then(async () => {
       await gesture('wake up','I’m here');
       await gesture('how are you feeling','Feeling');
       assert.deepEqual(mainErrors,[]);
-      console.log('PASS: custom control room, all seven sections, saved appearance/sound, narrow settings permissions, removed legacy controls, gaming pause/resume, close/reopen');
+      console.log('PASS: one-page control room, every section and deeper view, saved appearance/sound, narrow settings permissions, removed legacy controls, gaming pause/resume, close/reopen');
       console.log('CAPTURES:', captureDir);
       clearTimeout(limit); app.exit(0); return;
     }

@@ -1,103 +1,126 @@
+// Her control room: quick tiles on top, then one-line sections that fold open in place (settings-schema.js).
+// Saving goes through settingsHost (settings-preload.js); the main process still validates every change.
 import { SettingsQueue } from './settings-queue.js';
+import { QUICK, SECTIONS } from './settings-schema.js';
 
 const host = window.settingsHost;
 const content = document.querySelector('#content');
-let state, page = 'home', busy = false, previewStyle = 'neutral';
-const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
-const button = (label, action, cls = '', value) => `<button class="button ${cls}" data-action="${action}" ${typeof value === 'boolean' ? `data-value="${value}"` : ''}>${label}</button>`;
-const row = (title, detail, control = '') => `<div class="row"><div class="row__copy"><strong>${title}</strong><p>${detail}</p></div>${control}</div>`;
-const toggle = (key, enabled, label) => `<label class="switch"><input type="checkbox" data-key="${key}" ${enabled ? 'checked' : ''} aria-label="${label}"><span></span></label>`;
-const field = (key, value, label) => `<input type="text" maxlength="2000" data-key="${key}" value="${esc(value)}" aria-label="${label}">`;
-const card = (...rows) => `<div class="card">${rows.join('')}</div>`;
-const heading = (tag, title, intro) => `<p class="eyebrow">${tag}</p><h1 id="settings-title">${title}</h1><p class="intro">${intro}</p>`;
-const section = title => `<h2 class="section-label">${title}</h2>`;
-const options = (key, selected, values, label) => `<select data-key="${key}" aria-label="${label}">${values.map(([value, text]) => `<option value="${esc(value)}" ${String(value) === String(selected) ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select>`;
+let state, openSection = null, view = null, busy = false, previewStyle = 'neutral';
+
+const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+const text = (value, s = state) => typeof value === 'function' ? value(s) : value;
+const pathGet = (object, key) => key.split('.').reduce((value, part) => value?.[part], object);
+const ROWS = [...QUICK, ...SECTIONS.flatMap(section => section.rows)];
+const BY_KEY = new Map(ROWS.flatMap(row => [[row.key, row], ...(row.toggles || []).map(t => [t.key, t])]).filter(([key]) => key));
+const shown = row => !row.visible || row.visible(state);
+const value = row => row.get ? row.get(state) : pathGet(state.config, row.key);
+
+const ICONS = {
+  sound: '<path d="M4 10v4h4l5 4V6L8 10H4Z"/><path d="M16.5 9a4 4 0 0 1 0 6"/>',
+  memory: '<rect x="5" y="4" width="14" height="17" rx="3"/><path d="M9 10h6M9 14h4"/>',
+  reminders: '<path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0"/>',
+  behavior: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  codex: '<path d="m9 15 6-6m-6-2 2-2a5 5 0 0 1 7 7l-2 2m-7-4-3 3a5 5 0 0 0 7 7l2-2"/>',
+  app: '<path d="M20 8a8 8 0 1 0 0 8M20 3v5h-5"/>',
+  speaker: '<path d="M4 10v4h4l5 4V6L8 10H4Z"/><path d="M16.5 9a4 4 0 0 1 0 6"/>',
+  muted: '<path d="M4 10v4h4l5 4V6L8 10H4Z"/><path d="m16 10 4 4m0-4-4 4"/>',
+};
+const icon = (name, size = 15) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+
+const switchControl = (row, label) => {
+  const attr = row.action ? `data-action-switch="${row.action}"` : `data-key="${esc(row.key)}"`;
+  return `<label class="orbit-switch"><input type="checkbox" ${attr} ${value(row) === true ? 'checked' : ''} aria-label="${esc(label)}"><span></span></label>`;
+};
+const selectControl = (row, label) => {
+  const current = value(row), options = text(row.options);
+  return `<select class="field" data-key="${esc(row.key)}" aria-label="${esc(label)}">${options.map(([v, t]) =>
+    `<option value="${esc(v)}" ${String(v) === String(current ?? '') ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+};
+const buttons = row => (row.buttons || []).filter(shown).map(b => {
+  const v = b.value ? `data-value="${b.value(state)}"` : '';
+  return `<button class="pill ${b.danger ? 'is-danger' : ''} ${b.primary ? 'is-primary' : ''}" data-action="${b.action}" ${v}>${esc(text(b.label))}</button>`;
+}).join('');
+
+function control(row, label) {
+  switch (row.control) {
+    case 'switch': return buttons(row) + switchControl(row, label);
+    case 'segment': return `<div class="orbit-segment" role="group" aria-label="${esc(label)}">${row.options.map(([v, t]) =>
+      `<button data-segment="${row.key}" data-value="${v}" aria-pressed="${Math.abs((value(row) ?? 0) - v) < .01}">${t}</button>`).join('')}</div>`;
+    case 'select': return selectControl(row, label);
+    case 'slider': {
+      const muted = state.config[row.mute] === true, percent = Math.round((value(row) ?? 0) * 100);
+      return `<button class="orbit-icon orbit-icon--30 mute" data-toggle="${row.mute}" aria-pressed="${muted}" aria-label="Mute" title="${muted ? 'Unmute' : 'Mute'}">${icon(muted ? 'muted' : 'speaker', 14)}</button>` +
+        `<input type="range" data-key="${row.key}" min="0" max="100" value="${percent}" aria-label="${esc(label)}"><output>${percent}%</output>`;
+    }
+    case 'text': return `<input class="field" type="text" maxlength="${row.key === 'crunchyrollProfile' ? 80 : 2000}" data-key="${esc(row.key)}" value="${esc(value(row))}" aria-label="${esc(label)}" spellcheck="false">`;
+    case 'buttons': return buttons(row);
+    case 'toggles': return `<div class="chips">${row.toggles.map(t => `<label class="chip"><input type="checkbox" data-key="${esc(t.key)}" ${pathGet(state.config, t.key) === true ? 'checked' : ''}><span>${esc(t.label)}</span></label>`).join('')}</div>`;
+    case 'preview': return `<select class="field" data-key="previewStyle" aria-label="Voice style">${row.options.map(([v, t]) =>
+      `<option value="${v}" ${v === previewStyle ? 'selected' : ''}>${t}</option>`).join('')}</select><button class="pill" data-action="${row.action}">Play</button>`;
+    case 'status': return `<span class="value ${state.integration?.lastSeen ? 'is-ok' : ''}">${esc(row.value(state))}</span>`;
+    case 'info': return `<span class="value mono">${esc(row.value(state))}</span>`;
+    default: return '';
+  }
+}
+
+function rowHtml(row) {
+  if (row.control === 'reminders') return reminderRows();
+  const label = text(row.label);
+  const stack = ['toggles', 'text'].includes(row.control) ? ' row--stack' : '';
+  return `<div class="row${stack}" ${row.tip ? `title="${esc(row.tip)}"` : ''}><span class="row__label">${esc(label)}</span><div class="row__control">${control(row, label)}</div></div>`;
+}
+
+function reminderRows() {
+  const list = state.reminders || [];
+  if (!list.length) return '<p class="empty">Nothing yet. Ask her to remind you of something.</p>';
+  return list.map(item => `<div class="row row--reminder"><span class="row__label">${esc(item.text)}<small>${esc(item.next)} · ${esc(item.repeat)}</small></span><div class="row__control">` +
+    (item.movable ? `<input type="time" class="field" data-reminder-time="${esc(item.id)}" value="${esc(String(item.next).slice(11, 16))}" aria-label="New time for ${esc(item.text)}">` +
+      `<button class="pill" data-reminder-move="${esc(item.id)}" data-date="${esc(String(item.next).slice(0, 10))}">Move</button>` : '') +
+    `<button class="pill" data-reminder-cancel="${esc(item.id)}">Cancel</button></div></div>`).join('');
+}
+
+function quickHtml() {
+  const [gaming, size, desktop] = QUICK;
+  return `<div class="quick">` +
+    `<div class="tile ${value(gaming) ? 'is-on' : ''}" title="${esc(gaming.tip)}"><span class="tile__text"><b>${gaming.label}</b><small>Hide &amp; pause</small></span>${switchControl(gaming, gaming.label)}</div>` +
+    `<div class="tile"><span class="tile__text"><b>${size.label}</b></span>${control(size, size.label)}</div>` +
+    `<div class="tile tile--wide"><span class="tile__text"><b>${desktop.label}</b><small>${desktop.tip}</small></span>${buttons(desktop)}</div></div>`;
+}
+
+function sectionHtml(section) {
+  const open = openSection === section.id;
+  const head = `<button class="section__head" data-section="${section.id}" aria-expanded="${open}"><span class="section__icon">${icon(section.icon)}</span>` +
+    `<span class="section__label">${esc(section.label)}</span><span class="section__summary">${esc(section.summary(state))}</span><span class="chev" aria-hidden="true">›</span></button>`;
+  if (!open) return `<section class="section">${head}</section>`;
+  const rows = section.rows.filter(row => !row.deeper && shown(row)).map(rowHtml).join('');
+  const deeper = Object.entries(section.deepers || {}).filter(([id]) => section.rows.some(row => row.deeper === id && shown(row)))
+    .map(([id, label]) => `<button class="row row--deeper" data-deeper="${id}"><span class="row__label">${esc(label)}</span><span class="chev" aria-hidden="true">›</span></button>`).join('');
+  return `<section class="section is-open">${head}<div class="section__body">${rows}${deeper}</div></section>`;
+}
+
+function deeperHtml() {
+  const section = SECTIONS.find(s => s.deepers?.[view]);
+  const rows = section.rows.filter(row => row.deeper === view && shown(row)).map(rowHtml).join('');
+  return `<div class="subview"><button class="subview__back" data-back aria-label="Back to ${esc(section.label)}"><span aria-hidden="true">‹</span> ${esc(section.label)}</button>` +
+    `<h2 class="subview__title">${esc(section.deepers[view])}</h2><div class="section__body">${rows}</div></div>`;
+}
 
 function render() {
   if (!state) return;
-  const previousPage = content.dataset.page, scrollTop = content.scrollTop;
+  const scrollTop = content.scrollTop, place = `${openSection}/${view}`, samePlace = content.dataset.page === place;
   const active = document.activeElement;
   const focused = content.contains(active) && active?.dataset ? {
-    key: active.dataset.key, scale: active.dataset.scale, action: active.dataset.actionSwitch,
-    draft: active.type === 'text' ? active.value : null,
-    start: active.selectionStart, end: active.selectionEnd,
+    key: active.dataset.key, segment: active.dataset.segment, action: active.dataset.actionSwitch,
+    draft: active.type === 'text' ? active.value : null, start: active.selectionStart, end: active.selectionEnd,
   } : null;
-  content.dataset.page = page;
-  const c = state.config, p = c.privacy, r = state.runtime;
-  const trial = state.initiative;
-  document.querySelector('#version').textContent = `CAPRI v${r.version}`;
-  document.querySelectorAll('nav button[data-page]').forEach(el => { el.classList.toggle('selected', el.dataset.page === page); el.setAttribute('aria-current', el.dataset.page === page ? 'page' : 'false'); });
-  const sw = (key, value, title, detail) => row(title, detail, toggle(key, value, title));
-  if (page === 'home') content.innerHTML = heading('YOUR SPACE / YOUR RULES', 'A little more you.', 'Everything Capri needs to feel at home on your desktop.') +
-    `<div class="hero"><div class="hero__top"><h2>Capri is ${c.gamingMode ? 'taking a break' : 'right here'}.</h2><span class="badge ${c.gamingMode ? 'paused' : ''}">${c.gamingMode ? 'PAUSED' : 'AGENT ACTIVE'}</span></div><p>Codex reasoning. A familiar personality. Your PC, with a digital ghost looking out for you.</p></div>` +
-    section('AT A GLANCE') + `<div class="fact-grid"><div class="fact"><span>CODEX BRAIN</span><strong>OpenAI / Codex CLI</strong></div><div class="fact"><span>PERSONAL MEMORY</span><strong>${p.memoryEnabled ? 'Enabled · stored locally' : 'Off · yours to enable'}</strong></div></div>` + section('QUICK CONTROLS') +
-    card(row('Gaming mode', 'Pause proactive AI and hide Capri. Hey Capri remains available when enabled.', `<label class="switch"><input type="checkbox" data-action-switch="gaming" ${c.gamingMode ? 'checked' : ''} aria-label="Gaming mode"><span></span></label>`), row('Desktop presence', 'Ctrl + Alt + C folds Capri into her biochip.', button(c.visible ? 'Put away' : 'Bring back', 'visibility', '', !c.visible))) +
-    `<p class="fine">Click Capri to talk. Right-click her or the tray icon to come back here. Consequential actions and requests outside Codex permissions ask for review.</p>`;
-  if (page === 'appearance') content.innerHTML = heading('MAKE THE DESKTOP HERS', 'Appearance', 'Her presence, her movement, your preferred screen.') + section('PRESENCE') +
-    card(row('Character size', 'Find her place in your workspace.', `<div class="segments" role="group" aria-label="Character size">${[[0.45,'Small'],[0.6,'Medium'],[0.8,'Large']].map(([value,label]) => `<button data-scale="${value}" aria-pressed="${Math.abs(c.scale-value)<.01}">${label}</button>`).join('')}</div>`), row('Display', 'Move Capri to another connected screen.', options('displayId', c.displayId ?? '', [['','Primary display'], ...state.displays.map((d,i) => [d.id, `Screen ${i+1} · ${d.width} × ${d.height}`])], 'Display'))) +
-    section('A LIFE OF HER OWN') + card(sw('proactiveEnabled',c.proactiveEnabled !== false,'Start conversations','A brief opening every 5–15 minutes when you are available.'),sw('wander',c.wander,'Wander around','Let her find new places when you’re not chatting.'),sw('windowTracking',c.windowTracking,'Sit on windows','Follow window edges and perch above restored windows.'),sw('possess',c.possess,'Window mischief','Her playful window animation, with no app changes.'),
-      sw('idleAnimations',c.idleAnimations !== false,'Idle gestures','Breathing, listening, yawning, stretching and little dances using her original art.'),
-      sw('cursorInteractions',c.cursorInteractions !== false,'Pointer & desktop reactions','Notice a nearby pointer and react quietly when the active window changes.'),
-      sw('personality',c.personality !== false,'Mood & personality','Local energy and playfulness shape her gestures and chat tone.'),
-      sw('dailyRoutine',c.dailyRoutine !== false,'Daily routine','A quiet morning stretch, afternoon glance, evening rest and nighttime yawn.'),
-      sw('surpriseAnimations',c.surpriseAnimations !== false,'Rare surprises','Occasional spins, hops and ghost echoes while idle.')) +
-    `<p class="fine">Try /actions in chat. Type or dictate “wave”, “dance”, “stretch”, “take a nap”, “wake up”, or “come here”, then Send. Game mode pauses these behaviors; reduced motion keeps her still.</p>`;
-  if (page === 'sound') content.innerHTML = heading('A FAMILIAR FREQUENCY', 'Sound', 'Keep her little blips and glitches just how you like them.') +
-    card(sw('muted',c.muted,'Mute character sounds','A quieter digital ghost.'), row('Volume', 'Character effects and chat blips.', `<div class="meter"><input type="range" data-key="volume" min="0" max="100" value="${Math.round(c.volume*100)}" aria-label="Volume"><output>${Math.round(c.volume*100)}%</output></div>`)) + section('HANDS-FREE LISTENING') + card(sw('wakeWordEnabled',c.wakeWordEnabled === true,'Hey Capri','Wake a compact voice conversation. A small microphone appears above Capri while listening; click it or say stop listening to end the session. Recognition stays local; session text goes to Codex.')) + section('CUSTOM CUES') +
-    card(row('Your sound collection', 'Add your own sound files to replace character cues.',button('Open folder','sounds-folder'))) + section('SPOKEN REPLIES') + card(sw('ttsEnabled',c.ttsEnabled,'Enable voice replies','Use Capri’s local voice for conversation and check-ins.'), sw('speakTypedReplies',c.speakTypedReplies,'Speak typed replies','Hear her replies while you type. The chat still shows the text.'), sw('proactiveVoice',c.proactiveVoice,'Speak check-ins','Hear her when she has something to say and you’re available.'), sw('checkInReplies',c.checkInReplies,'Reply to spoken check-ins','When Capri speaks first, listen for a reply for a few seconds without requiring Hey Capri.'), row('Voice engine','Qwen uses your chosen character voice with streaming playback.', options('ttsEngine',c.ttsEngine,[['qwen','Qwen — expressive local voice'],['windows','Windows offline voice'],['chatterbox','Chatterbox (local setup)'],['f5','F5-TTS (local setup)']],'Voice engine')), row('Try her voice','Compare the same line in different styles.', '<div class="actions voice-preview">' + options('previewStyle',previewStyle,[['neutral','Neutral'],['playful','Playful'],['comforting','Comforting'],['pleased','Pleased'],['curious','Curious']],'Voice delivery style') + button('Preview voice','voice-preview') + '</div>'), ...(c.ttsEngine === 'qwen' ? [row('Voice model folder','Your downloaded Qwen Base model. Speech stays on this PC.',field('ttsModel',c.ttsModel,'Voice model folder'))] : [row('Processing','For Chatterbox and F5. Qwen uses the NVIDIA GPU.', options('ttsDevice',c.ttsDevice,[['cpu','CPU'],['cuda','NVIDIA GPU']],'Processing'))]), row('Python executable','Local neural voice runtime.',field('ttsPython',c.ttsPython,'Python executable')),row('Reference WAV','The recording that defines her voice.',field('ttsReference',c.ttsReference,'Reference WAV')),row('Reference transcript','Exact words spoken in the reference recording.',field('ttsReferenceText',c.ttsReferenceText,'Reference transcript'))) + `<p class="fine">Qwen warms up when you open a conversation, reuses the voice while chatting and releases its model after five minutes without speech. The first warmup takes longer. Neural voices require separately installed model weights.</p>`;
-  if (page === 'memory') content.innerHTML = heading('THINGS WORTH KEEPING', 'Memory', 'A little continuity, saved on your own PC. You choose what stays.') +
-    section('RECENT CONVERSATIONS') + card(
-      row('Remember recent chats', 'Keep up to 12 voice or text exchanges for 7 days on this PC. Codex can use their text to continue the conversation. Turning this off clears them.',
-        `<label class="switch"><input type="checkbox" data-action-switch="remember-chat" ${c.rememberRecentChat === true ? 'checked' : ''} aria-label="Remember recent chats"><span></span></label>`),
-      row('Clear recent chats', 'Remove saved conversation text and start fresh.', button('Clear recent chats', 'clear-recent-chat', 'danger'))) +
-    card(sw('privacy.memoryEnabled',p.memoryEnabled,'Personal memory','Keep personal details and topic preferences on this PC.'),sw('privacy.memoryLearn',p.memoryLearn,'Learn from conversation','Automatically save clearly stated interests, activities and belongings in voice and text chat.'),sw('privacy.memoryConfirmChanges',p.memoryConfirmChanges,'Review requested changes','Ask before applying requested memory edits or removals.'),sw('privacy.memoryCandidates',p.memoryCandidates,'Offer to remember','Let Capri suggest memories during conversation. Each save asks first.'),sw('privacy.memoryRecall',p.memoryRecall,'Recall in conversation','Give Codex relevant saved facts and topic preferences.')) +
-    section('KEEP / REVIEW / CLEAR') + card(row('Keep memories for', 'Retention starts from the last edit.',options('privacy.retentionDays',p.retentionDays,[[30,'30 days'],[90,'90 days'],[365,'1 year'],[0,'Until I delete them']],'Memory retention')),row('Review your memories','List, edit or forget individual facts in the local commands panel.',button('Review','memory-open'))) + `<div class="actions">${button('Export memories','memory-export')}${button('Delete all memories','memory-delete','danger')}</div>`;
-  if (page === 'reminders') {
-    const list = state.reminders || [], name = esc(c.displayName || 'Your companion');
-    content.innerHTML = heading('NEVER FORGET', 'Reminders', `${name} will speak up when these are due. Ask her to add one, or manage them here.`) + section('UPCOMING') +
-      (list.length ? card(...list.map(item => row(esc(item.text), `Next: ${esc(item.next)} · ${esc(item.repeat)}`,
-        `<div class="actions">` + (item.movable ? `<input type="time" data-reminder-time="${esc(item.id)}" value="${esc(item.next.slice(11, 16))}" aria-label="New time for ${esc(item.text)}">` +
-        `<button class="button" data-reminder-move="${esc(item.id)}" data-date="${esc(item.next.slice(0, 10))}">Move</button>` : '') +
-        `<button class="button" data-reminder-cancel="${esc(item.id)}">Cancel</button></div>`))) :
-        card(row('No reminders yet', `Tell ${name} what to remind you about and when, and it shows up here.`)));
-  }
-  if (page === 'awareness') content.innerHTML = heading('AWARE / ON YOUR TERMS', 'PC awareness', 'Snapshots are collected locally on demand or activity changes. Selected context may be sent to Codex. No screen recording or keylogging.') +
-    `<div class="hero"><div class="hero__top"><h2>Every app included.</h2><span class="badge">AUTOMATIC</span></div><p>New apps are included automatically. There’s no app list to maintain.</p></div>` +
-    card(sw('privacy.contextForeground',p.contextForeground,'Active app','Know which app is in front.'),sw('privacy.contextTitles',p.contextTitles,'Window titles','Include titles, which may contain private details.'),sw('privacy.contextProcesses',p.contextProcesses,'Open apps & processes','Read app names and running background processes.'),sw('privacy.contextEvents',p.contextEvents,'Respond to activity changes','Refresh on resume, power changes and foreground changes.')) +
-    section('AGENT PRESENCE') + card(sw('systemAccess',c.systemAccess,'System tools','Use Codex shell, file and web tools for your requests; approval prompts appear in Capri.'),sw('screenAwareness',c.screenAwareness,'Screen vision','Use current screen snapshots for your requests. Images are sent to OpenAI; they are not saved.'),sw('autonomyEnabled',c.autonomyEnabled,'Allow companion conversations','Let Capri start a brief conversation while you are available. She waits 5–15 minutes between opportunities and stays quiet when busy.'),sw('proactiveEnabled',c.proactiveEnabled,'Start conversations','Rotate between permitted app context, saved facts, open questions and playful topics. No background screenshots or desktop actions.'),sw('cognitiveEnabled',c.cognitiveEnabled,'Reflect on open questions','Reconsider permitted project evidence and app patterns with Codex, at most twice per hour. Questions remain tentative and cannot start actions.')) +
-    section('QUIET CHECK-IN TRIAL') + card(
-      row('Quiet trial', trial?.phase === 'running' ? `Collecting until ${esc(new Date(trial.endsAt).toLocaleString())}. Check-ins are quiet.`
-        : trial?.phase === 'review' ? 'Ready to review. Check-ins are quiet until you resume them.'
-        : 'For one day, review what Capri would have said and why.',
-        trial?.phase === 'live' ? button('Start quiet trial','initiative-start') : button('Review trial','initiative-open')),
-      ...(trial?.phase === 'live' && trial.startedAt !== null ? [row('Trial report', 'See proposed check-ins and rate their timing.',
-        button('Review report','initiative-open'))] : []),
-      ...(trial?.phase === 'review' ? [row('Check-ins', 'Return to your normal conversation settings.',
-        button('Resume check-ins','initiative-resume'))] : [])) +
-    section('REUSABLE ROUTINES') + card(sw('routinesEnabled',c.routinesEnabled !== false,'Remember named processes','Teach Capri the steps once, then ask for the process by name. Requires Memory and recall; saving does not run it.'),row('Your routines','Review, edit or forget a saved process. Runs use the usual tools and action review.',button('Review routines','routines-open'))) +
-    section('GROUNDED CURIOSITY') + card(sw('projectCuriosityEnabled',c.projectCuriosityEnabled !== false,'Learn from project evidence','With Memory and recall enabled, use saved check results, decisions, next steps and explicit feedback for cautious questions. Relevant saved records are sent to Codex for reflection.'),row('Questions you can review','Repeated app visits alone stay private. Stronger evidence may lead to one brief question, at most every six hours. Dismiss a topic to leave it aside.',button('Review questions','curiosity-open'))) +
-    section('DAILY REVIEWS') + card(sw('dailyReviewEnabled',c.dailyReviewEnabled !== false,'Save a daily review','With Memory enabled, quietly summarize saved project evidence after 6 pm. No chat transcripts or screen activity.'),sw('dailyReviewNotify',c.dailyReviewNotify === true,'Offer the daily recap','One brief notification when you are available. Off by default.'),row('Your saved progress','Review outcomes, open goals and the next step. Existing reviews remain available when saving is off.',button('Review today','reviews-open'))) +
-    section('CHOSEN INTERESTS') + card(sw('interestsEnabled',c.interestsEnabled,'Develop ongoing interests','With private reflection and companion conversations enabled, Capri can choose or refine one creative interest per day using Codex. These stay separate from your goals and never start desktop actions.'),row('Let a topic grow','Review, pause, dismiss or resolve a chosen interest. A selected project and a few saved preferences can inspire her. No screen images or project files are used.',button('Review interests','interests-open'))) +
-    section('PC CONTEXT') + card(sw('privacy.contextTime',p.contextTime,'Time & day','Use the local clock when relevant.'),sw('privacy.contextPower',p.contextPower,'Battery & power','Notice charging and battery status.'),sw('privacy.contextPerformance',p.contextPerformance,'System performance','Include memory and CPU usage when relevant.'));
-  if (page === 'connections') content.innerHTML = heading('BETTER TOGETHER', 'Connections', 'Reasoning uses your signed-in Codex CLI account. Messages, tool results and selected context are sent to OpenAI; account limits apply.') +
-    section('PROJECT COMPANION') + card(row(state.project ? `Working with ${esc(state.project.name)}` : 'Choose a project',state.project ? esc(state.project.root) : 'Choose the folder Capri should use for your requested work.',button('Choose folder','project-choose') + (state.project ? button('Use home folder','project-off') : '')),row('Goals and decisions','With Memory enabled, new goals belong to this project. In chat, use /project help to review notes, report outcomes or export your project.')) +
-    card(row('Codex executable','Leave empty for automatic discovery, or enter the absolute codex.exe path.',field('codexExecutable',c.codexExecutable,'Codex executable')),row('Model','Leave empty to use the account default.',field('codexModel',c.codexModel,'Codex model')),row('Reasoning effort','Use an effort supported by your model.',options('codexEffort',c.codexEffort,[['low','Low'],['medium','Medium'],['high','High'],['xhigh','Extra high']],'Reasoning effort'))) +
-    `<div class="hero"><div class="hero__top"><h2>Codex companion</h2><span class="badge ${state.integration.lastSeen ? '' : 'paused'}">${state.integration.lastSeen ? 'CONNECTED' : 'WAITING'}</span></div><p>${state.integration.lastSeen ? 'Receiving local activity notifications from Codex.' : 'No real Codex activity received in this run yet.'}</p></div>` +
-    card(row('Local notifications', 'Work, completion and approval alerts from Codex.'),row('Approval stays with you','Review Codex approvals in Codex. Capri’s desktop actions ask separately.')) + `<p class="fine">Regular ChatGPT conversations are not connected. Manage trusted notification hooks with /hooks in Codex.</p>`;
-  if (page === 'updates') content.innerHTML = heading('KEEP HER CURRENT', 'Updates & app', 'One place for versions, restarts and how Capri starts with you.') +
-    `<div class="hero"><div class="hero__top"><h2>Capri ${esc(r.version)}</h2><span class="badge ${r.currentSource ? '' : 'paused'}">${r.currentSource ? 'SOURCE LOADED' : 'RESTART READY'}</span></div><p>${r.currentSource ? 'This session is running the current local source.' : 'Your local source has changed. Restart Capri to load the new version.'}</p></div>` +
-    `<div class="actions">${button('Check local changes','refresh')}${button('Restart Capri','restart','primary')}</div><p class="fine">Updates are managed in this local project. Restarting loads saved changes; it does not download a new release.</p>` +
-    section('BROWSER & MEDIA') + card(row('Preferred browser','Websites and media use your normal signed-in browser. Firefox opens a new tab in an existing window.',options('preferredBrowser',c.preferredBrowser||'Firefox',[['Firefox','Firefox'],['system','Windows default'],['Google Chrome','Google Chrome'],['Microsoft Edge','Microsoft Edge'],['Brave','Brave']],'Preferred browser')),row('Music & anime','Music requests use YouTube Music. Watch anime opens Crunchyroll and selects your profile.'),row('Crunchyroll profile','The visible profile name Capri should select. Leave empty to ask when there are multiple profiles.',field('crunchyrollProfile',c.crunchyrollProfile||'','Crunchyroll profile'))) + section('YOUR ROUTINE') + card(row('Start with Windows','Launch Capri directly, without a terminal.', `<label class="switch"><input type="checkbox" data-action-switch="startup" ${state.startup ? 'checked' : ''} aria-label="Start with Windows"><span></span></label>`),row('Conversation language','Used when your message doesn’t specify a language.',options('lang',c.langSetting,[['auto','Follow Windows'],['en','English'],['es','Español'],['fr','Français'],['pt','Português'],['ru','Русский']],'Conversation language'))) +
-    section('LOCAL BUILD') + `<p class="mono">${esc(r.build)}<br>${esc(r.root)}</p>`;
-  if (previousPage === page) content.scrollTop = scrollTop;
-  else {
-    content.classList.remove('is-changing-page');
-    void content.offsetWidth;
-    content.classList.add('is-changing-page');
-  }
-  if (focused && previousPage === page) {
-    const replacement = [...content.querySelectorAll('[data-key], [data-scale], [data-action-switch]')].find(el =>
-      focused.key ? el.dataset.key === focused.key : focused.scale ? el.dataset.scale === focused.scale : focused.action && el.dataset.actionSwitch === focused.action);
+  content.dataset.page = place;
+  document.querySelector('#status').textContent = state.config.gamingMode ? 'Taking a break' : 'Here with you';
+  document.body.classList?.toggle('is-paused', state.config.gamingMode === true);
+  content.innerHTML = quickHtml() + (view ? deeperHtml() : `<div class="sections">${SECTIONS.map(sectionHtml).join('')}</div>`);
+  if (samePlace) content.scrollTop = scrollTop;
+  if (focused && samePlace) {
+    const replacement = [...content.querySelectorAll('[data-key], [data-segment], [data-action-switch]')].find(el =>
+      focused.key ? el.dataset.key === focused.key : focused.segment ? el.dataset.segment === focused.segment : focused.action && el.dataset.actionSwitch === focused.action);
     if (replacement) {
       if (focused.draft !== null && replacement.type === 'text') {
         replacement.value = focused.draft;
@@ -107,11 +130,12 @@ function render() {
     }
   }
 }
-function notice(text, error = false) { document.querySelector('#notice').textContent = text; document.querySelector('.statusbar').classList.toggle('error',error); }
+
+function notice(message, error = false) { document.querySelector('#notice').textContent = message; document.querySelector('.statusbar').classList.toggle('error', error); }
 const transactions = new SettingsQueue({
   onBusy(active) {
     busy = active;
-    if (active) { document.body.setAttribute('aria-busy', 'true'); notice('Saving...'); }
+    if (active) { document.body.setAttribute('aria-busy', 'true'); notice('Saving…'); }
     else document.body.removeAttribute('aria-busy');
   },
   onResult(result, { redraw = true } = {}) {
@@ -124,40 +148,53 @@ const transactions = new SettingsQueue({
     if (transactions.pending === 1) render();
   },
 });
-function perform(task, options) { return transactions.run(task, options); }
+const perform = (task, options) => transactions.run(task, options);
+const patchKey = (key, v) => perform(() => host.patch(key.startsWith('privacy.') ? { privacy: { [key.slice(8)]: v } } : { [key]: v }));
 
 document.addEventListener('click', event => {
-  const nav = event.target.closest('nav button[data-page]');
-  if (nav) { page = nav.dataset.page; render(); content.scrollTop=0; return; }
-  const scale = event.target.closest('[data-scale]');
-  if (scale) { const value = Number(scale.dataset.scale); perform(() => host.patch({ scale: value })); }
-  const cancel = event.target.closest('[data-reminder-cancel]');
+  const target = event.target;
+  const section = target.closest('[data-section]');
+  if (section) { openSection = openSection === section.dataset.section ? null : section.dataset.section; render(); return; }
+  const deeper = target.closest('[data-deeper]');
+  if (deeper) { view = deeper.dataset.deeper; render(); content.scrollTop = 0; return; }
+  if (target.closest('[data-back]')) { view = null; render(); return; }
+  const segment = target.closest('[data-segment]');
+  if (segment) { if (segment.dataset.value !== undefined) patchKey(segment.dataset.segment, Number(segment.dataset.value)); return; }
+  const toggle = target.closest('[data-toggle]');
+  if (toggle) { const key = toggle.dataset.toggle; patchKey(key, !(state.config[key] === true)); return; }
+  const cancel = target.closest('[data-reminder-cancel]');
   if (cancel) { const id = Number(cancel.dataset.reminderCancel); perform(() => host.action('reminder-cancel', id)); return; }
-  const move = event.target.closest('[data-reminder-move]');
+  const move = target.closest('[data-reminder-move]');
   if (move) {
     const id = Number(move.dataset.reminderMove), time = content.querySelector(`[data-reminder-time="${id}"]`)?.value;
     if (!time) { notice('Pick a time first.', true); return; }
     perform(() => host.action('reminder-move', { id, at: time, date: move.dataset.date })); return;
   }
-  const action = event.target.closest('[data-action]');
-  if (action) { const name = action.dataset.action, value = action.dataset.value; perform(() => host.action(name, name === 'voice-preview' ? previewStyle : value === undefined ? undefined : value === 'true')); }
+  const action = target.closest('[data-action]');
+  if (action) {
+    const name = action.dataset.action, raw = action.dataset.value;
+    perform(() => host.action(name, name === 'voice-preview' ? previewStyle : raw === undefined ? undefined : raw === 'true'));
+  }
 });
-document.addEventListener('input', event => { if (event.target.dataset.key === 'volume') event.target.nextElementSibling.textContent = `${event.target.value}%`; });
+document.addEventListener('input', event => {
+  if (event.target.dataset?.key === 'volume') event.target.nextElementSibling.textContent = `${event.target.value}%`;
+});
 document.addEventListener('change', event => {
   const el = event.target;
-  if (el.dataset.actionSwitch) { const name = el.dataset.actionSwitch, value = el.checked; perform(() => host.action(name, value)); return; }
-  if (!el.dataset.key) return;
-  if (el.dataset.key === 'previewStyle') { previewStyle = el.value; return; }
+  if (el.dataset.actionSwitch) { const name = el.dataset.actionSwitch, checked = el.checked; perform(() => host.action(name, checked)); return; }
   const key = el.dataset.key;
-  let value = el.type === 'checkbox' ? el.checked : el.value;
-  if (key === 'volume') value = Number(value)/100;
-  if (key === 'displayId') value = value === '' ? null : Number(value);
-  if (key === 'autonomyIntervalSeconds') value = Number(value);
-  if (key === 'privacy.retentionDays') value = Number(value);
-  perform(() => host.patch(key.startsWith('privacy.') ? {privacy:{[key.slice(8)]:value}} : {[key]:value}));
+  if (!key) return;
+  if (key === 'previewStyle') { previewStyle = el.value; return; }
+  let v = el.type === 'checkbox' ? el.checked : el.value;
+  if (key === 'volume') v = Number(v) / 100;
+  else if (BY_KEY.get(key)?.parse) v = BY_KEY.get(key).parse(v);
+  patchKey(key, v);
 });
 document.querySelector('#close').addEventListener('click', () => host.action('close'));
-document.addEventListener('keydown', event => { if (event.key === 'Escape') host.action('close'); });
-host.onUpdate(value => { state = value; if (!busy && !content.contains(document.activeElement)) render(); });
-try { state = await host.state(); render(); document.documentElement.dataset.settingsReady='true'; }
-catch (error) { notice(error.message,true); }
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  if (view) { view = null; render(); } else host.action('close');
+});
+host.onUpdate(next => { state = next; if (!busy && !content.contains(document.activeElement)) render(); });
+try { state = await host.state(); render(); document.documentElement.dataset.settingsReady = 'true'; }
+catch (error) { notice(error.message, true); }

@@ -26,10 +26,11 @@ function createSettingsWindow({ state, patch, action }) {
     open() {
       if (!window || window.isDestroyed()) {
         const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
-        window = new BrowserWindow({ width: Math.min(840, area.width), height: Math.min(690, area.height),
-          minWidth: Math.min(640, area.width), minHeight: Math.min(530, area.height),
-          x: area.x + Math.max(0, Math.round((area.width - 840) / 2)), y: area.y + Math.max(0, Math.round((area.height - 690) / 2)),
-          title: 'Capri — Control room', frame: false, backgroundColor: '#130e1d',
+        // Small rounded Orbit window: transparent so the CSS draws its corners (10px margin for the soft shadow).
+        const width = Math.min(400, area.width), height = Math.min(640, area.height);
+        window = new BrowserWindow({ width, height, minWidth: Math.min(360, area.width), minHeight: Math.min(420, area.height),
+          x: area.x + Math.max(0, Math.round((area.width - width) / 2)), y: area.y + Math.max(0, Math.round((area.height - height) / 2)),
+          title: 'Stella — Control room', frame: false, transparent: true, backgroundColor: '#00000000', resizable: true, maximizable: false,
           autoHideMenuBar: true, show: false, icon: path.resolve(__dirname, '../../assets/icons/capri.ico'),
           webPreferences: { preload: path.resolve(__dirname, '../settings-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
         });
