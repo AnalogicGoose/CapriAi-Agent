@@ -35,6 +35,8 @@ function overlayPatch(input) {
   const result = {};
   for (const [key, value] of Object.entries(input)) {
     if (['visible', 'welcomed'].includes(key) && typeof value === 'boolean') result[key] = value;
+    else if (key === 'stellaAnchor' && (value === null || (value && typeof value === 'object' && !Array.isArray(value)
+      && Number.isFinite(value.x) && Number.isFinite(value.y)))) result.stellaAnchor = value && { x: Math.round(value.x), y: Math.round(value.y) };
     else throw Error('Unknown or invalid preference.');
   }
   return result;

@@ -123,6 +123,24 @@ test('render maps the card box from its display to native pixels', async () => {
   assert.deepEqual(await f.ctl.render([], null), { cardBounds: null });
 });
 
+test('walkthrough reports its target and clears at the end', async () => {
+  const focus = [];
+  const f = fixture({ extra: { focus: e => focus.push(e) } });
+  const mark = { id: 'm1', kind: 'ring', bounds: box(100, 100, 60, 20) };
+  await f.ctl.render([mark], { kind: 'steps', title: 'T', items: ['Click'], buttons: [] }, { window: { ...f.s.fg } });
+  assert.deepEqual(focus.at(-1), { displayId: 1, rect: box(100, 100, 60, 20) });
+  await f.ctl.render([], { kind: 'steps', title: 'T', items: ['Click'], buttons: [] }, { window: { ...f.s.fg } });
+  assert.equal(focus.at(-1).displayId, 1);
+  assert.equal(focus.at(-1).rect.width, f.s.renders.at(-1).get(1).cards[0].box.width);
+  const t = tools(f.ctl);
+  await t.execute('capri_walkthrough', PLAN, ctx());
+  await f.advance(0);
+  f.ctl.stop();
+  await f.advance(0);
+  assert.equal(focus.at(-1), null);
+  assert.doesNotThrow(() => fixture({ extra: { focus: () => { throw Error('x'); } } }).ctl.render([mark], null));
+});
+
 test('appName comes from the process table, cached per pid', () => {
   const f = fixture();
   assert.equal(f.ctl.appName({ id: 1, pid: 12 }), 'chrome');

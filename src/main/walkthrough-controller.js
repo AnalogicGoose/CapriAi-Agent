@@ -28,12 +28,12 @@ const within = (p, b) => Boolean(p && b) && p.x >= b.x && p.x <= b.x + b.width &
 
 class WalkthroughController {
   constructor({ targets, layer, displays, screenToDip, dipToScreen, cursor, foreground, pointer, processRows, speak,
-    lang = () => 'en', snapshot, infer, busy = () => false, guide = null, allowed = () => true, ownPid = process.pid, onActive = () => {},
+    lang = () => 'en', snapshot, infer, busy = () => false, guide = null, allowed = () => true, ownPid = process.pid, onActive = () => {}, focus = () => {},
     body = null, bodyAllowed = () => false, gate = null, reminderWindow = () => false,
     now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, every = setInterval, stopEvery = clearInterval,
     sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
     Object.assign(this, { targets, layer, displays, screenToDip, dipToScreen, cursor, foreground, pointer, processRows,
-      speakLine: speak, lang, snapshot, infer, busy, guide, allowed, ownPid, onActive, now, setTimer, clearTimer, every, stopEvery, sleep,
+      speakLine: speak, lang, snapshot, infer, busy, guide, allowed, ownPid, onActive, focus, now, setTimer, clearTimer, every, stopEvery, sleep,
       body, bodyAllowed, gate, reminderWindow });
     this.current = null;
     this.awaiting = false;  // a request made during the walkthrough is being answered
@@ -83,7 +83,7 @@ class WalkthroughController {
     this.setInteractive(null);
     Object.assign(this, { current: null, awaiting: false, turn: null, window: null, card: null, lastDraw: null });
     this.apps.clear();
-    if (!this.replacing) { this.notifyActive(false); this.react('mood'); }
+    if (!this.replacing) { this.notifyActive(false); this.react('mood'); this.sendFocus(null); }
   }
 
   // Her body reacts (spec 5.1) only while her overlay is visible and not fullscreen; any failure is ignored.
@@ -101,6 +101,9 @@ class WalkthroughController {
     this.listening = on;
     if (this.current && this.lastDraw) this.render(...this.lastDraw).catch(() => {});
   }
+
+  // Tells Stella where the current step's target is (screen DIP); null when the walkthrough ends. Best effort.
+  sendFocus(value) { try { this.focus(value); } catch { /* her position is best effort */ } }
 
   notifyActive(active) { try { this.onActive(active); } catch { /* listening state is best effort */ } }
 
@@ -189,6 +192,14 @@ class WalkthroughController {
       if (placed && display) shown = { displayId: id, dip: { x: placed.box.x + display.bounds.x, y: placed.box.y + display.bounds.y, width: placed.box.width, height: placed.box.height } };
     }
     this.card = shown;
+    let target = null;
+    for (const [id, s] of scene) {
+      const display = displays.find(d => d.id === id);
+      const mark = s.marks?.[0];
+      if (mark && display) { target = { displayId: id, rect: { x: mark.box.x + display.bounds.x, y: mark.box.y + display.bounds.y, width: mark.box.width, height: mark.box.height } }; break; }
+    }
+    if (!target && shown) target = { displayId: shown.displayId, rect: { ...shown.dip } };
+    if (target) this.sendFocus(target);
     if (!shown) this.setInteractive(null);
     return { cardBounds: shown ? this.dipToScreen(shown.dip) : null };
   }

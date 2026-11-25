@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('host', {
   onAgentSuggestion: on('agent:suggestion'),
   onConversation: on('companion:conversation'),
   onGuideSay: on('guide:say'),
+  onAgentActivity: on('agent:activity'),
+  onGuideFocus: on('guide:focus'),
   onReminderDue: on('reminder:due'),
   reminderReady: () => ipcRenderer.send('reminder:ready'),
   reminderShown: (id, firedDue) => ipcRenderer.send('reminder:shown', id, firedDue),

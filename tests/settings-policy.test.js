@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { settingsPatch } = require('../src/main/settings-policy');
+const { settingsPatch, overlayPatch } = require('../src/main/settings-policy');
 
 test('settings accept displayed preferences and reject hidden agent/action switches and invalid values', () => {
   assert.deepEqual(settingsPatch({ dailyReviewEnabled: true, dailyReviewNotify: false }), { dailyReviewEnabled: true, dailyReviewNotify: false });
@@ -21,4 +21,10 @@ test('control room migration selects Qwen and enables built-in agent/actions wit
   assert.equal(updated.gamingMode,true); assert.equal(updated.scale,0.45); assert.equal(updated.privacy.memoryEnabled,false); assert.equal(updated.privacy.allApps,true);
   assert.equal(migrateControlRoom(updated),updated);
   assert.equal(old.agentEnabled,false);
+});
+
+test('overlay may save a finite anchor only', () => {
+  assert.deepEqual(overlayPatch({ stellaAnchor: { x: 1.6, y: 2.2 } }), { stellaAnchor: { x: 2, y: 2 } });
+  assert.deepEqual(overlayPatch({ stellaAnchor: null }), { stellaAnchor: null });
+  for (const bad of [{ x: 'a' }, { x: Infinity, y: 0 }, { x: 1 }, 5, 'x', [], { x: NaN, y: 1 }]) assert.throws(() => overlayPatch({ stellaAnchor: bad }));
 });

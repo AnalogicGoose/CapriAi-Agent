@@ -363,7 +363,7 @@ const walkthroughs = new WalkthroughController({ targets: guideTargets, layer: g
   processRows: () => require('./native-windows').processRows(), allowed: () => screenAccess.enabled(),
   lang: () => resolveLang(config.load().lang), busy: () => brain.busy || decisionBrain.busy,
   speak: guideSay, onActive: () => syncCommands(), gate: exclusiveGate, reminderWindow: () => Boolean(reminders?.windowOpen()),
-  body: action => bodyAction(action),
+  body: action => bodyAction(action), focus: sendGuideFocus,
   bodyAllowed: () => Boolean(overlay && !overlay.isDestroyed() && overlay.isVisible() && !fullscreenState.active && !config.load().gamingMode),
   snapshot: () => screenAccess.snapshot('', () => {}, { lifted: true }),
   infer: async request => {
@@ -391,7 +391,7 @@ const currentContext = text => {
 };
 const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: resolveLang, context: pcContext,
   screen: screenAccess, accessibility, guide, walkthroughs, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
-  body: bodyAction,
+  body: bodyAction, activity: event => overlay?.webContents.send('agent:activity', event),
   actions, store: memory, goals, curiosity: () => curiosity, state: settingsState, patch: updateConfig, confirm: confirmMemory });
 const brain = new CodexBrain({ settings: agentConfig, recentConversation,
   warmIdleMs: 3 * 60 * 1000, canKeepWarm: () => !config.load().gamingMode && sessionAvailable,
@@ -590,6 +590,20 @@ function serveProtocol() {
 function targetDisplay() {
   const { displayId } = config.load();
   return screen.getAllDisplays().find((d) => d.id === displayId) || screen.getPrimaryDisplay();
+}
+
+// Tells Stella where the walkthrough target is: a rect in overlay coordinates on her display, else the direction of its display.
+function sendGuideFocus(focus) {
+  if (!overlay || overlay.isDestroyed()) return;
+  if (!focus) { overlay.webContents.send('guide:focus', null); return; }
+  const home = targetDisplay(), other = screen.getAllDisplays().find(d => d.id === focus.displayId);
+  const r = focus.rect;
+  if (focus.displayId === home.id) overlay.webContents.send('guide:focus', { rect: { x: r.x - home.workArea.x, y: r.y - home.workArea.y, w: r.width, h: r.height } });
+  else if (other) {
+    const dx = other.bounds.x + other.bounds.width / 2 - (home.bounds.x + home.bounds.width / 2);
+    const dy = other.bounds.y + other.bounds.height / 2 - (home.bounds.y + home.bounds.height / 2);
+    overlay.webContents.send('guide:focus', { direction: Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down') });
+  }
 }
 
 function fitOverlay() {

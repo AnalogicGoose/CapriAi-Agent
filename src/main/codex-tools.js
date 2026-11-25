@@ -179,7 +179,17 @@ class CodexTools {
     if (session.status === 'running') session.stop();
     return session.receipt();
   }
+  // Tells Stella a tool started or ended. Only the tool name and a short operation word leave here, never arguments.
+  report(event) { try { this.activity?.(event); } catch { /* an animation never breaks a tool */ } }
   async run(name, args, context) {
+    const op = args?.operation ?? args?.action ?? args?.tool ?? null;
+    const shortOp = typeof op === 'string' ? op.slice(0, 40) : null;
+    this.report({ tool: name, op: shortOp, phase: 'start' });
+    let ok = false;
+    try { const result = await this.runTool(name, args, context); ok = true; return result; }
+    finally { this.report({ tool: name, op: shortOp, phase: 'end', ok }); }
+  }
+  async runTool(name, args, context) {
     let interpreted = false;
     if (CONVERSATIONAL_TOOLS.has(name) && args && Object.hasOwn(args, 'requestEvidence')) {
       const { requestEvidence, ...operation } = args;
