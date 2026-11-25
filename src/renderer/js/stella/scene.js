@@ -34,6 +34,8 @@ const SWARM = Array.from({length: P.blades.count * D.perGap}, (_, i) => ({
 
 const env = (o, k) => (o && o[k] > 0 ? Math.min(1, o[k]) : 0);
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+// Into [0, 2pi): long sessions keep angles small enough for float32 (shader uniforms, Canvas).
+const turn = a => { const v = a - TAU * Math.floor(a / TAU); return v >= TAU ? 0 : v; };
 // Idle envelope, faded out by the eased reduced-motion factor `red` (0..1).
 const idleEnv = (idle, name, red) => (idle && idle.name === name ? clamp(idle.envelope || 0, 0, 1) * (1 - red) : 0);
 // Moves `value` toward the nearest multiple of `step`, eased.
@@ -92,6 +94,8 @@ export class SceneClock {
       const d = this.sticks - this.blades;
       this.sticks += settle(d, TAU / P.sticks.count, dt) - d;
     }
+    // Whole turns are invisible (the settles above work in quarter turns, which divide 2pi).
+    this.blades = turn(this.blades); this.sticks = turn(this.sticks); this.orbit = turn(this.orbit);
     this.sway += 0.6 * dt;
     this.swayOff = 0.5 * Math.sin(this.sway) * sway;
     this.tilt = damp(this.tilt, ie('globeTilt'), SPEED_EASE, dt);
@@ -217,9 +221,9 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
   let ringAlpha = Math.min(1, 0.8 + listen * 0.2 + 0.2 * fl + 0.3 * chime);
   ringAlpha = lerp(ringAlpha, 1, env(mo, 'approval'));
   const ring = {
-    r: ringR, turn: clock.ringTurn, alpha: ringAlpha * brightness * body,
+    r: ringR, turn: turn(clock.ringTurn), alpha: ringAlpha * brightness * body,
     glow: (0.14 + E * 0.15) * brightness * body,
-    chase: {angle: clock.chase, strength: think},
+    chase: {angle: turn(clock.chase), strength: think},
   };
 
   // Dot swarms in the gaps between the blades.
@@ -241,7 +245,7 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
   // Globe and its heart.
   const gr = R * P.ring * breath * P.globe * (1 - f);
   const globe = {
-    r: gr * breath, yaw: clock.spin, pitch: lerp(P.globePitch, 0.25, clock.tilt),
+    r: gr * breath, yaw: turn(clock.spin), pitch: lerp(P.globePitch, 0.25, clock.tilt),
     wavy: 0.08 + E * 0.9 + listen * 0.25, rippleSpeed: clock.rippleSpeed, ripple: clock.ripple,
     heart: {r: gr * (0.42 + E * 0.25 + listen * 0.08 + 0.03 * Math.sin(t * 1.3)), alpha: brightness * body},
     scan: env(mo, 'scan') > 0 ? Math.min(clock.scan, 1) : null,

@@ -62,7 +62,7 @@ test('angles accumulate, never jump when speed changes', async () => {
   for (let i = 0; i < 600; i++) {
     const think = i < 120 ? 0 : 1; // abrupt switch
     clock.step(dt, blendOf({ think }), IDLE, {});
-    for (const k of keys) maxD = Math.max(maxD, Math.abs(clock[k] - prev[k]));
+    for (const k of keys) maxD = Math.max(maxD, Math.abs(wrap(clock[k] - prev[k]))); // blades/sticks wrap at 2pi
     maxChase = Math.max(maxChase, Math.abs(clock.chase - prevChase));
     const sc = m.buildScene({ s: 360, t: i * dt, clock, blend: blendOf({ think }), idle: IDLE, motions: {} });
     if (i > 0) for (let k = 0; k < 4; k++) assert.ok(Math.abs(wrap(sc.blades[k].angle - prev.sc.blades[k].angle)) < 0.05);
@@ -70,7 +70,32 @@ test('angles accumulate, never jump when speed changes', async () => {
   }
   assert.ok(maxD < 0.05, `max delta ${maxD}`);
   assert.ok(maxChase < 0.08, `chase delta ${maxChase}`);
-  assert.ok(clock.blades > 5, 'blades accumulated');
+  assert.ok(clock.blades > 0 && clock.blades < TAU, 'blades kept in [0, 2pi)');
+});
+
+test('long sessions: angles stay in [0, 2pi) and frames stay continuous across the wrap', async () => {
+  const m = await load();
+  const clock = new m.SceneClock(), dt = 1 / 60;
+  clock.step(dt, blendOf({ think: 1 }), IDLE, {});
+  // a day and more of turning (and a counter-turning ring)
+  Object.assign(clock, { spin: 1e6 + 0.3, ringTurn: -1e6 - 0.7, chase: 1e6 + 1.1, blades: 1e6 + 0.2, sticks: 1e6 + 0.25,
+    orbit: 1e6 + 0.1 });
+  const inTurn = (v, what) => assert.ok(v >= 0 && v < TAU, `${what} = ${v}`);
+  let prev = null;
+  for (let i = 0; i < 2000; i++) {
+    clock.step(dt, blendOf({ think: 1 }), { name: 'dotDrift', envelope: 1, energy: 0.5 }, {});
+    for (const k of ['blades', 'sticks', 'orbit']) inTurn(clock[k], k);
+    const sc = m.buildScene({ s: 360, t: i * dt, clock, blend: blendOf({ think: 1 }), idle: IDLE, motions: {} });
+    inTurn(sc.globe.yaw, 'yaw'); inTurn(sc.ring.turn, 'ring.turn'); inTurn(sc.ring.chase.angle, 'chase.angle');
+    if (prev) {
+      for (const [a, b] of [[sc.globe.yaw, prev.globe.yaw], [sc.ring.turn, prev.ring.turn], [sc.ring.chase.angle, prev.ring.chase.angle],
+        ...sc.blades.map((x, k) => [x.angle, prev.blades[k].angle]), ...sc.sticks.map((x, k) => [x.angle, prev.sticks[k].angle])]) {
+        assert.ok(Math.abs(wrap(a - b)) < 0.1, `jump ${a} -> ${b}`);
+      }
+      for (let k = 0; k < sc.dots.length; k++) assert.ok(Math.hypot(sc.dots[k].x - prev.dots[k].x, sc.dots[k].y - prev.dots[k].y) < 12, `dot jump ${i} ${Math.hypot(sc.dots[k].x - prev.dots[k].x, sc.dots[k].y - prev.dots[k].y)}`);
+    }
+    prev = sc;
+  }
 });
 
 test('speaking widens and extends', async () => {
@@ -174,7 +199,7 @@ test('angular rates stay continuous when think switches abruptly', async () => {
     hist.push(Object.fromEntries(keys.map(k => [k, clock[k]])));
   }
   for (let i = 2; i < hist.length; i++) for (const k of keys) {
-    const d2 = hist[i][k] - 2 * hist[i - 1][k] + hist[i - 2][k];
+    const d2 = wrap(hist[i][k] - hist[i - 1][k]) - wrap(hist[i - 1][k] - hist[i - 2][k]); // blades/sticks wrap at 2pi
     assert.ok(Math.abs(d2) < 0.004, `${k} second difference ${d2} at ${i}`);
   }
 });
