@@ -1,7 +1,7 @@
 # Stella
 
 Stella is the on-screen character of the assistant. She replaced the old sprite character
-(the retired Stella renderer, see [ANIMATIONS.md](../ANIMATIONS.md)). Her code lives in
+(the retired Stella renderer, see [ANIMATIONS.md](ANIMATIONS.md)). Her code lives in
 `src/renderer/js/stella/`; `src/renderer/js/app.js` creates her on `#stella` / `#stella-canvas`.
 Voice, personality, memory and abilities are unchanged. The design is in
 [the spec](superpowers/specs/2026-11-24-stella-character-design.md); the visual reference is
