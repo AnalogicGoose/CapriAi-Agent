@@ -981,7 +981,8 @@ app.whenReady().then(async () => {
       win.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...dragAt});
       win.webContents.sendInputEvent({type:'mouseMove',x:dragAt.x-35,y:dragAt.y-35,modifiers:['leftButtonDown']});await pause(50);
       assert.equal(await js('window.fullscreenPet.dragging'),true,'Drag can start after fullscreen');
-      assert.ok(await js(`window.fullscreenPet.pos.x<${beforeDrag.x}-20`));
+      // Stella follows the pointer with a slight lag (eased), so wait for her rather than a fixed 50 ms.
+      await until(()=>js(`window.fullscreenPet.pos.x<${beforeDrag.x}-20`),'drag follows the pointer after fullscreen');
       win.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,x:dragAt.x-35,y:dragAt.y-35});
       await until(()=>js('!window.fullscreenPet.dragging'),'drag release after fullscreen');
       await until(()=>js("!window.fullscreenPet.busy&&window.fullscreenPet.stance!=='fall'"),'drop settles before chat');
