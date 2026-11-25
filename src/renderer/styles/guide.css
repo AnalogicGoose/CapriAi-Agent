@@ -1,5 +1,5 @@
 /* Guide layer: marks and cards drawn over the desktop, one window per display.
-   Same cel rules as the overlay: flat fills, hard edges, cut corners, violet misregistered copy, green for the target.
+   Orbit look like the overlay: midnight surfaces, soft glow, round shapes, gold for the target.
    Card metrics match guide-scene.js: padding 24 total, title 28, line 18, item gap 6, table row 24, width from the scene. */
 
 .guide-shapes,
@@ -24,35 +24,38 @@
 /* ---------- marks ---------- */
 
 .guide-spot {
-  fill: var(--ink);
+  fill: var(--st-bg-0);
   fill-opacity: 0.55;
 }
 
 .guide-ring {
   fill: none;
-  stroke: var(--green);
+  stroke: var(--st-gold);
   stroke-width: 3;
-  stroke-linejoin: miter;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(246, 220, 156, .55));
 }
 
 .guide-arrow {
-  stroke: var(--green);
+  stroke: var(--st-gold);
   stroke-width: 3;
-  stroke-linecap: butt;
+  stroke-linecap: round;
 }
 
 .guide-arrowhead {
-  fill: var(--green);
+  fill: var(--st-gold);
   stroke: none;
 }
 
 .guide-ring.is-shade,
 .guide-arrow.is-shade {
-  stroke: var(--violet);
+  stroke: var(--st-violet);
+  stroke-opacity: .55;
 }
 
 .guide-arrowhead.is-shade {
-  fill: var(--violet);
+  fill: var(--st-violet);
+  fill-opacity: .55;
 }
 
 .guide-pill {
@@ -62,15 +65,15 @@
   gap: 7px;
   height: 24px;
   padding: 0 10px;
-  border: 1px solid var(--violet);
+  border: 1px solid rgba(185, 164, 245, .35);
   border-radius: 999px;
-  background: var(--ink-2);
-  color: var(--paper);
-  box-shadow: 2px 2px 0 var(--violet);
-  font: 600 11px var(--font-display);
+  background: var(--st-panel-b);
+  color: var(--st-text);
+  box-shadow: 0 0 14px rgba(139, 92, 246, .4);
+  font: 600 11px var(--st-font);
   white-space: nowrap;
 }
-.guide-pill::before { content: ''; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+.guide-pill::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--st-gold); box-shadow: 0 0 6px var(--st-gold); }
 .guide-pill span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .guide-badge {
@@ -80,17 +83,19 @@
   min-width: 24px;
   height: 24px;
   padding: 0 4px;
-  background: var(--green);
-  color: var(--ink);
-  box-shadow: 2px 2px 0 var(--violet);
-  font: 700 13px/1 var(--font-display);
+  border-radius: 999px;
+  background: radial-gradient(circle at 40% 35%, var(--st-warm), var(--st-gold) 45%, #d9a86a);
+  color: var(--st-ink);
+  box-shadow: 0 0 12px rgba(246, 220, 156, .5);
+  font: 700 13px/1 var(--st-font);
 }
 
 .guide-underline {
   position: absolute;
   height: 3px;
-  background: var(--green);
-  box-shadow: 2px 2px 0 var(--violet);
+  border-radius: 3px;
+  background: var(--st-gold);
+  box-shadow: 0 0 8px rgba(246, 220, 156, .6);
 }
 
 /* ---------- cards ---------- */
@@ -98,9 +103,9 @@
 .guide-card {
   position: absolute;
   display: flex;
-  color: var(--paper);
-  filter: drop-shadow(5px 5px 0 var(--violet));
-  animation: guide-card-in 170ms steps(3, jump-end) both;
+  color: var(--st-text);
+  filter: drop-shadow(0 12px 24px rgba(5, 4, 20, .6));
+  animation: guide-card-in 180ms var(--ease-out) both;
 }
 
 .guide-card__mic {
@@ -111,22 +116,19 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  background: var(--ink);
-  color: #64e9ae;
-  border: 1px solid #64e9ae;
-  box-shadow: 2px 2px 0 var(--violet);
+  z-index: 1;
+  border-radius: 50%;
+  background: var(--st-panel-b);
+  color: var(--st-ok);
+  border: 1px solid rgba(142, 230, 176, .6);
+  box-shadow: 0 0 10px rgba(142, 230, 176, .3);
 }
+.guide-card__mic svg { display: block; }
 .guide-card__mic svg { width: 13px; height: 13px; }
 
 .guide-card__plate {
   flex: 1;
   padding: 12px 16px;
-  background: var(--ink);
-  clip-path: polygon(
-    0 var(--cut), var(--cut) 0,
-    100% 0, 100% calc(100% - var(--cut)),
-    calc(100% - var(--cut)) 100%, 0 100%
-  );
 }
 
 .guide-card__title {
@@ -137,24 +139,25 @@
   margin: 0;
   padding-bottom: 8px;
   overflow: hidden;
-  font: 700 14px/20px var(--font-display);
-  letter-spacing: 0.02em;
+  font: 700 14px/20px var(--st-font);
+  letter-spacing: 0.01em;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .guide-card__title::before {
   content: '';
   flex: none;
-  width: 10px;
-  height: 10px;
-  background: var(--green);
-  clip-path: polygon(0 0, 100% 0, 100% 60%, 60% 100%, 0 100%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--st-gold);
+  box-shadow: 0 0 6px var(--st-gold);
 }
-.guide-card[data-kind='note'] .guide-card__title::before { background: var(--violet); }
+.guide-card[data-kind='note'] .guide-card__title::before { background: var(--st-lavender); box-shadow: 0 0 6px var(--st-lavender); }
 
 .guide-note {
   margin: 0;
-  font: 600 13px/18px var(--font-display);
+  font: 500 13px/18px var(--st-font);
   overflow-wrap: anywhere;
 }
 
@@ -167,7 +170,7 @@
   display: flex;
   gap: 8px;
   margin-bottom: 6px;
-  font: 600 13px/18px var(--font-display);
+  font: 500 13px/18px var(--st-font);
 }
 .guide-steps__n {
   flex: none;
@@ -175,15 +178,16 @@
   place-items: center;
   width: 18px;
   height: 18px;
-  background: var(--green);
-  color: var(--ink);
-  font: 700 11px/1 var(--font-mono);
+  border-radius: 50%;
+  background: rgba(246, 220, 156, .9);
+  color: var(--st-ink);
+  font: 700 11px/1 var(--st-font);
 }
 .guide-steps__text { min-width: 0; overflow-wrap: anywhere; }
 
 .guide-table {
   display: grid;
-  font: 400 11px var(--font-mono);
+  font: 400 12px var(--st-font);
 }
 .guide-table__head,
 .guide-table__cell {
@@ -193,14 +197,12 @@
   line-height: 23px;
   white-space: nowrap;
   text-overflow: ellipsis;
-  border-bottom: 1px solid var(--ink-2);
+  border-bottom: 1px solid var(--st-line);
 }
 .guide-table__head {
-  color: var(--green);
+  color: var(--st-gold);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom-color: var(--violet);
+  border-bottom-color: rgba(185, 164, 245, .4);
 }
 
 .guide-card__actions {
@@ -211,31 +213,24 @@
 .guide-card__button {
   height: 26px;
   padding: 0 14px;
-  border: 1px solid var(--paper-2);
-  border-radius: 0;
-  background: transparent;
-  color: var(--paper);
-  font: 700 12px var(--font-display);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  border: 1px solid rgba(185, 164, 245, .35);
+  border-radius: 999px;
+  background: rgba(55, 48, 163, .35);
+  color: var(--st-text);
+  font: 600 12px var(--st-font);
   cursor: pointer;
   pointer-events: auto;
 }
 .guide-card__button:first-child {
-  border-color: var(--green);
-  background: var(--green);
-  color: var(--ink);
-  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  border-color: transparent;
+  background: radial-gradient(circle at 40% 30%, var(--st-warm), var(--st-gold) 55%, #d9a86a);
+  color: var(--st-ink);
 }
-.guide-card__button:hover { border-color: var(--paper); background: var(--paper); color: var(--ink); }
-.guide-card__button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.guide-card__button:hover { border-color: rgba(246, 220, 156, .6); filter: brightness(1.08); }
+.guide-card__button:focus-visible { outline: 2px solid var(--st-gold); outline-offset: 2px; }
 
 @keyframes guide-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes guide-card-in {
-  0% { clip-path: inset(49% 50% 49% 50%); }
-  40% { clip-path: inset(49% -20px 49% -20px); }
-  100% { clip-path: inset(-20px -20px -20px -20px); }
-}
+@keyframes guide-card-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
   .guide-marks > *,

@@ -175,7 +175,7 @@ function drawCard(card) {
   const wrap = place(el('section', 'guide-card'), card.box.x, card.box.y, card.box.width);
   wrap.dataset.kind = card.kind;
   wrap.style.minHeight = `${card.box.height}px`;
-  const plate = el('div', 'guide-card__plate');
+  const plate = el('div', 'guide-card__plate orbit-surface');
   if (card.title) plate.append(el('h2', 'guide-card__title', card.title));
   plate.append(cardBody(card));
   const buttons = (Array.isArray(card.buttons) ? card.buttons : []).filter(b => b && typeof b.id === 'string');

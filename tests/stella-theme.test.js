@@ -55,3 +55,14 @@ test('old look is gone from overlays', () => {
   assert.equal((html.match(/data-talk="(text|voice)"/g) || []).length, 2);
   for (const talk of ['text', 'voice']) assert.match(html, new RegExp(`class="[^"]*orbit-icon--46[^"]*" data-talk="${talk}"`));
 });
+
+test('guide and highlight use theme tokens', () => {
+  for (const file of ['guide.css', 'desktop-highlight.css']) {
+    const source = read(`src/renderer/styles/${file}`).replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.match(source, /var\(--st-/, `${file} uses Stella tokens`);
+    assert.doesNotMatch(source, /var\(--green\)|#64e9ae/i, `${file} has no neon green`);
+    assert.doesNotMatch(source, /polygon\(/, `${file} has no cut corners`);
+    assert.doesNotMatch(source, /--font-display|Chakra Petch/, `${file} has no Chakra Petch`);
+    assert.doesNotMatch(source, /\d+px \d+px 0 var\(--violet\)/, `${file} has no hard offset shadows`);
+  }
+});
