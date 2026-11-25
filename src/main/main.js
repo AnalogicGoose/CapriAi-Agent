@@ -422,15 +422,17 @@ const brain = new CodexBrain({ settings: agentConfig, recentConversation, activi
   },
 });
 
+const { migrateProfile } = require('./profile-migration');
 const ROOT = path.resolve(__dirname, '..', '..');
 const VERSION = require('../../package.json').version;
 const runtime = require('./runtime-info').runtimeInfo(ROOT, VERSION);
 const DEV = process.argv.includes('--dev');
-app.setName('Capri');
-// Keep the existing profile across the rename and separate from upstream Capri.
+app.setName('Stella');
+// Her saved data lives in %APPDATA%\Stella; the first start after the rename moves it over from
+// her old profile folder (kept as a backup). Smoke tests use their own throwaway profile.
 const smokeTest = process.argv.some((arg) => path.basename(arg) === 'smoke-electron.js');
-app.setPath('userData', smokeTest && process.env.CAPRIGPT_TEST_PROFILE
-  ? process.env.CAPRIGPT_TEST_PROFILE : path.join(app.getPath('appData'), 'CapriGPT'));
+app.setPath('userData', smokeTest && process.env.STELLA_TEST_PROFILE ? process.env.STELLA_TEST_PROFILE
+  : migrateProfile(path.join(app.getPath('appData'), 'CapriGPT'), path.join(app.getPath('appData'), 'Stella')).dir);
 // Installed Codex transport with no background tools, actions or conversation history.
 const cognitiveBrain = new CodexBrain({ settings: () => config.load(),
   cwd: path.join(app.getPath('temp'), 'caprigpt-codex-cognition'),
