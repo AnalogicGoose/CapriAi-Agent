@@ -1,0 +1,136 @@
+import { smoothstep } from './math.js';
+
+const m = (duration, priority, hold) => hold ? { duration: 0, priority, hold: true } : { duration, priority };
+
+export const MOTIONS = {
+  flare: m(900, 2), fold: m(700, 2), radar: m(1800, 1), scan: m(1400, 1), ticks: m(1200, 1),
+  aim: m(0, 3, true), trail: m(1200, 1), chime: m(1800, 3), swirlIn: m(1300, 1), swirlOut: m(1300, 1),
+  approval: m(0, 3, true), glitch: m(500, 3), celebrate: m(1400, 2), musicPulse: m(0, 1, true),
+  wake: m(600, 2), pulse: m(500, 1), doublePulse: m(900, 1), spinBurst: m(1500, 2), breath: m(1600, 1),
+};
+
+const APP_FLARE = new Set(['open_url', 'open_app', 'open_workspace', 'open_media', 'play_music', 'play_video',
+  'youtube_latest', 'open_result']);
+const APP_RADAR = new Set(['search_web', 'search_news', 'steam_deals']);
+
+const AGENT = {
+  capri_close_app: 'fold',
+  capri_screen: 'scan', capri_context: 'scan', capri_point_on_snapshot: 'scan',
+  capri_input: 'ticks', capri_desktop_step: 'ticks', capri_control: 'ticks', capri_window_controls: 'ticks',
+  capri_routine_step: 'ticks',
+  capri_point: 'aim', capri_walkthrough: 'aim', capri_draw: 'trail', capri_reminder: 'swirlIn',
+  capri_memory_learn: 'swirlIn', capri_memory_change: 'swirlIn', capri_project_change: 'swirlIn',
+  capri_routines_save: 'swirlIn', capri_topic_recap: 'swirlIn',
+  capri_memory_lookup: 'swirlOut', capri_project_lookup: 'swirlOut', capri_routines_lookup: 'swirlOut',
+  capri_curiosity_lookup: 'swirlOut', capri_settings_read: 'swirlOut', capri_saved_work: 'swirlOut',
+  capri_daily_review: 'swirlOut',
+  capri_approval: 'approval',
+  capri_settings_change: 'pulse', capri_routines_delete: 'pulse', capri_body: 'pulse',
+};
+
+export function motionForAgentTool(tool, op) {
+  if (tool === 'capri_apps') return APP_RADAR.has(op) ? 'radar' : 'flare';
+  return Object.hasOwn(AGENT, tool) ? AGENT[tool] : 'think';
+}
+
+export function motionForCodexTool(tool = '') {
+  if (/search|grep|glob|find|fetch|browse/i.test(tool)) return 'radar';
+  if (/write|edit|patch|notebook/i.test(tool)) return 'ticks';
+  if (/read|view|inspect|list/i.test(tool)) return 'scan';
+  return 'think';
+}
+
+const ACT = {
+  alarm: 'glitch', flinch: 'glitch', curious: 'pulse', hop: 'celebrate', victory: 'celebrate',
+  split: 'spinBurst', zap: 'flare', point: 'aim', idleWave: 'doublePulse',
+  idleStretch: 'breath', idleYawn: 'breath', idleBreathe: 'breath', idleSway: 'breath', idlePreen: 'breath',
+  idleBounce: 'spinBurst', spin: 'spinBurst', dance: 'spinBurst',
+};
+
+export function motionForAct(name) {
+  return Object.hasOwn(ACT, name) ? ACT[name] : null;
+}
+
+const NO_SIT = 'I don’t sit anymore — I just float around now.';
+const BODY = {
+  come: { come: true, motion: 'pulse' }, nap: { rest: true, motion: 'breath' },
+  wake: { wake: true, motion: 'wake' }, mood: { motion: 'pulse' }, wave: { motion: 'doublePulse' },
+  dance: { motion: 'spinBurst' }, stretch: { motion: 'breath' },
+  sit: { motion: null, reply: NO_SIT }, stand: { motion: null, reply: NO_SIT },
+};
+
+export function bodyResponse(action) {
+  return { motion: null, reply: null, ...(Object.hasOwn(BODY, action) ? BODY[action] : {}) };
+}
+
+const ROUTINE_GAP = 1800, CROSSFADE = 250, RELEASE = 400, HOLD_IN = 150;
+
+export class MotionMixer {
+  constructor() { this.active = new Map(); this.lastRoutine = -Infinity; }
+
+  // Envelope of a motion's own shape (ignoring crossfade-out).
+  #shape(a, now) {
+    const t = now - a.start;
+    if (t < 0) return 0;
+    let e;
+    if (a.hold) {
+      e = smoothstep(t / HOLD_IN);
+      if (a.releasedAt != null) e = Math.min(e, 1 - smoothstep((now - a.releasedAt) / RELEASE));
+    } else {
+      const d = a.duration;
+      if (t >= d) return 0;
+      e = Math.min(smoothstep(t / (d * 0.15)), smoothstep((d - t) / (d * 0.25)));
+    }
+    return e;
+  }
+
+  #env(a, now) {
+    let e = this.#shape(a, now);
+    if (a.killedAt != null) e *= 1 - smoothstep((now - a.killedAt) / CROSSFADE);
+    return e;
+  }
+
+  #alive(a, now) {
+    if (a.killedAt != null && now >= a.killedAt + CROSSFADE) return false;
+    if (a.hold) return a.releasedAt == null || now < a.releasedAt + RELEASE;
+    return now - a.start < a.duration;
+  }
+
+  play(name, now) {
+    const def = MOTIONS[name];
+    if (!def) return false;
+    const cur = this.active.get(name);
+    if (def.hold && cur && cur.killedAt == null && cur.releasedAt == null && this.#alive(cur, now)) return false;
+    for (const [n, a] of this.active) if (!this.#alive(a, now)) this.active.delete(n);
+    for (const a of this.active.values()) if (a.killedAt == null && a.priority > def.priority) return false;
+    if (def.priority === 1) {
+      if (now - this.lastRoutine < ROUTINE_GAP) return false;
+      this.lastRoutine = now;
+    }
+    for (const a of this.active.values()) if (a.killedAt == null) a.killedAt = now;
+    this.active.set(name, { start: now, duration: def.duration, priority: def.priority, hold: !!def.hold });
+    return true;
+  }
+
+  release(name, now) {
+    const a = this.active.get(name);
+    if (a && a.hold && a.releasedAt == null) a.releasedAt = now;
+  }
+
+  update(now) {
+    const out = {};
+    for (const [n, a] of this.active) {
+      const e = this.#env(a, now);
+      if (e > 0) out[n] = e;
+    }
+    return out;
+  }
+
+  busy(now) {
+    for (const a of this.active.values()) {
+      if (a.hold && this.#alive(a, now) && a.releasedAt == null) return true;
+      if (a.priority >= 2 && this.#env(a, now) > 0) return true;
+    }
+    return false;
+  }
+}
