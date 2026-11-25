@@ -34,3 +34,24 @@ test('icon buttons are fixed circles', () => {
     assert.match(rule, new RegExp(`height:\\s*${size}px`));
   }
 });
+
+// Rules whose selector names one of the restyled overlay pieces.
+function overlayRules(source) {
+  const pieces = ['.talk-menu', '.panel', '.ticker', '.wake-indicator', '.voice-indicator'];
+  return [...source.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selector]) => pieces.some(piece => selector.includes(piece)))
+    .map(([, selector, body]) => ({ selector: selector.trim(), body }));
+}
+
+test('old look is gone from overlays', () => {
+  const rules = overlayRules(read('src/renderer/styles/capri.css'));
+  assert.ok(rules.length > 20, 'overlay rules found');
+  for (const { selector, body } of rules) {
+    assert.doesNotMatch(body, /polygon\(/, `${selector} has no cut corners`);
+    assert.doesNotMatch(body, /Chakra Petch|--font-display/, `${selector} has no Chakra Petch`);
+    assert.doesNotMatch(body, /#31ff72|var\(--green\)/i, `${selector} has no neon green`);
+  }
+  const html = read('src/renderer/index.html');
+  assert.equal((html.match(/data-talk="(text|voice)"/g) || []).length, 2);
+  for (const talk of ['text', 'voice']) assert.match(html, new RegExp(`class="[^"]*orbit-icon--46[^"]*" data-talk="${talk}"`));
+});

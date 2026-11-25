@@ -1,3 +1,4 @@
+import { partialText } from './rich-text.js';
 // Audio stays in the overlay; the local worker streams signed 16-bit PCM.
 // Change the silence between phrases while playing each generated sample as-is.
 const PHRASE_PAUSES = { neutral: 0.06, playful: 0.02, comforting: 0.19, pleased: 0.12, curious: 0.04 };
@@ -153,6 +154,7 @@ export class SpeechPlayer {
     const epoch = this.epoch, token = { id: `voice-${++this.serial}-${Date.now()}`, text, mood };
     this.pending = token;
     try {
+      text = partialText(text); // never read formatting markers or link syntax aloud
       const result = await this.host.ttsSpeak(typeof grant === 'string' ? { text, id: token.id, grant } : { text, id: token.id });
       if (this.pending !== token || epoch !== this.epoch) return;
       if (!result.ok) {

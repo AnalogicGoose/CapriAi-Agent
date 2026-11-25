@@ -1,4 +1,5 @@
 'use strict';
+const { withRichText } = require('./helpers/rich-text-source');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -85,7 +86,7 @@ test('a broken worker input pipe rejects the request without an unhandled stream
 
 test('streamed text queues complete phrases once and Escape suppresses the rest of the reply', async () => {
   const source = await fs.readFile(path.join(__dirname, '../src/renderer/js/speech-output.js'), 'utf8');
-  const { SpeechPlayer, speechText } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+  const { SpeechPlayer, speechText } = await import('data:text/javascript;base64,' + Buffer.from(withRichText(source)).toString('base64'));
   const saved = { window: global.window, document: global.document, cancelAnimationFrame: global.cancelAnimationFrame };
   global.window = global.document = { addEventListener() {} }; global.cancelAnimationFrame = () => {};
   try {

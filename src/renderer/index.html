@@ -24,12 +24,12 @@
   </button>
 
   <nav id="talk-menu" class="talk-menu" hidden aria-label="Talk to Capri">
-    <p class="talk-menu__hello" aria-live="polite"></p>
+    <p class="talk-menu__hello orbit-pill" aria-live="polite"></p>
     <div class="talk-menu__choices">
-      <button type="button" data-talk="text" aria-label="Text chat" title="Text chat">
+      <button type="button" class="orbit-icon orbit-icon--46 icon-chat" data-talk="text" aria-label="Text chat" title="Text chat">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z"/><path d="M7 9h10M7 13h7"/></svg>
       </button>
-      <button type="button" data-talk="voice" aria-label="Talk by voice" title="Talk by voice">
+      <button type="button" class="orbit-icon orbit-icon--46 icon-mic" data-talk="voice" aria-label="Talk by voice" title="Talk by voice">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>
       </button>
     </div>
@@ -37,15 +37,14 @@
 
   <aside id="panel" class="panel" data-kind="info" hidden aria-live="polite">
     <div class="panel__frame">
-      <div class="panel__plate">
-        <figure class="panel__face" aria-hidden="true">
-          <canvas width="128" height="128" aria-label="Capri animated portrait"></canvas>
-        </figure>
+      <div class="panel__plate orbit-surface">
         <div class="panel__body">
           <header class="panel__meta">
+            <span class="panel__dot" aria-hidden="true"></span>
             <span class="panel__who">Capri</span>
             <span class="panel__tag"></span>
             <span class="panel__state"></span>
+            <button class="panel__close orbit-icon orbit-icon--30" type="button" aria-label="Close conversation"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </header>
           <p class="panel__activity" hidden aria-live="polite"></p>
           <p class="panel__line"></p>
@@ -57,17 +56,16 @@
           <div class="panel__actions" hidden></div>
           <form class="panel__chat" hidden autocomplete="off">
             <textarea class="panel__input" rows="1" maxlength="500" spellcheck="true" wrap="soft" title="Enter to send · Shift+Enter for a new line · Right-click underlined words for spelling suggestions"></textarea>
-            <button class="panel__action panel__mic" type="button" aria-label="Dictate with your default microphone" aria-pressed="false">
+            <button class="panel__action panel__mic orbit-icon orbit-icon--34 icon-mic" type="button" aria-label="Dictate with your default microphone" aria-pressed="false">
               <svg width="16" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <rect x="9" y="2" width="6" height="12" rx="3"/>
                 <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/>
               </svg>
             </button>
-            <button class="panel__action panel__typing" type="button" hidden aria-label="Switch to typing" title="Switch to typing">
+            <button class="panel__action panel__typing orbit-icon orbit-icon--34" type="button" hidden aria-label="Switch to typing" title="Switch to typing">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M6 9h1m4 0h1m4 0h1M6 12h1m4 0h1m4 0h1M7 16h10" stroke-linecap="round"/></svg>
             </button>
-            <button class="panel__action is-primary panel__send" type="submit"></button>
-            <button class="panel__action panel__close" type="button" aria-label="Close conversation"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+            <button class="panel__action is-primary panel__send orbit-icon orbit-icon--34 orbit-primary icon-send" type="submit"></button>
           </form>
           <p class="panel__dictation-status" hidden role="status" aria-live="polite"></p>
           <p class="panel__note" hidden></p>
@@ -78,7 +76,7 @@
   </aside>
 
   <div id="ticker" class="ticker" hidden>
-    <div class="ticker__plate">
+    <div class="ticker__plate orbit-pill">
       <span class="ticker__dot" aria-hidden="true"></span>
       <span class="ticker__verb"></span>
       <span class="ticker__target"></span>

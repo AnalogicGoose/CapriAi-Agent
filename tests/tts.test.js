@@ -1,4 +1,5 @@
 'use strict';
+const { withRichText } = require('./helpers/rich-text-source');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -52,7 +53,7 @@ test('muting and pause prevent the engine from starting', async () => {
 
 test('renderer discards a completed synthesis after stop', async () => {
   const source = await fs.readFile(require.resolve('../src/renderer/js/speech-output.js'), 'utf8');
-  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(withRichText(source)).toString('base64'));
   const old = {window:global.window,document:global.document,cancelAnimationFrame:global.cancelAnimationFrame};
   global.window = global.document = {addEventListener(){}};
   global.cancelAnimationFrame = () => {};
@@ -69,7 +70,7 @@ test('renderer discards a completed synthesis after stop', async () => {
 
 test('proactive voice is opt-in and discards audio if availability changes during warmup', async () => {
   const source = await fs.readFile(require.resolve('../src/renderer/js/speech-output.js'), 'utf8');
-  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(withRichText(source)).toString('base64'));
   const old = { window: global.window, document: global.document, cancelAnimationFrame: global.cancelAnimationFrame };
   global.window = global.document = { addEventListener() {} };
   global.cancelAnimationFrame = () => {};
@@ -96,7 +97,7 @@ test('proactive voice is opt-in and discards audio if availability changes durin
 
 test('a stopped PCM chunk cannot schedule audio after its asynchronous context check', async () => {
   const source = await fs.readFile(require.resolve('../src/renderer/js/speech-output.js'), 'utf8');
-  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(withRichText(source)).toString('base64'));
   const old = { window: global.window, document: global.document, cancelAnimationFrame: global.cancelAnimationFrame };
   global.window = global.document = {addEventListener() {}};
   global.cancelAnimationFrame = () => {};

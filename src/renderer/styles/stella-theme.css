@@ -96,7 +96,7 @@
 .orbit-primary:hover { color: var(--st-ink); filter: brightness(1.06); }
 
 /* Optical offsets: these icons are visually unbalanced inside a circle. */
-.icon-chat > svg { transform: translate(0, -.5px); }
+.icon-chat > svg { transform: translate(.5px, -.5px); }
 .icon-mic > svg { transform: translate(0, .5px); }
 .icon-send > svg { transform: translate(0, -.5px); }
 

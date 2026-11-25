@@ -58,6 +58,7 @@ async function boot() {
     ticker: document.getElementById('ticker'),
     labels: LINES[config.lang] || LINES.fr,
   });
+  panel.onOpenLink = url => host.openLink(url);
 
   // Stella (stella/stella.js), still called `capri` here and by the modules it is handed to. With no renderer
   // given she builds her own StellaRenderer, and without WebGL2 keeps working undrawn instead of failing boot.

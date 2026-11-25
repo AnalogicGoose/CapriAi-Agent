@@ -144,3 +144,12 @@ export function renderRichText(node, text, { onLink } = {}) {
     }
   }
 }
+
+// Text still arriving: no half-typed markers, no raw link syntax.
+export function partialText(text) {
+  return plainText(text)
+    .replace(/\[([^\]\n]*)\]\([^)\s]*$/, '$1')
+    .replace(/\[([^\]\n]*)$/, '$1')
+    .replace(/\*\*|`/g, '')
+    .replace(/(^|\s)[*_](?=\S)/g, '$1');
+}

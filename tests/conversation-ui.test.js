@@ -1,4 +1,5 @@
 'use strict';
+const { withRichText } = require('./helpers/rich-text-source');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path');
@@ -7,8 +8,8 @@ const uri = code => 'data:text/javascript;base64,' + Buffer.from(code).toString(
 test('voice and typing layouts preserve the draft and expose the correct accessible composer', async () => {
   const code = fs.readFileSync(path.join(__dirname, '../src/renderer/js/panel.js'), 'utf8')
     .replace("import { clamp, ease, reducedMotion } from './util.js';", 'const clamp=x=>x,ease=x=>x,reducedMotion={matches:true};')
-    .replace("import { Portrait } from './portrait.js';", 'class Portrait {}');
-  const { Panel } = await import(uri(code));
+    ;
+  const { Panel } = await import(uri(withRichText(code)));
   const panel = Object.create(Panel.prototype), classes = new Set();
   panel.el = { classList: { toggle(name, on) { if (on) classes.add(name); else classes.delete(name); } } };
   panel.current = { chat: { placeholder: 'Type a message...', voicePlaceholder: 'Say something...', typingLabel: 'Switch to typing' } };
@@ -27,15 +28,14 @@ test('voice and typing layouts preserve the draft and expose the correct accessi
 test('both conversation exits stop the mic immediately, preserve card height and finish before hiding the voice session', async () => {
   const code = fs.readFileSync(path.join(__dirname, '../src/renderer/js/panel.js'), 'utf8')
     .replace("import { clamp, ease, reducedMotion } from './util.js';", 'const clamp=x=>x,ease=x=>x,reducedMotion={matches:false};')
-    .replace("import { Portrait } from './portrait.js';", 'class Portrait {}');
-  const { Panel } = await import(uri(code));
+    ;
+  const { Panel } = await import(uri(withRichText(code)));
   for (const mode of ['text', 'voice']) {
     const panel = Object.create(Panel.prototype), classes = new Set(['is-entering']);
     let cancelled = 0, hidden = 0; const styles = {};
     panel.el = { hidden: false, offsetHeight: 180, style: { setProperty: (key, value) => { styles[key] = value; } },
       classList: { add: name => classes.add(name), remove: name => classes.delete(name) } };
     panel.current = { chat: { mode }, onLeave() { assert.equal(panel.leaving, true); } };
-    panel.animatedPortrait = { setActive() {} };
     panel.onSpeechCancel = () => { cancelled++; panel.el.offsetHeight = 100; };
     panel.onHidden = () => { hidden++; };
     panel.hide();

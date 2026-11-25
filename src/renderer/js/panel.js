@@ -1,9 +1,9 @@
 // The transmission panel next to Capri, and the one-line ticker she wears while Claude works.
 
 import { clamp, ease, reducedMotion } from './util.js';
-import { Portrait } from './portrait.js';
+import { renderRichText, plainText, partialText } from './rich-text.js';
 
-const NOISE = '▚▞▙▟░▒#%&/\\<>01XZ';
+const NOISE = '·∙•°✦⋆';  // her words settle in like little stars
 
 // Existing mood names now share one consistent animated portrait.
 export const FACES = Object.fromEntries(['calm', 'aside', 'smug', 'wide', 'look', 'laugh', 'many', 'grin']
@@ -19,8 +19,6 @@ export class Panel {
     this.tickerEl = ticker;
     this.labels = labels;
     this.line = panel.querySelector('.panel__line');
-    this.portrait = panel.querySelector('.panel__face canvas');
-    this.animatedPortrait = new Portrait(this.portrait);
     this.quote = panel.querySelector('.panel__quote');
     this.reply = panel.querySelector('.panel__reply');
     this.report = panel.querySelector('.panel__report');
@@ -153,7 +151,7 @@ export class Panel {
     this.setActivity(msg.activity);
     this.quote.textContent = msg.quote || '';
     this.quote.hidden = !msg.quote;
-    this.reply.textContent = msg.reply || '';
+    this.richText(this.reply, msg.reply);
     this.reply.hidden = !msg.reply;
     this.reply.scrollTop = 0;
     this.el.classList.toggle('has-reply', Boolean(msg.reply));
@@ -170,7 +168,6 @@ export class Panel {
     this.tickerEl.hidden = true;
     this.leaving = false;
     this.el.hidden = false;
-    this.animatedPortrait.setActive(!this.suspended);
     this.el.classList.remove('is-leaving');
     this.replayEnter();
     this.place();
@@ -180,9 +177,28 @@ export class Panel {
     return true;
   }
 
-  // Retain semantic moods without swapping between mismatched static crops.
-  setFace(name) {
-    this.animatedPortrait.setMood(FACES[name] ? name : 'grin');
+  // Moods no longer change a portrait; kept so callers can still pass one.
+  setFace() {}
+
+  // Her words with **bold**, *italic*, `code`, lists and https links (rich-text.js); never parsed as HTML.
+  richText(node, text) {
+    renderRichText(node, text || '', { onLink: url => this.openLink(url) });
+  }
+
+  // Links open in the preferred browser through main; a failure says so in the note line for a moment.
+  async openLink(url) {
+    const result = await this.onOpenLink?.(url);
+    if (result?.ok) return;
+    const previous = this.note.hidden;
+    this.note.replaceChildren(result?.error || 'Couldn’t open that link.');
+    this.note.hidden = false;
+    this.place();
+    clearTimeout(this.noteTimer);
+    this.noteTimer = setTimeout(() => {
+      this.note.hidden = previous || !this.current?.chat?.note;
+      if (!this.note.hidden) this.renderNote(this.current.chat);
+      this.place();
+    }, 4000);
   }
 
   // Her report card: today's big number, three smaller ones, the longest mission, a footer.
@@ -294,13 +310,16 @@ export class Panel {
     this.chatSend.setAttribute('aria-label', chat.send); this.chatSend.title = chat.send;
     this.setConversationMode(chat.mode || 'text');
     this.chatClose.setAttribute('aria-label', chat.close);
-    this.note.replaceChildren();
-    if (chat.note) {
-      const tag = document.createElement('b');
-      tag.textContent = chat.noteTag || '';
-      this.note.replaceChildren(tag, ` ${chat.note}`);
-    }
+    this.renderNote(chat);
     if (chat.autofocus !== false) requestAnimationFrame(() => this.chatInput.focus());
+  }
+
+  renderNote(chat) {
+    this.note.replaceChildren();
+    if (!chat?.note) return;
+    const tag = document.createElement('b');
+    tag.textContent = chat.noteTag || '';
+    this.note.replaceChildren(tag, ` ${chat.note}`);
   }
 
   setConversationMode(mode) {
@@ -336,7 +355,8 @@ export class Panel {
   // Her answer so far (done: all of it).
   stream(text, { done = false } = {}) {
     if (!this.current?.chat) return;
-    this.line.textContent = text;
+    if (done) this.richText(this.line, text);
+    else this.line.textContent = partialText(text);
     this.line.classList.toggle('is-streaming', !done);
     this.line.scrollTop = this.line.scrollHeight;
     this.place();
@@ -415,7 +435,6 @@ export class Panel {
     this.el.classList.remove('is-entering');
     if (!reducedMotion.matches) this.el.classList.add('is-leaving');
     this.onSpeechCancel?.();
-    this.animatedPortrait.setActive(false);
     clearTimeout(this.hideTimer);
     clearInterval(this.decodeTimer);
     this.onTalk?.(false);
@@ -447,14 +466,12 @@ export class Panel {
   suspend() {
     this.onSpeechCancel?.();
     this.suspended = true;
-    this.animatedPortrait.setActive(false);
     this.el.style.visibility = 'hidden';
     this.tickerEl.style.visibility = 'hidden';
   }
 
   resume() {
     this.suspended = false;
-    this.animatedPortrait.setActive(!this.el.hidden && !this.leaving);
     this.el.style.visibility = '';
     this.tickerEl.style.visibility = '';
     this.place();
@@ -471,10 +488,10 @@ export class Panel {
   decode(text, kind) {
     clearInterval(this.decodeTimer);
     if (reducedMotion.matches || !text) {
-      this.line.textContent = text;
+      this.richText(this.line, text);
       return;
     }
-    const chars = [...text];
+    const chars = [...plainText(text)];
     let done = 0;
     this.onTalk?.(true);
     const step = () => {
@@ -488,7 +505,7 @@ export class Panel {
       if (chars[done - 1] && chars[done - 1] !== ' ') this.onChar?.(kind);
       if (done >= chars.length) {
         clearInterval(this.decodeTimer);
-        this.line.textContent = text;
+        this.richText(this.line, text);
         this.onTalk?.(false);
       }
     };

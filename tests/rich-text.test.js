@@ -109,3 +109,13 @@ test('very long input stays fast', async () => {
   parseRichText('*_`['.repeat(20000));
   assert.ok(Date.now() - started < 500);
 });
+
+test('partial text hides half-typed markers', async () => {
+  const { partialText } = await load();
+  assert.equal(partialText('Try **cacio e'), 'Try cacio e');
+  assert.equal(partialText('a `co'), 'a co');
+  assert.equal(partialText('see [Recipe](https://serious'), 'see Recipe');
+  assert.equal(partialText('see [Reci'), 'see Reci');
+  assert.equal(partialText('2 * 3 = 6 and *it'), '2 * 3 = 6 and it');
+  assert.equal(partialText('**Hi** there'), 'Hi there');
+});
