@@ -104,7 +104,7 @@ test('mixer busy and hold release', async () => {
   const { MotionMixer } = await loadRenderer('stella/motions.js');
   const m = new MotionMixer();
   m.play('flare', 0);
-  assert.equal(m.busy(0), false);
+  assert.equal(m.busy(0), true);
   assert.equal(m.busy(450), true);
   assert.equal(m.busy(950), false);
   m.play('aim', 2000);
@@ -117,4 +117,33 @@ test('mixer busy and hold release', async () => {
   assert.equal(m.busy(5400), false);
   m.play('musicPulse', 6000);
   assert.equal(m.busy(7000), true); // hold counts as busy
+});
+
+// 0.2: a fresh 135-150 ms smoothstep ease-in itself steps up to ~0.18 per 16 ms frame; the bug was a ~1.0 jump.
+const maxStep = (m, from, to, name) => {
+  let prev = m.update(from)[name] ?? 0, worst = 0;
+  for (let t = from + 16; t <= to; t += 16) { const e = m.update(t)[name] ?? 0; worst = Math.max(worst, Math.abs(e - prev)); prev = e; }
+  return worst;
+};
+
+test('same-name replay stays continuous', async () => {
+  const { MotionMixer } = await loadRenderer('stella/motions.js');
+  const a = new MotionMixer();
+  a.play('flare', 0);
+  assert.equal(a.update(450).flare, 1);
+  a.play('flare', 450);
+  assert.ok(a.update(450).flare >= 0.99);
+  assert.ok(maxStep(a, 400, 900, 'flare') < 0.2);
+
+  const b = new MotionMixer();
+  b.play('aim', 0);
+  b.play('chime', 1000);
+  b.play('aim', 1100);
+  assert.ok(maxStep(b, 900, 1600, 'aim') < 0.2);
+
+  const c = new MotionMixer();
+  c.play('aim', 0);
+  c.release('aim', 1000);
+  c.play('aim', 1200);
+  assert.ok(maxStep(c, 900, 1900, 'aim') < 0.2);
 });

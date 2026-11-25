@@ -66,7 +66,7 @@ export function bodyResponse(action) {
 const ROUTINE_GAP = 1800, CROSSFADE = 250, RELEASE = 400, HOLD_IN = 150;
 
 export class MotionMixer {
-  constructor() { this.active = new Map(); this.lastRoutine = -Infinity; }
+  constructor() { this.list = []; this.lastRoutine = -Infinity; }
 
   // Envelope of a motion's own shape (ignoring crossfade-out).
   #shape(a, now) {
@@ -99,37 +99,36 @@ export class MotionMixer {
   play(name, now) {
     const def = MOTIONS[name];
     if (!def) return false;
-    const cur = this.active.get(name);
-    if (def.hold && cur && cur.killedAt == null && cur.releasedAt == null && this.#alive(cur, now)) return false;
-    for (const [n, a] of this.active) if (!this.#alive(a, now)) this.active.delete(n);
-    for (const a of this.active.values()) if (a.killedAt == null && a.priority > def.priority) return false;
+    this.list = this.list.filter(a => this.#alive(a, now));
+    const live = this.list.filter(a => a.killedAt == null);
+    if (def.hold && live.some(a => a.name === name && a.releasedAt == null)) return false;
+    if (live.some(a => a.priority > def.priority)) return false;
     if (def.priority === 1) {
       if (now - this.lastRoutine < ROUTINE_GAP) return false;
       this.lastRoutine = now;
     }
-    for (const a of this.active.values()) if (a.killedAt == null) a.killedAt = now;
-    this.active.set(name, { start: now, duration: def.duration, priority: def.priority, hold: !!def.hold });
+    for (const a of live) a.killedAt = now;
+    this.list.push({ name, start: now, duration: def.duration, priority: def.priority, hold: !!def.hold });
     return true;
   }
 
   release(name, now) {
-    const a = this.active.get(name);
-    if (a && a.hold && a.releasedAt == null) a.releasedAt = now;
+    for (const a of this.list) if (a.name === name && a.hold && a.releasedAt == null && a.killedAt == null) a.releasedAt = now;
   }
 
   update(now) {
     const out = {};
-    for (const [n, a] of this.active) {
+    for (const a of this.list) {
       const e = this.#env(a, now);
-      if (e > 0) out[n] = e;
+      if (e > 0 && !(out[a.name] >= e)) out[a.name] = e;
     }
     return out;
   }
 
   busy(now) {
-    for (const a of this.active.values()) {
-      if (a.hold && this.#alive(a, now) && a.releasedAt == null) return true;
-      if (a.priority >= 2 && this.#env(a, now) > 0) return true;
+    for (const a of this.list) {
+      if (a.hold && this.#alive(a, now) && a.releasedAt == null && a.killedAt == null) return true;
+      if (a.priority >= 2 && (this.#env(a, now) > 0 || (a.killedAt == null && now >= a.start && this.#alive(a, now)))) return true;
     }
     return false;
   }
