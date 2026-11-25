@@ -56,7 +56,8 @@ const { MemoryAgent } = require('./memory-agent');
 const { Agent } = require('./agent');
 const { ForegroundPriority } = require('./foreground-priority');
 const { ActionAgent } = require('./action-agent');
-const { WebTools } = require('./web-tools');
+const { WebTools, publicUrl } = require('./web-tools');
+const { createLinkOpener } = require('./link-open');
 const { DesktopTools } = require('./desktop-tools');
 const { MusicPlayback } = require('./music-playback');
 const { observePlayback, observeWorkspace } = require('./windows-action-observer');
@@ -664,6 +665,9 @@ function createOverlay() {
   });
 
   installChatSpelling(overlay, Menu);
+  // Chat links open through link:open; the overlay itself never navigates.
+  overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  overlay.webContents.on('will-navigate', e => e.preventDefault());
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setIgnoreMouseEvents(true, { forward: true });
   const microphonePermission = (contents, permission, details={}) =>
@@ -1253,6 +1257,11 @@ function registerIpc() {
     return { x: p.x - b.x, y: p.y - b.y, inside: p.x >= b.x && p.y >= b.y && p.x < b.x + b.width && p.y < b.y + b.height };
   });
   ipcMain.handle('config:get', () => rendererConfig());
+  const openLink = createLinkOpener({ publicUrl, openUrl: (url, browser) => desktop.openUrl(url, browser) });
+  ipcMain.handle('link:open', (event, url) => {
+    if (event.sender !== overlay?.webContents) throw Error('Overlay required.');
+    return openLink(url);
+  });
   ipcMain.handle('config:set', (event, patch) => {
     if (event.sender !== overlay?.webContents) throw Error('Overlay required.');
     return updateConfig(DEV || smokeTest ? patch : overlayPatch(patch));

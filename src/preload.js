@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('host', {
   setInteractive: (on) => ipcRenderer.send('overlay:interactive', Boolean(on)),
   cursor: () => ipcRenderer.invoke('overlay:cursor'),
   getConfig: () => ipcRenderer.invoke('config:get'),
+  openLink: url => ipcRenderer.invoke('link:open', url),
   runtimeInfo: () => ipcRenderer.invoke('runtime:info'),
   setConfig: (patch) => ipcRenderer.invoke('config:set', patch),
   listSounds: () => ipcRenderer.invoke('sounds:list'),
