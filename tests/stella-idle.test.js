@@ -67,6 +67,7 @@ test('envelope is continuous and within 0..1', async () => {
     assert.ok(samples[i].envelope >= 0 && samples[i].envelope <= 1);
     if (i) max = Math.max(max, Math.abs(samples[i].envelope - samples[i - 1].envelope));
   }
+  // Max smoothstep slope 1.5 per 2 s ramp -> ~0.075 per 100 ms, so the bound is 0.08.
   // A 2 s smoothstep ramp peaks at ~0.075 per 100 ms.
   assert.ok(max < 0.08, `max step ${max}`);
   assert.ok(samples.some(s => s.envelope === 1), 'reaches full strength');
@@ -98,4 +99,12 @@ test('energy scales only the energy field', async () => {
   const b = simulate(m, { ms: 60000, energy: () => 0.9 });
   assert.ok(a.every(s => s.energy === 0.2) && b.every(s => s.energy === 0.9));
   assert.deepEqual(a.map(s => [s.name, s.envelope]), b.map(s => [s.name, s.envelope]));
+});
+
+test('resuming from disallowed waits a fresh gap before starting', async () => {
+  const m = await loadRenderer('stella/idle.js');
+  const resume = 120000; // far past any initial gap
+  const samples = simulate(m, { ms: 200000, allowed: t => t >= resume });
+  const first = samples.find(s => s.name);
+  assert.ok(first.t - resume >= 8000 - 250 && first.t - resume <= 25000 + 250, `waited ${first.t - resume}`);
 });

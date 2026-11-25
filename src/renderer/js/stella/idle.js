@@ -14,6 +14,7 @@ export class IdleScheduler {
     this.nextStart = null; // set on first update
     this.current = null;   // { name, start, duration, abortAt, abortFrom }
     this.last = null;
+    this.blocked = false;
   }
 
   _gap() { return GAP_MIN + this.random() * (GAP_MAX - GAP_MIN); }
@@ -33,6 +34,13 @@ export class IdleScheduler {
 
   update(now, { allowed = true } = {}) {
     if (this.nextStart === null) this.nextStart = now + this._gap();
+
+    if (!allowed) this.blocked = true;
+    else if (this.blocked) {
+      // Resuming after a block: plain idle for a fresh gap before any variation.
+      this.blocked = false;
+      this.nextStart = now + this._gap();
+    }
 
     if (this.current && !allowed && this.current.abortAt === null) {
       this.current.abortFrom = this._envelope(now);
