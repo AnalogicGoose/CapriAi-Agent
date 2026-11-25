@@ -11,6 +11,8 @@ const BOB_PERIOD = 4;          // s
 const BOB_RATE = 1.5;          // 1/s: the bob fades in after a stop and out when she sets off
 const HOME_REACH = 200;        // px: the anchor area
 const WANDER_SPEED = 40;       // px/s: a wander hop never averages faster than this
+const FN_SPEED = 500;          // px/s: a function's move (pointing, guiding, come, reminders, home) averages this
+const FN_MIN = 600, FN_MAX = 2500; // ms: and takes this long at least / at most
 const FADE = 150;              // ms: reduced motion fades out, is placed, fades in
 const CORNER = 200;            // px: how far before a waypoint a detour starts to curve
 const TABLE = 48;              // samples per leg for arc-length lookup
@@ -165,9 +167,10 @@ export class Traveler {
     });
   }
 
+  // Wandering is calm (30-40 px/s); every other travel is a function's quick, eased move.
   duration(r, reason) {
-    const d = travelDuration(r);
-    return reason === 'wander' ? Math.max(d, r.length / WANDER_SPEED * 1000) : d;
+    if (reason === 'wander') return Math.max(travelDuration(r), r.length / WANDER_SPEED * 1000);
+    return clamp(r.length / FN_SPEED * 1000, FN_MIN, FN_MAX);
   }
 
   // After a drop: she eases onto the drop point.

@@ -164,8 +164,10 @@ export class Stella {
     return Math.hypot(x - this.pos.x, y - this.pos.y) <= 0.45 * this.size;
   }
 
+  // 'post': her first-run corner; 'stage': where she is (a finished task doesn't move her); else a band point.
   spot(name) {
     const r = this.bandRadius, view = this.view;
+    if (name === 'stage') return { ...this.pos };
     if (name === 'post') {
       const p = clampToView({ x: view.w * 0.85, y: view.h * 0.82 }, r, view);
       return inBand(p, r, view) ? p : pickWanderTarget({ from: p, radius: r, view, random: this.random });

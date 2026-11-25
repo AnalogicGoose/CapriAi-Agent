@@ -24,6 +24,8 @@ export const Focus = {
   // on arrival, false if something replaced it.
   glideTo(point, { reason = 'glide' } = {}) {
     if (!isPoint(point)) return Promise.resolve(false);
+    // Already there (spot('stage')): nothing moves and nothing she shows is let go.
+    if (!this.travel && Math.hypot(point.x - this.pos.x, point.y - this.pos.y) < 1) return Promise.resolve(true);
     if (this.focus || this.pointing) { this.focus = this.pointing = null; this.homeToken++; }
     return this.traveler.go(point, { reason, fn: true });
   },
@@ -114,13 +116,14 @@ export const Focus = {
     return this.goHome();
   },
 
-  // The capri_body tool. `come` goes to `cursor` when given, else toward the middle.
+  // The capri_body tool. `come` goes to `cursor` when given, else toward the middle. The reply
+  // comes as soon as the move starts: callers never wait for her to arrive.
   async bodyAction(action, { cursor } = {}) {
     const r = bodyResponse(action);
     if (r.wake) this.wake();
     if (r.rest) this.resting = true;
     if (r.motion) this.play(r.motion);
-    if (r.come) await this.summon(cursor);
+    if (r.come) void this.summon(cursor);
     return r.reply ?? 'done';
   },
 

@@ -367,8 +367,10 @@ test('stopPointing returns after 1.5 s unless she points again', async () => {
   step(DT, 20);
   assert.equal(stella.travel, null, 'waits 1.5 s');
   stella.pointAt({ x: 200, y: 600, w: 300, h: 200 });
-  step(DT, 20);
+  step(DT, 2);
   assert.equal(stella.travel?.reason, 'point', 'no stale return');
+  step(DT, 40);
+  assert.equal(stella.travel, null, 'and stays pointing');
 });
 
 test('nap rests until wake', async () => {
@@ -608,8 +610,8 @@ test('A(c) routes around the zone turn smoothly', async () => {
   const { stella, step } = await make({ anchor: { x: 1840, y: 540 }, random: lcg(23) });
   stella.summon({ x: 150, y: 540 });
   let last = { ...stella.pos }, heading = null, maxTurn = 0;
-  for (let i = 0; i < 600; i++) {
-    step(DT);
+  for (let i = 0; i < 600; i++) { // 60 fps: a function move is quick (at most 2.5 s)
+    step(1000 / 60);
     const dx = stella.pos.x - last.x, dy = stella.pos.y - last.y;
     if (Math.hypot(dx, dy) > 0.3) {
       const h = Math.atan2(dy, dx);
@@ -619,7 +621,9 @@ test('A(c) routes around the zone turn smoothly', async () => {
     last = { ...stella.pos };
   }
   assert.ok(stella.pos.x < 500, 'got there');
-  assert.ok(maxTurn < 0.15, `turned ${maxTurn} rad in one frame`);
+  // At a function move's speed (~1200 px/s here) a rounded corner turns up to ~0.25 rad per 60 fps
+  // frame; an unrounded waypoint would turn its full angle (> 1.2 rad) in one.
+  assert.ok(maxTurn < 0.3, `turned ${maxTurn} rad in one frame`);
 });
 
 test('B(1) pointAt resolves false when displaced, and glideTo clears the focus', async () => {
@@ -753,7 +757,7 @@ test('C#7 setView re-plans the whole route and keeps the anchor in the band', as
   const inBand = await band();
   const { stella, step } = await make({ anchor: { x: 1840, y: 540 }, random: lcg(30) });
   stella.summon({ x: 150, y: 540 }); // a multi-leg route
-  step(DT, 60);
+  step(DT, 10); // mid-route (a function move takes at most 2.5 s)
   stella.setView(1280, 720);
   let bad = 0;
   for (let i = 0; i < 500; i++) { step(DT); if (!inBand(stella.pos, R(stella), stella.view)) bad++; }

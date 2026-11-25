@@ -37,7 +37,7 @@ speed shift, counter-turn, sway, breath pulse, shine wave, dot drift, globe tilt
 ## Wandering
 
 - She stays in the outer band of her display's work area, fully inside it. The central 50% x 50% rectangle is off-limits to wandering.
-- She moves on gentle curved paths with ease-in/ease-out at about 30-40 px/s, never jumping, and never crosses the center zone while wandering.
+- She moves on gentle curved paths with ease-in/ease-out, never jumping, and never crosses the center zone while wandering. Wandering is calm (about 30-40 px/s); a function's move (pointing, a walkthrough step, come, a reminder or approval nudge, going back home) is quick: about 500 px/s, 0.6-2.5 s whatever the distance. A finished task doesn't move her.
 - Rhythm: travel to a new spot, rest 30 s to 3 min (floating a few px so she never fully stops), repeat.
 - No wandering while chat is open or she is listening, thinking, speaking or working, or during a walkthrough. She resumes after a short grace period.
 - She lives on one display (`displayId`). If a walkthrough target is on another display she goes to the nearest edge and aims a blade at it.
@@ -69,7 +69,7 @@ Put away (Ctrl+Alt+C), a game, or a fullscreen app on her display: her points re
 | Music playing | Blades pulse gently while playback she started is active |
 | Wake word heard | Quick brighten and turn toward listening |
 
-`capri_body` actions: `come` glides toward the cursor (stops at the center zone's edge), `nap` rests (dimmed, no wandering) until `wake`, `mood` and `wave` give soft pulses, `dance` a spin burst, `stretch` a breath pulse, `sit`/`stand` a short reply that she no longer sits.
+`capri_body` actions (the reply comes as soon as she starts; nothing waits for her to arrive): `come` glides toward the cursor (stops at the center zone's edge), `nap` rests (dimmed, no wandering) until `wake`, `mood` and `wave` give soft pulses, `dance` a spin burst, `stretch` a breath pulse, `sit`/`stand` a short reply that she no longer sits.
 
 Removed pet behaviors (teleporting, sitting, window perching and possession, gestures, falling, cut-ins) are not coming back; the settings that controlled them have no effect.
 
