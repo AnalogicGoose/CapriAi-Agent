@@ -5,9 +5,6 @@ import { renderRichText, plainText, partialText } from './rich-text.js';
 
 const NOISE = '·∙•°✦⋆';  // her words settle in like little stars
 
-// Existing mood names now share one consistent animated portrait.
-export const FACES = Object.fromEntries(['calm', 'aside', 'smug', 'wide', 'look', 'laugh', 'many', 'grin']
-  .map(name => [name, 'portrait-blink.png']));
 const KIND_FACE = { alert: 'many', done: 'look', error: 'laugh', work: 'calm', idle: 'calm', report: 'smug', chat: 'look' };
 const PRIORITY = { info: 1, idle: 1, work: 2, done: 3, error: 3, report: 3, chat: 3, alert: 4 };
 const DECODE_STEP_MS = 28;
@@ -112,7 +109,7 @@ export class Panel {
   //          or the panel's
   // guide: the quote is an explanation, shown whole
   // badge: the word in the corner, instead of the one for its kind
-  // face: her expression (a key of FACES), instead of the one for its kind
+  // face: her expression (a mood name), instead of the one for its kind
   // report: her report card, { date, hero: { value, label }, stats: [{ value, label, hot }],
   //         longest: { label, project, time }, foot }
   // chat: a line to type to her, { placeholder, send, close, noteTag, note }; onSend(text) gets

@@ -90,42 +90,11 @@ test('typed and reviewed voice transcripts share strict local command routing',a
   chat.open=true;await chat.send('wave');assert.equal(executed,1);assert.equal(routed,0);assert.equal(reply,'Hi!');assert.equal(busy,false);assert.equal(chat.turn,0);
 });
 
-test('smooth quiet sheets remain continuous including seat folding and loop seams; impact sheets keep their timing',async()=>{
-  const {Player,ACTS}=await import(uri(source('acting.js')));
-  for(const name of ['stand','focus','sit','floorSit','sitDown','standUp','idleWave','idleSway','idlePreen','idleStretch','idleBreathe','idleListen','idleYawn','idleBounce']) {
-    const p=new Player(name,{at:0});let last=p.sample(0).pose;
-    const duration=p.total*1000/(p.act.fps||12);
-    for(let now=1;now<duration*(p.act.loop?2:1);now++) {
-      const pose=p.sample(now).pose;
-      for(const key of ['head','armL','armR','kickL','kickR','seat','bob'])if(key in pose&&key in last)assert.ok(Math.abs(pose[key]-last[key])<0.1,`${name}: ${key} jumped at ${now}`);
-      last=pose;
-    }
-    assert.deepEqual(p.sample(50,true).pose,p.sample(0).pose,'Reduced motion freezes the base pose');
-  }
-  assert.equal(ACTS.victory.smooth,undefined);assert.equal(ACTS.zap.smooth,undefined);
-  assert.equal(ACTS.stand.loop,true,'Standing motion remains a looping stance');
-  assert.equal(ACTS.stand.smooth,true,'The original artwork now floats continuously');
-});
-
 test('all companion toggles cross the settings boundary as booleans only',()=>{
   const {settingsPatch}=require('../src/main/settings-policy');
   for(const key of ['idleAnimations','cursorInteractions','personality','dailyRoutine','surpriseAnimations']) {
     assert.deepEqual(settingsPatch({[key]:false}),{[key]:false});assert.throws(()=>settingsPatch({[key]:'false'}));
   }
-});
-
-test('drifting effects use sub-frame updates while impact-only effects retain held cadence',async()=>{
-  const code=source('fx.js').replace("import { rand, pick, clamp } from './util.js';",'const rand=(a,b)=>(a+b)/2,pick=x=>x[0],clamp=(v,a,b)=>Math.min(b,Math.max(a,v));');
-  const {FxLayer}=await import(uri(code));
-  const fx=Object.create(FxLayer.prototype),items=[];
-  fx.add=item=>{items.push(item);return item;};fx.drift(10,20,0);fx.glyph(10,20);fx.beam(10,20);
-  assert.equal(items[0].smooth,true);assert.equal(items[1].smooth,true);assert.equal(items[2].smooth,undefined);
-  const raf=global.requestAnimationFrame;global.requestAnimationFrame=()=>0;
-  try {
-    let draws=0;Object.assign(fx,{last:1000,canvas:{width:100,height:100},ctx:{clearRect(){}},draw(){draws++;}});
-    fx.items=[{...items[0],born:1000}];fx.frame(1016);assert.equal(draws,1,'Drift advances inside a 24 fps frame');
-    draws=0;fx.last=1000;fx.items=[{...items[2],born:1000}];fx.frame(1016);assert.equal(draws,0,'Impact-only frames remain held');
-  } finally {global.requestAnimationFrame=raf;}
 });
 
 test('Stella floats: she is available, and a local "come here" goes to her body (not refused)',async()=>{

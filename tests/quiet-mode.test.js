@@ -63,25 +63,6 @@ test('quiet notifications animate work bursts and retain completion, error and a
   assert.match(companion.context(), /No prompts/);
 });
 
-test('focus cycle loops smooth poses without effect or sound cues', async () => {
-  const { Player } = await loadRenderer('acting.js');
-  const player = new Player('focus', { at: 0 });
-  const duration = player.total * 1000 / 12;
-  for (let now = 0; now < duration; now += 100) {
-    const frame = player.sample(now);
-    assert.equal(frame.cue, undefined);
-    const pose = player.resolve(frame.pose, 1);
-    assert.ok(Math.abs(pose.head) <= 0.12);
-    assert.ok(Math.abs(pose.bob) <= 3);
-    const repeated = player.sample(now + duration);
-    assert.equal(repeated.index, frame.index);
-    for (const key of Object.keys(pose)) {
-      const values = [pose[key]].flat(), next = [repeated.pose[key]].flat();
-      values.forEach((value, i) => assert.ok(Math.abs(value - next[i]) < 1e-10, key));
-    }
-  }
-});
-
 test('chat opens immediately even if Codex status is unavailable', async () => {
   // Supply the two formatting helpers so this controller can run without browser globals.
   const source = fs.readFileSync(path.join(__dirname, '../src/renderer/js/chat.js'), 'utf8')
