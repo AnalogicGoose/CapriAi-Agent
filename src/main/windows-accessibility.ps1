@@ -71,8 +71,9 @@ function Set-ControlValue($element, [string]$value) {
 }
 
 try {
-    $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+    # Load assemblies before reading the request so a spare helper is fully warm while it waits.
     Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
+    $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
     $handle = [IntPtr]::new([long]$request.windowId)
     try { $root = [Windows.Automation.AutomationElement]::FromHandle($handle) } catch { throw 'The observed window closed or changed.' }
     if (!$root -or $root.Current.ProcessId -ne $request.pid) { throw 'The observed window closed or changed.' }

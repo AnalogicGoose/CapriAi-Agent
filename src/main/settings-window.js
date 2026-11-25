@@ -2,6 +2,7 @@
 const path = require('node:path');
 const { BrowserWindow, ipcMain, screen } = require('electron');
 const { settingsPatch } = require('./settings-policy');
+const { validateReminderAction } = require('./reminder-settings');
 
 function createSettingsWindow({ state, patch, action }) {
   let window;
@@ -14,8 +15,9 @@ function createSettingsWindow({ state, patch, action }) {
   ipcMain.handle('settings:action', async (event, name, value) => {
     if (!trusted(event)) throw Error('Settings window required.');
     if (name === 'close') { window.hide(); return; }
-    if (!['gaming', 'visibility', 'startup', 'sounds-folder', 'voice-preview', 'memory-export', 'memory-delete', 'memory-open', 'remember-chat', 'clear-recent-chat', 'interests-open', 'reviews-open', 'curiosity-open', 'routines-open', 'initiative-start', 'initiative-open', 'initiative-resume', 'project-choose', 'project-off', 'refresh', 'restart', 'quit'].includes(name)) throw Error('Unknown action.');
+    if (!['gaming', 'visibility', 'startup', 'sounds-folder', 'voice-preview', 'memory-export', 'memory-delete', 'memory-open', 'remember-chat', 'clear-recent-chat', 'interests-open', 'reviews-open', 'curiosity-open', 'routines-open', 'initiative-start', 'initiative-open', 'initiative-resume', 'project-choose', 'project-off', 'reminder-cancel', 'reminder-move', 'refresh', 'restart', 'quit'].includes(name)) throw Error('Unknown action.');
     if (['gaming', 'startup', 'remember-chat'].includes(name) && typeof value !== 'boolean') throw Error('Invalid switch.');
+    if (name.startsWith('reminder-')) value = validateReminderAction(name, value);
     const result = await action(name, value);
     if (['memory-open', 'interests-open', 'reviews-open', 'curiosity-open', 'routines-open', 'initiative-open'].includes(name)) window.hide();
     return { state: state(), message: typeof result === 'string' ? result : '' };

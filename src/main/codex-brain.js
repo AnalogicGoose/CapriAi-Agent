@@ -7,6 +7,7 @@ const { readDeliveryPrefix, INSTRUCTIONS: VOICE_DELIVERY } = require('./voice-de
 
 const MAX_WARM_TURNS = 24;
 const THREAD_RELEASE_TIMEOUT = 400;
+const SCREEN_LOOKS = new Set(['capri_window_controls', 'capri_screen', 'capri_point', 'capri_point_on_snapshot', 'capri_draw']);
 
 function packContext(data, budget = 16000) {
   const packed = Object.create(null), omitted = [];
@@ -238,7 +239,7 @@ class CodexBrain {
             diagnostics.calls++;
             onProgress(`Using ${p.tool}.`);
             const value = await this.tools.run(p.tool, p.arguments, {
-              text, history: actionHistory, savedTask, activateSavedTask, signal, check, progress: onProgress });
+              text, history: actionHistory, savedTask, activateSavedTask, signal, check, progress: onProgress, turn: options.turn });
             trackRoutine(this.tools.routineSession);
             check(); receipt = { fingerprint, value }; dedupe.set(p.callId, receipt);
             diagnostics.completed++;
@@ -314,7 +315,8 @@ class CodexBrain {
       const routineResult = this.tools.finishRoutine?.();
       if (routineResult && routineResult.status !== 'completed') answer = routineReply(routineResult);
       if (!answer.trim()) throw Error('Codex returned no final answer.');
-      if (!routineResult && diagnostics.errors.length && !diagnostics.completed) {
+      // A failed look at the screen is not a failed action: the answer stands on its own, so don't tack an error onto it.
+      if (!routineResult && diagnostics.errors.some(error => !SCREEN_LOOKS.has(error.tool)) && !diagnostics.completed) {
         answer += `\n\nLocal tool error: ${diagnostics.errors.at(-1).message}`;
       }
       if (this.tools.consumeHistoryReset?.()) this.discardHistory();

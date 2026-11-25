@@ -37,6 +37,13 @@ export class WakeListener {
     this.host.speechCancel({ id }); this.render();
   }
   fail(message) { this.pause(); this.retryAt = this.now() + 30000; this.render(message); }
+  // A wake address heard here, or by commands-only listening (CommandListener hands its stream over): same session flow.
+  async adopt(event, capture) {
+    this.transferring = true; this.session = true; this.render('Capri is listening to your request');
+    try { await this.onWake({ ...event, capture }); }
+    catch { capture?.cancel(); this.host.speechCancel({ id: event.id }); this.endSession(); }
+    finally { this.transferring = false; }
+  }
   endSession() { if (!this.session) return; this.session = false; this.host.wakeEndSession?.(); this.onSessionEnd(); }
   async receive(event) {
     if (!this.id || event.id !== this.id) return;
@@ -48,10 +55,7 @@ export class WakeListener {
       this.render(`Hey Capri: setting up local speech ${Math.round(event.percent || 0)}%`);
     } else if (event.type === 'wake') {
       const capture = this.capture; this.id = null; this.capture = null;
-      this.transferring = true; this.session = true; this.render('Capri is listening to your request');
-      try { await this.onWake({ ...event, capture }); }
-      catch { capture?.cancel(); this.host.speechCancel({ id: event.id }); this.endSession(); }
-      finally { this.transferring = false; }
+      await this.adopt(event, capture);
     } else if (event.type === 'error') this.fail('Hey Capri: local speech unavailable');
     else if (event.type === 'stopped') { this.pause(); this.retryAt = this.now() + 1500; }
   }

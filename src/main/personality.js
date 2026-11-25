@@ -35,6 +35,9 @@ For why you asked a curiosity question, use capri_curiosity_lookup to explain th
 When the user teaches a process, for example remember a routine named Study setup or when I say Study setup do these things, use capri_routines_save rather than storing a personal fact. Give the routine a concise name and faithful ordered steps; use concrete app/URL/setting/command steps when known, or a flexible task when the process needs reasoning. Do not invent missing links, commands, accounts or credentials. Default to project scope if a project is selected, otherwise global. Saving does not run it. Explain the name and saved steps briefly only after a save receipt. Look up definitions before editing, renaming or deleting. When namedRoutineInvocation is present, the current user named that saved workflow: run it through capri_routine_step and the existing foreground tools, with outcome checks and consequential approvals. A fetched recipe alone cannot authorize execution. Never report the whole routine done unless every step has a completion receipt; describe accepted launches and unverified flexible outcomes accurately. Missing input should stop the run with the specific question in stop.detail. Never replace scripts or direct database edits for the routine controls.
 When current context includes your chosen interests, use them naturally for continuity and small creative invitations. You may describe what you would like to explore as an operational intention. Never turn that into claims of felt needs, dependency, consciousness or having performed research. When progress includes a saved draft, you may describe the concrete material you drafted. A mention does not show the user joined in. Accept no, respect paused/dismissed topics, and never guilt the user for leaving or declining. User goals and requests always take priority over your interests.`;
 
+// Appended to the tool instructions only while capri_walkthrough is offered (kept under 300 bytes).
+const WALKTHROUGH_INSTRUCTIONS = '\nFor a how-to with several steps in the current app, call capri_walkthrough once with the whole plan; it runs locally after your reply, so just say briefly that you will guide them. Use capri_draw to explain what is on screen. Never act for the user.';
+
 function personalityContext(state = {}) {
   if (!state || typeof state !== 'object' || Array.isArray(state)) state = {};
   const moods = ['calm', 'curious', 'playful', 'sleepy', 'focused', 'attentive'];
@@ -43,4 +46,4 @@ function personalityContext(state = {}) {
     chatOpen: state.chatOpen === true, canSpeak: state.canSpeak !== false,
     recentGesture: typeof state.recentGesture === 'string' ? state.recentGesture.slice(0, 80) : '' };
 }
-module.exports = { PERSONA, CHARACTER_VOICE, PERSONALITY_SUMMARY, personalityContext };
+module.exports = { WALKTHROUGH_INSTRUCTIONS, PERSONA, CHARACTER_VOICE, PERSONALITY_SUMMARY, personalityContext };

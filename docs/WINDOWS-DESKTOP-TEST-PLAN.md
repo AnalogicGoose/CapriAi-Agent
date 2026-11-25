@@ -37,3 +37,15 @@ Verified 2026-11-23 on a 1920x1080 @1x primary and a 1440x900 @2x secondary at a
 - OCR on the native-resolution capture finds 11 px text on both displays and maps it inside the text's real bounds. The old 1600x1000 capture missed the same text on the 1080p display. Capture ~0.4 s + OCR ~0.4 s per lookup.
 
 Still manual: real invoke/set-value actions (need the confirmation dialog), password-field exclusion on a real password box, 150% scaling, and `npm run test:desktop`, whose Codex-status assertion at `scripts/smoke-electron.js:1569` fails the same way on the pre-#5 commit `2f248d8` (pre-existing, unrelated to accessibility or OCR).
+
+## Visual guides and walkthroughs (branch `feature/visual-guides-reminders`)
+Automated: guide schema, scene layout, target resolution, the walkthrough state machine, commands-only phrases, body reactions (visible overlay only, never in fullscreen) and the exclusive-fullscreen refusal are unit tests (**U**, `npm test`). Everything below needs an interactive desktop.
+
+| Area | What to verify | Level | Status (2026-11-23) |
+|---|---|---|---|
+| Walkthrough, Windows Settings | "How do I change my refresh rate?": Settings → Display → Advanced display → refresh rate, one ring and card per step, Next/Back/Repeat/Stop by voice and on the card, the done line at the end, her body comes over on each step | M | Not run |
+| Explanation, browser | Ask her to explain a browser settings page (e.g. Chrome or Firefox privacy settings): marks land on the named controls, the drawing clears on a new request or when the page changes | M | Not run |
+| Borderless game, Gaming mode | Gaming mode on, a borderless-windowed game in front, "Hey Capri, show me how to change the graphics quality": the guide layer appears over the game menu, her body and panel stay hidden, commands-only listening works, the layer closes at the end and fullscreen hiding resumes | M | Not run |
+| Exclusive fullscreen game | A game in exclusive fullscreen: asking for a guide draws nothing; she says once that it needs borderless window mode (not again until the game leaves fullscreen) and helps by voice. Detection reads the shell's Direct3D exclusive-mode state (`SHQueryUserNotificationState` = 3); note which games are missed (OpenGL/Vulkan exclusive, fullscreen-optimized D3D) | M | Not run |
+| Two monitors, mixed scaling | Monitors at 100% and 150%: a walkthrough on each display, and an app dragged across mid-step; rings sit on their controls and the card stays beside the window | M | Not run |
+| Capture privacy | Print Screen (and Snipping Tool) while a ring and card are shown: the guide marks do not appear in the capture (content protection) | M | Not run |

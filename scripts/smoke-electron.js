@@ -1269,7 +1269,7 @@ app.whenReady().then(async () => {
         assert.equal((await js('host.getConfig()')).rememberRecentChat, enabled);
       }
       const captureDir = path.resolve(__dirname,'..','captures');fs.mkdirSync(captureDir,{recursive:true});
-      for (const page of ['home','appearance','sound','memory','awareness','connections','updates']) {
+      for (const page of ['home','appearance','sound','memory','awareness','reminders','connections','updates']) {
         await run(`document.querySelector('[data-page=${page}]').click(); document.fonts.ready`);
         assert.equal(await run('document.querySelector("main").scrollWidth <= document.querySelector("main").clientWidth'),true, `Horizontal overflow on ${page}`);
         await pause(100);

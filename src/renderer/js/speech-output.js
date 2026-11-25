@@ -133,7 +133,8 @@ export class SpeechPlayer {
       this.onPlayback(false);
     }
   }
-  async speak(text, mood) { this.stop(); if (this.enabled) await this.play(text, mood); }
+  // grant: main's one-time token for a guide line or reminder (lets it speak while she is hidden; never when muted).
+  async speak(text, mood, grant) { this.stop(); if (this.enabled) await this.play(text, mood, grant); }
   speakProactive(text, deadline, available, mood) {
     if (!this.enabled || this.config.proactiveVoice !== true || this.pending || this.playing || this.response) return false;
     const canStart = () => this.enabled && this.config.proactiveVoice === true && Date.now() < deadline && available();
@@ -148,11 +149,11 @@ export class SpeechPlayer {
     return true;
   }
   stopProactive() { if (this.proactive) this.stop(); }
-  async play(text, mood) {
+  async play(text, mood, grant) {
     const epoch = this.epoch, token = { id: `voice-${++this.serial}-${Date.now()}`, text, mood };
     this.pending = token;
     try {
-      const result = await this.host.ttsSpeak({ text, id: token.id });
+      const result = await this.host.ttsSpeak(typeof grant === 'string' ? { text, id: token.id, grant } : { text, id: token.id });
       if (this.pending !== token || epoch !== this.epoch) return;
       if (!result.ok) {
         if (result.error !== 'cancelled' && !this.proactive) this.onError(result.error);

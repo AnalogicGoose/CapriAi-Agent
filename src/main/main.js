@@ -10,6 +10,7 @@ const {
 } = require('electron');
 
 const config = require('./config');
+const { DISPLAY_NAME } = require('./identity');
 const { LANGS } = require('./labels');
 const { createSettingsWindow } = require('./settings-window');
 const { installChatSpelling } = require('./chat-spelling');
@@ -25,6 +26,12 @@ const { CodexTools } = require('./codex-tools');
 const { ScreenAccess } = require('./screen-access');
 const { WindowsAccessibility } = require('./windows-accessibility');
 const { desktopHighlight } = require('./desktop-highlight');
+const { GuideTargets } = require('./guide-targets');
+const { layoutScene } = require('./guide-scene');
+const { createGuideLayer } = require('./guide-layer');
+const { GuideSession } = require('./guide-session');
+const { WalkthroughController } = require('./walkthrough-controller');
+const { ExclusiveFullscreenGate, exclusiveFullscreen } = require('./exclusive-fullscreen');
 const { CognitiveFoundation } = require('./cognitive-foundation');
 const { GroundedCuriosity } = require('./grounded-curiosity');
 const { ReflectionEngine } = require('./cognitive-reflection');
@@ -56,6 +63,13 @@ const { RequestInterpreter } = require('./request-interpreter');
 const { createAgentBrowser } = require('./agent-browser');
 const { WorldState } = require('./world-state');
 const capabilities = require('./capabilities');
+const { ReminderStore } = require('./reminders');
+const { ReminderScheduler } = require('./reminder-scheduler');
+const { ReminderController } = require('./reminder-controller');
+const { routeReminderCommand } = require('./reminder-commands');
+const { reminderRows, moveReminder } = require('./reminder-settings');
+// Reminders (reminder-controller.js): created after app ready; card actions and voice replies go through `reminders`.
+let reminderStore = null, reminderScheduler = null, reminders = null;
 let memoryStore, recentChatStore, goalStore, autonomy, reflection, curiosity, interests;
 let sessionAvailable = true;
 let checkInDeadline = 0;
@@ -186,7 +200,8 @@ const foreground = new ForegroundPriority(() => ({
   cancel() { agent.cancel(); autonomy?.cancel(); reflection?.cancel(); },
 }));
 // Legacy structured decision services use the same Codex transport, never Ollama.
-const decisionBrain = new CodexBrain({ settings: () => config.load(),
+// agentConfig: a voice session lifts Gaming mode, so a voice-started walkthrough can still re-plan (spec §8, decision 2).
+const decisionBrain = new CodexBrain({ settings: agentConfig,
   cwd: path.join(app.getPath('temp'), 'caprigpt-codex-decisions'),
   tools: { specs: () => [], instructions: () => 'Return only the JSON decision requested in the supplied schema. No tools or actions.' } });
 const inferDecision = async (request, signal) => {
@@ -252,7 +267,12 @@ async function captureDisplay(displayId, thumbnailSize = { width: 1600, height: 
   return source.thumbnail;
 }
 
-const screenAccess = new ScreenAccess({ settings: agentConfig,
+// Gaming mode pauses screen reads, lifted for the user's voice request (agentConfig) and, for guide reads only
+// ({ lifted: true } from GuideTargets / a walkthrough re-plan), for a guide or walkthrough the user started: it keeps
+// working after the voice session ends, until it finishes, is stopped, or Gaming mode is turned on (which stops it).
+// Effects (capri_control, desktop input) are never lifted.
+const guideReadLift = () => Boolean(voiceSession || walkthroughs?.active || guide?.active);
+const screenAccess = new ScreenAccess({ settings: agentConfig, readLift: guideReadLift,
   displays: () => {
     const fg = require('./native-windows').foregroundBounds();
     const active = fg ? screen.getDisplayNearestPoint(screen.screenToDipPoint({ x: Math.round(fg.x + fg.width / 2), y: Math.round(fg.y + fg.height / 2) })).id : screen.getPrimaryDisplay().id;
@@ -270,16 +290,18 @@ const externalForeground = () => {
   const window = require('./native-windows').foregroundBounds();
   return window?.pid === process.pid ? null : window;
 };
+// Hand focus back to the app behind her overlay before reading or drawing on it.
+const yieldOverlayFocus = async () => {
+  if (!overlay?.isFocused()) return;
+  overlay.blur();
+  await new Promise(resolve => setTimeout(resolve, 100));
+};
 const highlight = desktopHighlight({ BrowserWindow, screen, foreground: externalForeground,
   enabled: () => screenAccess.enabled() && config.load().visible !== false,
   onError: () => console.error('[capri] Could not keep the desktop highlight visible.') });
 const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
-  settings: () => config.load(), foreground: externalForeground, highlight: highlight.show,
-  yieldFocus: async () => {
-    if (!overlay?.isFocused()) return;
-    overlay.blur();
-    await new Promise(resolve => setTimeout(resolve, 100));
-  },
+  settings: () => config.load(), foreground: externalForeground, highlight: highlight.show, readLift: guideReadLift,
+  yieldFocus: yieldOverlayFocus,
   confirm: async (message, detail) => (await dialog.showMessageBox({ type: 'question', title: 'Capri - Desktop action', message,
     detail, buttons: ['Cancel', 'Confirm'], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
   captureWindow: async ({ x, y, width, height }) => {
@@ -298,6 +320,59 @@ const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
   },
 }) : null;
 app.on('before-quit', highlight.clear);
+// The guide layer is separate from her overlay: onFullscreen hides only the overlay, never this layer.
+const guideTargets = new GuideTargets({ accessibility, screen: screenAccess, foreground: externalForeground });
+// A guide line goes to the overlay's normal TTS path with a one-time voice grant (spoken while she is hidden in a game).
+const guideSay = text => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('guide:say', { text, grant: tts.grant('guide', text) }); };
+// Exclusive-fullscreen games: no guide can appear over them, so guides are refused there and she suggests borderless
+// window mode once per game session (exclusive-fullscreen.js; the shell's D3D exclusive-mode state, probed only in fullscreen).
+const exclusiveGate = new ExclusiveFullscreenGate({ fullscreen: () => fullscreenState.active,
+  exclusive: exclusiveFullscreen, speak: guideSay, lang: () => resolveLang(config.load().lang) });
+// Her body (capri_body actions on the overlay), shared by Codex's capri_body tool and walkthrough reactions.
+function bodyAction(action, { check = () => {}, signal = new AbortController().signal } = {}) {
+  return new Promise((resolve, reject) => {
+    check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Capri’s body is unavailable.'));
+    const id = randomBytes(12).toString('hex');
+    const finish = (error, result) => { clearTimeout(timer); signal.removeEventListener('abort', stop); bodyJobs.delete(id); error ? reject(error) : resolve(result); };
+    const stop = () => finish(Error('Body action cancelled.'));
+    const timer = setTimeout(() => finish(Error('Body action timed out.')), 10000);
+    bodyJobs.set(id, result => finish(null, result)); signal.addEventListener('abort', stop, { once: true });
+    overlay.webContents.send('companion:body', { id, action });
+  });
+}
+const guideLayer = createGuideLayer({ BrowserWindow, screen, preload: path.join(__dirname, '..', 'guide-preload.js'),
+  page: path.join(__dirname, '..', 'renderer', 'guide.html') });
+const guide = new GuideSession({
+  targets: guideTargets, layer: guideLayer,
+  layout: scene => layoutScene(scene, { displays: screen.getAllDisplays(), screenToDip: rect => screen.screenToDipRect(null, rect) }),
+  // Raw foreground: her own windows (pid) keep the drawing instead of clearing it.
+  foreground: () => require('./native-windows').foregroundBounds(), ownPid: process.pid, yieldFocus: yieldOverlayFocus,
+  // ScreenAccess reads agentConfig, which lifts Gaming mode only while a voice session is active.
+  allowed: () => screenAccess.enabled(), gate: exclusiveGate,
+  // A drawing already shown is not cleared when the voice session that asked for it ends (Gaming mode on clears it).
+  keep: () => config.load().screenAwareness !== false,
+});
+// One walkthrough at a time (walkthrough-controller.js). Re-plans use the decision brain with one fresh screenshot,
+// outside chat history. Each line goes to the overlay's normal TTS path with a one-time voice grant, so it is spoken while
+// she is hidden in a fullscreen game or Gaming mode (never when voice is off or muted). Commands-only listening follows it.
+// Her body comes over on each new step and shows her mood at the end, only while her overlay is visible and not fullscreen.
+const walkthroughs = new WalkthroughController({ targets: guideTargets, layer: guideLayer, guide, ownPid: process.pid,
+  displays: () => screen.getAllDisplays(), screenToDip: rect => screen.screenToDipRect(null, rect),
+  dipToScreen: rect => screen.dipToScreenRect(null, rect), cursor: () => screen.getCursorScreenPoint(),
+  foreground: () => require('./native-windows').foregroundBounds(), pointer: () => require('./native-windows').pointerState(),
+  processRows: () => require('./native-windows').processRows(), allowed: () => screenAccess.enabled(),
+  lang: () => resolveLang(config.load().lang), busy: () => brain.busy || decisionBrain.busy,
+  speak: guideSay, onActive: () => syncCommands(), gate: exclusiveGate, reminderWindow: () => Boolean(reminders?.windowOpen()),
+  body: action => bodyAction(action),
+  bodyAllowed: () => Boolean(overlay && !overlay.isDestroyed() && overlay.isVisible() && !fullscreenState.active && !config.load().gamingMode),
+  snapshot: () => screenAccess.snapshot('', () => {}, { lifted: true }),
+  infer: async request => {
+    decisionBrain.reset();
+    try { return await decisionBrain.chat(JSON.stringify(request.messages), () => {}, () => {}, { outputSchema: request.schema, recordHistory: false, images: request.images }); }
+    finally { decisionBrain.reset(); }
+  } });
+guideLayer.onCardAction((displayId, id) => walkthroughs.cardAction(displayId, id));
+app.on('before-quit', () => { walkthroughs.stop(); guide.clear('quit'); });
 const currentContext = text => {
   const p = permissions(agentConfig().privacy);
   const savedContinuity = goals().continuity.context();
@@ -315,16 +390,8 @@ const currentContext = text => {
   recentTasks: actions.grounding({ includeApps: false }) };
 };
 const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: resolveLang, context: pcContext,
-  screen: screenAccess, accessibility, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
-  body: (action, { check, signal }) => new Promise((resolve, reject) => {
-    check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Capri’s body is unavailable.'));
-    const id = randomBytes(12).toString('hex');
-    const finish = (error, result) => { clearTimeout(timer); signal.removeEventListener('abort', stop); bodyJobs.delete(id); error ? reject(error) : resolve(result); };
-    const stop = () => finish(Error('Body action cancelled.'));
-    const timer = setTimeout(() => finish(Error('Body action timed out.')), 10000);
-    bodyJobs.set(id, result => finish(null, result)); signal.addEventListener('abort', stop, { once: true });
-    overlay.webContents.send('companion:body', { id, action });
-  }),
+  screen: screenAccess, accessibility, guide, walkthroughs, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
+  body: bodyAction,
   actions, store: memory, goals, curiosity: () => curiosity, state: settingsState, patch: updateConfig, confirm: confirmMemory });
 const brain = new CodexBrain({ settings: agentConfig, recentConversation,
   warmIdleMs: 3 * 60 * 1000, canKeepWarm: () => !config.load().gamingMode && sessionAvailable,
@@ -434,12 +501,49 @@ let lastWindows = null;
 const chats = new Map(); // id -> AbortController of an answer being streamed
 const wakeAllowed = () => Boolean(overlay && !overlay.isDestroyed() && config.load().wakeWordEnabled === true
   && (!smokeTest || process.argv.includes('--wake-live')));
+// Commands-only listening (spec decision 1): open while a walkthrough runs or a reminder's command window is open,
+// in fullscreen and Gaming mode too. Only the fixed local commands are acted on; speech.js drops every other transcript.
+// speech.commandsReady() adds the user's voice opt-in (wake word on) and an already installed runtime: never a download.
+let commandWindowUntil = 0, commandWindowTimer = null, commandsOn = false, commandsListeningId = null;
+const commandsAllowed = () => Boolean(sessionAvailable && overlay && !overlay.isDestroyed()
+  && (walkthroughs.active || Date.now() < commandWindowUntil));
+// For the reminders plan: open the window for ms (30 s after a reminder fires or is shown).
+function openCommandWindow(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return;
+  commandWindowUntil = Math.max(commandWindowUntil, Date.now() + Math.min(ms, 120000));
+  clearTimeout(commandWindowTimer);
+  commandWindowTimer = setTimeout(() => syncCommands(), commandWindowUntil - Date.now() + 50);
+  commandWindowTimer.unref?.();
+  syncCommands();
+}
+function syncCommands(force = false) {
+  const on = speech.commandsReady();
+  if (!on && speech.current?.mode === 'commands') speech.cancel();
+  if (on === commandsOn && !force) return;
+  commandsOn = on;
+  if (!overlay || overlay.isDestroyed()) return;
+  // Hidden for a fullscreen game, the overlay must keep capturing while the window is open.
+  if (on) overlay.webContents.setBackgroundThrottling(false);
+  else if (!overlay.isVisible()) overlay.webContents.setBackgroundThrottling(!config.load().wakeWordEnabled && !voiceSession);
+  overlay.webContents.send('speech:commands', { on });
+}
+function routeSpeechCommand({ command, minutes }) {
+  // 'done' / 'snooze': the most recently shown reminder card, within its window; otherwise "done" is a walkthrough's Next.
+  walkthroughs.voiceCommand(command, () => Boolean(reminders?.voice({ command, minutes })));
+}
 const speech = new SpeechInput({
   runtimeDir: app.isPackaged ? path.join(app.getPath('userData'),'speech-runtime') : path.join(ROOT,'.caprigpt-local','speech-runtime'),
   allowed: () => Boolean(overlay && !overlay.isDestroyed() && (voiceSession || (overlay.isVisible()
     && !config.load().gamingMode && !fullscreenState.active))),
   wakeAllowed,
+  commandsAllowed,
+  wakeEnabled: () => config.load().wakeWordEnabled === true,
   notify: state => {
+    if (state.type === 'command') { routeSpeechCommand(state); return; } // handled here, never forwarded
+    // The walkthrough card's mic badge follows the commands microphone (her overlay may be hidden in a game).
+    if (state.type === 'ready' && state.mode === 'commands') { commandsListeningId = state.id; walkthroughs.setListening(true); }
+    // 'wake': the wake address was heard in commands mode, so that stream is now the user's request.
+    else if (['stopped', 'wake'].includes(state.type) && state.id === commandsListeningId) { commandsListeningId = null; walkthroughs.setListening(false); }
     if (!overlay || overlay.isDestroyed()) return;
     if (state.type === 'wake' || (state.type === 'ready' && state.mode === 'conversation')) {
       voiceSession = true; autonomy.cancel(); tts.cancel(); tts.warm();
@@ -452,7 +556,10 @@ const speech = new SpeechInput({
 
 const tts = new SpeechOutput({ root: ROOT, config: () => config.load(),
   allowed: () => sessionAvailable && speech.allowed() && (voiceSession || config.load().visible !== false)
-    && (!speech.current || ['wake', 'conversation'].includes(speech.current.mode)),
+    && (!speech.current || ['wake', 'conversation', 'commands'].includes(speech.current.mode)),
+  // A granted guide/reminder line skips only the visibility, fullscreen and Gaming part of allowed().
+  grantAllowed: () => Boolean(sessionAvailable && overlay && !overlay.isDestroyed()
+    && (!speech.current || ['wake', 'conversation', 'commands'].includes(speech.current.mode))),
   notify: state => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('tts:state', state); },
 });
 
@@ -543,13 +650,43 @@ function createOverlay() {
     speech.cancel(true); tts.cancel(); endVoiceSession();
     console.error('[capri] renderer gone:', details.reason);
   });
-  overlay.webContents.on('did-start-loading', () => { speech.cancel(true); tts.cancel(); endVoiceSession(); });
+  overlay.webContents.on('did-start-loading', () => { speech.cancel(true); tts.cancel(); endVoiceSession(); reminders?.setReady(false); });
   if (DEV) {
     overlay.webContents.on('console-message', (e) => {
       const { level, message, lineNumber, sourceId } = e;
       console.log(`[renderer:${level}] ${message} (${String(sourceId).split('/').pop()}:${lineNumber})`);
     });
     if (process.env.CAPRI_DEVTOOLS) overlay.webContents.openDevTools({ mode: 'detach' });
+  }
+}
+
+// Reminders: one local SQLite file, one timer. A fired reminder speaks with a one-time 'reminder' voice grant (also while
+// she is hidden in a fullscreen game or Gaming mode; never when voice is off or muted) and shows her card, or holds the card
+// until fullscreen ends / Gaming mode is off. A shown card opens the 30 s commands window for "done" / "snooze".
+function startReminders() {
+  try {
+    reminderStore = new ReminderStore(path.join(app.getPath('userData'), 'reminders.sqlite'));
+    reminders = new ReminderController({ store: reminderStore, lang: () => resolveLang(config.load().lang),
+      state: () => { const cfg = config.load(); return { fullscreen: fullscreenState.active, gaming: cfg.gamingMode === true,
+        overlayAvailable: Boolean(overlay && !overlay.isDestroyed()), voiceOn: Boolean(cfg.ttsEnabled) && !cfg.muted,
+        locked: !sessionAvailable }; },
+      send: payload => { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('reminder:due', payload); },
+      grant: line => tts.grant('reminder', line), openWindow: openCommandWindow,
+      isOverlay: sender => Boolean(overlay && !overlay.isDestroyed() && sender === overlay.webContents) });
+    reminderScheduler = new ReminderScheduler({ store: reminderStore, fire: (reminder, info) => reminders.fire(reminder, info) });
+    brainTools.reminders = reminderStore;
+    reminderScheduler.resume();
+    reminders.redeliver(); // occurrences still waiting from before the restart, once, as missed
+    // Done / cancelled reminders are kept 30 days; the Control room follows changes made by voice or Codex too.
+    const prune = () => { try { reminderStore?.prune(); } catch { /* best effort */ } };
+    prune();
+    const pruneTimer = setInterval(prune, 24 * 3600000); pruneTimer.unref();
+    let roomTimer = null;
+    reminderStore.onChange(() => { clearTimeout(roomTimer); roomTimer = setTimeout(() => settingsRoom?.update(), 250); roomTimer.unref?.(); });
+  } catch (error) {
+    console.error('[capri] Reminders unavailable:', error.message);
+    reminderScheduler?.stop(); reminderStore?.close();
+    reminderStore = reminderScheduler = reminders = null; brainTools.reminders = undefined;
   }
 }
 
@@ -621,7 +758,8 @@ function onFullscreen(active) {
   if (active === fullscreenState.active) return;
   const revision = fullscreenState.revision + 1;
   fullscreenState = { active, revision };
-  if (active) { if (speech.current?.mode !== 'wake' && !speech.current?.wakeActivated) speech.cancel(); if (!voiceSession) tts.cancel(); }
+  exclusiveGate.onFullscreen(active); // a new game session may hear the borderless suggestion again
+  if (active) { if (!['wake', 'commands'].includes(speech.current?.mode) && !speech.current?.wakeActivated) speech.cancel(); if (!voiceSession) tts.cancel(); }
   clearTimeout(fullscreenHideTimer);
   if (!overlay || overlay.isDestroyed()) return;
   overlay.webContents.setBackgroundThrottling(false);
@@ -632,7 +770,7 @@ function onFullscreen(active) {
     fullscreenHideTimer = setTimeout(() => {
       if (!voiceSession && fullscreenState.active && fullscreenState.revision === revision && !overlay?.isDestroyed()) {
         overlay?.hide();
-        overlay?.webContents.setBackgroundThrottling(true);
+        overlay?.webContents.setBackgroundThrottling(!commandsOn);
       }
     }, 260);
   } else if (!config.load().gamingMode) {
@@ -643,12 +781,13 @@ function onFullscreen(active) {
     overlay.showInactive();
   }
   overlay.webContents.send('fullscreen:state', fullscreenState);
+  if (!active) reminders?.flush(); // held reminder cards appear once fullscreen ends
 }
 
 // Ctrl+Alt+C: she folds herself away into her biochip in the corner, or comes back out of it.
 function toggleVisible(force) {
   const visible = typeof force === 'boolean' ? force : !config.load().visible;
-  if (!visible) { if (speech.current?.mode !== 'wake') speech.cancel(); tts.cancel(); }
+  if (!visible) { if (!['wake', 'commands'].includes(speech.current?.mode)) speech.cancel(); tts.cancel(); }
   config.save({ visible });
   sendCommand('stow', { on: !visible });
   rebuildTray();
@@ -693,7 +832,7 @@ function resolveLang(setting) {
 function rendererConfig() {
   const cfg = config.load();
   return { ...cfg, wakeWordEnabled: smokeTest && !process.argv.includes('--wake-live') ? false : cfg.wakeWordEnabled,
-    lang: resolveLang(cfg.lang), langSetting: cfg.lang };
+    lang: resolveLang(cfg.lang), langSetting: cfg.lang, displayName: DISPLAY_NAME };
 }
 
 function updateConfig(patch) {
@@ -719,12 +858,14 @@ function updateConfig(patch) {
   if (['gamingMode', 'privacy', 'systemAccess', 'screenAwareness'].some(changes) || backendChanged) {
     brain.reset({ keepRecent: !revokedRecall && !['systemAccess', 'screenAwareness', 'codexExecutable'].some(changes) });
   }
-  if ((patch.gamingMode === true || patch.visible === false) && speech.current?.mode !== 'wake') speech.cancel();
+  if (patch.gamingMode === true || patch.screenAwareness === false) { walkthroughs.stop(); guide.clear('paused'); }
+  if ((patch.gamingMode === true || patch.visible === false) && !['wake', 'commands'].includes(speech.current?.mode)) speech.cancel();
   if (patch.gamingMode === true || patch.visible === false
       || ['muted', 'volume', 'ttsEnabled', 'speakTypedReplies', 'proactiveVoice', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText', 'ttsDevice'].some(changes)) tts.cancel();
   if (['ttsEnabled', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText'].some(changes) || patch.muted === true) tts.close();
   if (patch.privacy) patch = { ...patch, privacy: nextPrivacy };
   config.save(patch);
+  if (patch.gamingMode === false) reminders?.flush();
   if (backendChanged || patch.gamingMode === true || patch.visible === false ||
       [patch.interestsEnabled, patch.cognitiveEnabled, patch.agentEnabled].includes(false)) interestCollaboration.cancel();
   if (speech.current?.checkIn && (patch.muted === true || patch.volume === 0 ||
@@ -732,6 +873,7 @@ function updateConfig(patch) {
     speech.cancel(); endVoiceSession();
   }
   if (patch.wakeWordEnabled === false) { speech.cancel(); endVoiceSession(); }
+  if (changes('wakeWordEnabled')) syncCommands();
   if (Object.hasOwn(patch, 'displayId')) fitOverlay();
   pcContext.eventSnapshot(); // discard event fields when permissions are revoked
   if (!config.load().windowTracking) {
@@ -751,6 +893,7 @@ function settingsState() {
     initiative: initiativeTrial.status(),
     runtime: runtime(), integration: codexEvents.snapshot(),
     project: goals().projects.selected(),
+    reminders: (() => { try { return reminderRows(reminderStore, resolveLang(config.load().lang)); } catch { return []; } })(),
     startup: app.getLoginItemSettings(loginItemOptions()).openAtLogin,
     displays: screen.getAllDisplays().map(d => ({ id: d.id, width: d.size.width, height: d.size.height })) };
 }
@@ -834,6 +977,13 @@ async function projectCommand(text) {
 
 async function settingsAction(name, value) {
   switch (name) {
+    case 'reminder-cancel': case 'reminder-move': {
+      if (!reminderStore) return 'Reminders are unavailable right now.';
+      let message;
+      if (name === 'reminder-cancel') message = reminderStore.cancel(value) ? 'Reminder cancelled.' : 'That reminder is already gone.';
+      else { moveReminder(reminderStore, value); message = 'Reminder moved.'; }
+      settingsRoom?.update(); return message;
+    }
     case 'gaming': await setGamingMode(value); break;
     case 'visibility': toggleVisible(value); break;
     case 'startup': app.setLoginItemSettings({ ...loginItemOptions(), openAtLogin: value }); break;
@@ -910,6 +1060,11 @@ function registerIpc() {
   });
   ipcMain.handle('tts:speak', (event, request) => speechCaller(event) ? tts.speak(request) : {ok:false,error:'Voice unavailable.'});
   ipcMain.on('tts:cancel', event => { if (speechCaller(event)) tts.cancel(false); });
+  // Reminder cards: only the overlay may act on them (checked again in ReminderController).
+  ipcMain.handle('reminder:action', (event, id, action, firedDue, minutes) =>
+    reminders ? reminders.ipcAction(event.sender, id, action, firedDue, minutes) : { ok: false, error: 'Reminders are unavailable.' });
+  ipcMain.on('reminder:shown', (event, id, firedDue) => { reminders?.shown(event.sender, id, firedDue); });
+  ipcMain.on('reminder:ready', event => { if (speechCaller(event)) reminders?.setReady(true); });
   ipcMain.handle('speech:start', (event, request) => {
     if (!speechCaller(event)) return { ok: false, error: 'speech-unavailable' };
     if (request?.checkIn === true) {
@@ -918,8 +1073,8 @@ function registerIpc() {
           !cfg.checkInReplies || !cfg.proactiveVoice || !cfg.proactiveEnabled || !cfg.ttsEnabled || cfg.muted || cfg.volume === 0 ||
           Date.now() >= checkInDeadline) return { ok: false, error: 'speech-paused' };
     }
-    if (request?.checkIn !== true) autonomy.touch();
-    tts.cancel();
+    // Commands-only listening runs under her guide lines: it neither interrupts her nor counts as user activity.
+    if (request?.mode !== 'commands') { if (request?.checkIn !== true) autonomy.touch(); tts.cancel(); }
     const result = speech.start(request);
     if (result.ok && request?.checkIn === true) checkInDeadline = 0;
     return result;
@@ -929,6 +1084,7 @@ function registerIpc() {
     return updateConfig({ wakeWordEnabled: enabled });
   });
   ipcMain.on('wake:end-session', event => { if (speechCaller(event)) endVoiceSession(); });
+  ipcMain.handle('speech:commands-state', event => ({ on: speechCaller(event) ? speech.commandsReady() : false }));
   ipcMain.handle('speech:stop', (event, request) => {
     if (!speechCaller(event)) return { ok: false, error: 'speech-unavailable' };
     return speech.stop(request?.id);
@@ -951,13 +1107,19 @@ function registerIpc() {
         || state.hidden !== fullscreenState.active) return;
     clearTimeout(fullscreenHideTimer);
     if (state.hidden && !voiceSession) overlay.hide();
-    overlay.webContents.setBackgroundThrottling(!config.load().wakeWordEnabled && !voiceSession);
+    overlay.webContents.setBackgroundThrottling(!config.load().wakeWordEnabled && !voiceSession && !commandsOn);
   });
   ipcMain.handle('runtime:info', () => runtime());
   ipcMain.handle('personal:route', async (event, text, id, conversation, commandsOnly = false, replyTo, conversationId) => foreground.run(async () => {
     try {
       if (event.sender !== overlay?.webContents) throw Error('Overlay required.');
       if (typeof text !== 'string' || text.length > 12000) throw Error('Invalid message.');
+      const reminderReply = reminderStore && routeReminderCommand(text, reminderStore, resolveLang(config.load().lang));
+      if (reminderReply) return reminderReply;
+      // A running walkthrough keeps the guide layer: a command runs locally, anything else pauses it until answered; only "stop" or a new walkthrough ends it.
+      const walkReply = walkthroughs.route(text);
+      if (walkReply) return walkReply;
+      // A new request leaves an explanation drawing up (asking about it must not erase it); see GuideSession's lifetime.
       if (projectRouting) return { handled: true, text: 'Finish choosing your project before sending a request.' };
       const trialReply = initiativeCommand(text);
       if (trialReply) return trialReply;
@@ -1040,7 +1202,7 @@ function registerIpc() {
       return { handled: false };
     }
     catch (err) { return { handled: true, text: `Local assistant unavailable: ${err.message}` }; }
-  }));
+  }).then(result => walkthroughs.afterRoute(result, commandsOnly === true), error => { walkthroughs.answered(); throw error; }));
   ipcMain.handle('task:openResult', async (_event, ref) => {
     try { if (typeof ref!=='string'||!/^[a-f0-9]{16}$/.test(ref)) throw Error('Invalid result.'); return {ok:true,...await actions.openResult(ref)}; }
     catch(error) { return {ok:false,error:error.message}; }
@@ -1102,16 +1264,16 @@ function registerIpc() {
       }
       const text = await brain.chat(current.content,
         text => overlay?.webContents.send('chat:delta', { id, text }),
-        text => overlay?.webContents.send('task:progress', { id, text }), { voice, statedMemory, onDelivery });
+        text => overlay?.webContents.send('task:progress', { id, text }), { voice, statedMemory, onDelivery, turn: id });
       if (projectFeedbackAnchor === feedbackAnchorAtStart) projectFeedbackAnchor = null;
       return { ok: true, text, closeViaTools: true, delivery };
     } catch (error) { projectFeedbackAnchor = null; return { ok: false, error: abort.signal.aborted ? 'stopped' : error.message }; }
     finally { abort.signal.removeEventListener('abort', stop); chats.delete(id); finish(); }
-  }));
+  }).finally(() => walkthroughs.answered()));
   ipcMain.on('chat:stop', (event, id) => {
     if (event.sender !== overlay?.webContents) return;
     interestCollaboration.cancel(id);
-    chats.get(id)?.abort.abort(); brain.cancel(); decisionBrain.cancel();
+    chats.get(id)?.abort.abort(); brain.cancel(); decisionBrain.cancel(); walkthroughs.chatStopped(id);
     settingsRequests.cancel(); agent.cancel(); requests.cancel(); memoryRequests.cancel();
   });
   // closing an app you asked her to close, once you've clicked to confirm (apps.js)
@@ -1249,6 +1411,7 @@ function main() {
       onChange: onFullscreen,
     });
     watchWindows();
+    startReminders();
     // Existing OS events only; at most one in-memory snapshot with a 60-second TTL.
     for (const [event, reason] of [['resume', 'resume'], ['on-ac', 'power-change'], ['on-battery', 'power-change']]) {
       powerMonitor.on(event, () => { pcContext.onEvent(reason).catch(() => {}); autonomy.touch(); });
@@ -1317,11 +1480,14 @@ function main() {
       sessionAvailable = event === 'resume' || event === 'unlock-screen';
       autonomy.observeIdle(null); autonomy.touch(); reflection.cancel();
       if (!sessionAvailable) {
+        walkthroughs.stop(); guide.clear('locked');
         brain.dropWarmClient();
         checkInDeadline = 0; tts.cancel();
         interestCollaboration.cancel();
         if (speech.current?.checkIn) { speech.cancel(); endVoiceSession(); }
-      }
+        commandWindowUntil = 0;
+      } else { reminderScheduler?.resume(); reminders?.redeliver(); } // held while locked: shown now, missed ones once
+      syncCommands();
     });
     const presenceTimer = setInterval(() => {
       const cfg = config.load();
@@ -1356,6 +1522,7 @@ function main() {
     fullscreenWatch?.stop();
     clearTimeout(fullscreenHideTimer);
     memoryStore?.close(); recentChatStore?.close(); goalStore?.close(); curiosity?.close();
+    reminderScheduler?.stop(); reminderStore?.close();
   });
   app.on('window-all-closed', (e) => e.preventDefault());
 }

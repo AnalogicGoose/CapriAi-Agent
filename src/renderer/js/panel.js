@@ -77,7 +77,7 @@ export class Panel {
 
     this.el.addEventListener('click', () => {
       if (this.current?.chat) { this.onFocus?.(); this.chatInput.focus(); } // a chat stays until you close it
-      else this.hide();
+      else this.hide('user');
     });
   }
 
@@ -114,7 +114,8 @@ export class Panel {
   //         longest: { label, project, time }, foot }
   // chat: a line to type to her, { placeholder, send, close, noteTag, note }; onSend(text) gets
   //       what you typed
-  // onLeave: () => void, when this message goes (closed, timed out or replaced)
+  // onLeave: (reason) => void, when this message goes: 'user' (clicked away), 'timeout', 'replaced' (another message),
+  //          'cleared' (clearKind), or whatever reason hide() was given (undefined from other callers)
   setActivity(text) {
     this.activity.textContent = text || '';
     this.activity.hidden = !text;
@@ -136,7 +137,7 @@ export class Panel {
     }
     clearTimeout(this.leaveTimer);
     if (cur && this.visible) this.onDismiss?.(cur);
-    cur?.onLeave?.();
+    cur?.onLeave?.('replaced');
     this.current = { ...msg, at: performance.now() };
     clearTimeout(this.hideTimer);
 
@@ -170,7 +171,7 @@ export class Panel {
     this.place();
     this.decode(msg.line || '', msg.kind);
 
-    if (msg.hold) this.hideTimer = setTimeout(() => this.hide(), msg.hold);
+    if (msg.hold) this.hideTimer = setTimeout(() => this.hide('timeout'), msg.hold);
     return true;
   }
 
@@ -399,7 +400,7 @@ export class Panel {
     this.log.hidden = entries.length === 0;
   }
 
-  hide() {
+  hide(reason) {
     if (this.el.hidden || this.leaving) return;
     const gone = this.current;
     // Preserve the conversation card's height while mic cleanup clears its status.
@@ -415,7 +416,7 @@ export class Panel {
     this.onTalk?.(false);
     if (gone) {
       this.onDismiss?.(gone);
-      gone.onLeave?.();
+      gone.onLeave?.(reason);
     }
     const missed = gone?.chat && this.missed;
     this.missed = null;
@@ -435,7 +436,7 @@ export class Panel {
 
   // Only drop a sticky alert (permission prompt) once it has been dealt with.
   clearKind(kind) {
-    if (this.current?.kind === kind) this.hide();
+    if (this.current?.kind === kind) this.hide('cleared');
   }
 
   suspend() {

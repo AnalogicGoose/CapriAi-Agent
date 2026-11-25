@@ -52,6 +52,15 @@ function render() {
       row('Clear recent chats', 'Remove saved conversation text and start fresh.', button('Clear recent chats', 'clear-recent-chat', 'danger'))) +
     card(sw('privacy.memoryEnabled',p.memoryEnabled,'Personal memory','Keep personal details and topic preferences on this PC.'),sw('privacy.memoryLearn',p.memoryLearn,'Learn from conversation','Automatically save clearly stated interests, activities and belongings in voice and text chat.'),sw('privacy.memoryConfirmChanges',p.memoryConfirmChanges,'Review requested changes','Ask before applying requested memory edits or removals.'),sw('privacy.memoryCandidates',p.memoryCandidates,'Offer to remember','Let Capri suggest memories during conversation. Each save asks first.'),sw('privacy.memoryRecall',p.memoryRecall,'Recall in conversation','Give Codex relevant saved facts and topic preferences.')) +
     section('KEEP / REVIEW / CLEAR') + card(row('Keep memories for', 'Retention starts from the last edit.',options('privacy.retentionDays',p.retentionDays,[[30,'30 days'],[90,'90 days'],[365,'1 year'],[0,'Until I delete them']],'Memory retention')),row('Review your memories','List, edit or forget individual facts in the local commands panel.',button('Review','memory-open'))) + `<div class="actions">${button('Export memories','memory-export')}${button('Delete all memories','memory-delete','danger')}</div>`;
+  if (page === 'reminders') {
+    const list = state.reminders || [], name = esc(c.displayName || 'Your companion');
+    content.innerHTML = heading('NEVER FORGET', 'Reminders', `${name} will speak up when these are due. Ask her to add one, or manage them here.`) + section('UPCOMING') +
+      (list.length ? card(...list.map(item => row(esc(item.text), `Next: ${esc(item.next)} · ${esc(item.repeat)}`,
+        `<div class="actions">` + (item.movable ? `<input type="time" data-reminder-time="${esc(item.id)}" value="${esc(item.next.slice(11, 16))}" aria-label="New time for ${esc(item.text)}">` +
+        `<button class="button" data-reminder-move="${esc(item.id)}" data-date="${esc(item.next.slice(0, 10))}">Move</button>` : '') +
+        `<button class="button" data-reminder-cancel="${esc(item.id)}">Cancel</button></div>`))) :
+        card(row('No reminders yet', `Tell ${name} what to remind you about and when, and it shows up here.`)));
+  }
   if (page === 'awareness') content.innerHTML = heading('AWARE / ON YOUR TERMS', 'PC awareness', 'Snapshots are collected locally on demand or activity changes. Selected context may be sent to Codex. No screen recording or keylogging.') +
     `<div class="hero"><div class="hero__top"><h2>Every app included.</h2><span class="badge">AUTOMATIC</span></div><p>New apps are included automatically. There’s no app list to maintain.</p></div>` +
     card(sw('privacy.contextForeground',p.contextForeground,'Active app','Know which app is in front.'),sw('privacy.contextTitles',p.contextTitles,'Window titles','Include titles, which may contain private details.'),sw('privacy.contextProcesses',p.contextProcesses,'Open apps & processes','Read app names and running background processes.'),sw('privacy.contextEvents',p.contextEvents,'Respond to activity changes','Refresh on resume, power changes and foreground changes.')) +
@@ -122,6 +131,14 @@ document.addEventListener('click', event => {
   if (nav) { page = nav.dataset.page; render(); content.scrollTop=0; return; }
   const scale = event.target.closest('[data-scale]');
   if (scale) { const value = Number(scale.dataset.scale); perform(() => host.patch({ scale: value })); }
+  const cancel = event.target.closest('[data-reminder-cancel]');
+  if (cancel) { const id = Number(cancel.dataset.reminderCancel); perform(() => host.action('reminder-cancel', id)); return; }
+  const move = event.target.closest('[data-reminder-move]');
+  if (move) {
+    const id = Number(move.dataset.reminderMove), time = content.querySelector(`[data-reminder-time="${id}"]`)?.value;
+    if (!time) { notice('Pick a time first.', true); return; }
+    perform(() => host.action('reminder-move', { id, at: time, date: move.dataset.date })); return;
+  }
   const action = event.target.closest('[data-action]');
   if (action) { const name = action.dataset.action, value = action.dataset.value; perform(() => host.action(name, name === 'voice-preview' ? previewStyle : value === undefined ? undefined : value === 'true')); }
 });

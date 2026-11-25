@@ -133,3 +133,100 @@ test('closing a panel cancels capture; device errors unlock input; full drafts s
   f.input.value='a'.repeat(499);f.input.selectionStart=f.input.selectionEnd=499;
   await f.dictation.toggle();f.send({type:'final',text:'many extra words'});assert.ok(f.input.value.length<=500);f.dictation.cancel();
 });
+
+function commandsFixture({wake=true,runtime=true,wakeAllowed=false}={}){
+  const events=[],jobs=[],starts=[];let commands=true,stops=0;
+  const engine={device:'GPU',installed:()=>runtime,start:async(progress,options)=>{starts.push(options);},stop:()=>{stops++;},
+    transcribe:(pcm,signal)=>new Promise(resolve=>jobs.push({resolve,signal}))};
+  // allowed() is false: the overlay is hidden in a fullscreen game or Gaming mode.
+  const speech=new SpeechInput({allowed:()=>false,commandsAllowed:()=>commands,wakeEnabled:()=>wake,wakeAllowed:()=>wakeAllowed,notify:event=>events.push(event),engine});
+  return {speech,events,jobs,starts,revoke:()=>{commands=false;},stops:()=>stops};
+}
+
+test('commands mode discards non-command speech',async()=>{
+  const f=commandsFixture();
+  try{
+    assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).ok,true);await tick();
+    const slot=f.speech.current;assert.equal(slot.mode,'commands');assert.equal(slot.segmenter.maxSamples,5*16000);
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[0].resolve('what a nice day');await tick();
+    assert.equal(JSON.stringify(f.events).includes('nice day'),false);
+    assert.equal(f.events.some(event=>event.type==='final'||event.type==='processing'||event.type==='command'),false);
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[1].resolve('Next, please.');await tick();
+    assert.deepEqual(f.events.filter(event=>event.type==='command'),[{id:'commands-0001',type:'command',command:'next'}]);
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[2].resolve('snooze 15 minutes');await tick();
+    assert.deepEqual(f.events.at(-1),{id:'commands-0001',type:'command',command:'snooze',minutes:15});
+    assert.equal(f.events.some(event=>'text' in event),false,'commands mode never sends transcript text');
+    assert.equal(f.speech.current,slot);assert.equal(slot.timeout,undefined,'no dictation timeout while commands are allowed');
+  }finally{f.speech.cancel();}
+});
+
+test('commands mode is refused when commandsAllowed is false and allowed in fullscreen when true',async()=>{
+  const f=commandsFixture();
+  try{
+    assert.equal(f.speech.start({id:'dictate-0001'}).error,'speech-paused','ordinary dictation stays paused in fullscreen');
+    assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).ok,true);await tick();
+    assert.equal(f.events.find(event=>event.type==='ready').mode,'commands');
+    f.speech.audio({id:'commands-0001',samples:tone()});assert.ok(f.speech.current,'audio is accepted while hidden/fullscreen');
+    f.revoke();f.speech.audio({id:'commands-0001',samples:tone()});
+    assert.equal(f.speech.current,null,'the window closes as soon as commands are no longer allowed');
+    assert.equal(f.speech.start({id:'commands-0002',mode:'commands'}).error,'speech-paused');
+  }finally{f.speech.cancel();}
+});
+
+test('commands mode is refused while the wake word is off, even inside a walkthrough window',()=>{
+  const f=commandsFixture({wake:false});
+  assert.equal(f.speech.commandsReady(),false);
+  assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).error,'speech-paused');
+  assert.equal(f.starts.length,0,'the engine (and its download) is never started');
+});
+
+test('commands mode is refused while the speech runtime is not installed',()=>{
+  const f=commandsFixture({runtime:false});
+  assert.equal(f.speech.commandsReady(),false);
+  assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).error,'speech-paused');
+  assert.equal(f.starts.length,0);
+});
+
+test('commands mode starts the engine without any download',async()=>{
+  const f=commandsFixture();
+  try{
+    assert.equal(f.speech.commandsReady(),true);
+    assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).ok,true);await tick();
+    assert.deepEqual(f.starts,[{download:false}]);
+  }finally{f.speech.cancel();}
+});
+
+test('WhisperEngine.start({download:false}) never calls ensureRuntime',async()=>{
+  const {WhisperEngine}=require('../src/main/whisper-engine');
+  let ensures=0;
+  const engine=new WhisperEngine({runtimeDir:path.join(require('node:os').tmpdir(),'capri-no-runtime'),ensure:async()=>{ensures++;throw Error('speech-download-failed');},probe:()=>null});
+  await assert.rejects(engine.start(()=>{},{download:false}),/speech-unavailable/);
+  assert.equal(ensures,0);
+  assert.equal(engine.installed(),false);
+});
+
+test('commands mode hears the wake word and hands off to the wake flow; other speech is still discarded',async()=>{
+  const f=commandsFixture({wakeAllowed:true});
+  try{
+    assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).ok,true);await tick();
+    const slot=f.speech.current;
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[0].resolve('capri is nice');await tick();
+    assert.equal(JSON.stringify(f.events).includes('nice'),false,'no address: discarded');
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[1].resolve('Hey Capri, open Firefox');await tick();
+    assert.deepEqual(f.events.at(-1),{id:'commands-0001',type:'wake',text:'open Firefox',complete:true});
+    assert.equal(slot.mode,'dictation');assert.equal(slot.wakeActivated,true);assert.equal(slot.segmenter.maxSamples,20*16000);
+    assert.ok(slot.timeout,'the dictation limit applies as in wake mode');
+    assert.equal(f.speech.conversation('commands-0001').ok,true,'and can become a conversation');
+  }finally{f.speech.cancel();}
+});
+
+test('commands mode ignores the wake word while wake listening is not allowed',async()=>{
+  const f=commandsFixture({wakeAllowed:false});
+  try{
+    assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).ok,true);await tick();
+    const slot=f.speech.current;
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[0].resolve('Hey Capri, open Firefox');await tick();
+    assert.equal(f.events.some(event=>event.type==='wake'||'text' in event),false);
+    assert.equal(slot.mode,'commands');
+  }finally{f.speech.cancel();}
+});

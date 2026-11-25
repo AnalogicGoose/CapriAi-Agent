@@ -2,22 +2,23 @@
 const {WhisperEngine}=require('./whisper-engine');
 const {SpeechSegmenter}=require('./speech-segmenter');
 const {wakePhrase}=require('./wake-phrase');
+const {commandPhrase}=require('./command-phrases');
 const CHECK_IN_LIMIT_MS=40_000;
 class SpeechInput {
-  constructor({allowed,notify,engine,runtimeDir,wakeAllowed=()=>false}){
-    Object.assign(this,{allowed,notify,wakeAllowed});this.engine=engine||new WhisperEngine({runtimeDir});this.current=null;
+  constructor({allowed,notify,engine,runtimeDir,wakeAllowed=()=>false,commandsAllowed=()=>false,wakeEnabled=()=>false}){
+    Object.assign(this,{allowed,notify,wakeAllowed,commandsAllowed,wakeEnabled});this.engine=engine||new WhisperEngine({runtimeDir});this.current=null;
   }
   start(request={}){
     if(!request||typeof request.id!=='string'||!/^[a-zA-Z0-9-]{8,80}$/.test(request.id))return {ok:false,error:'invalid-request'};
-    const mode=request.mode==='wake'?'wake':request.mode==='conversation'?'conversation':'dictation';
-    if(!(mode==='wake'?this.wakeAllowed():this.allowed()))return {ok:false,error:'speech-paused'};
+    const mode=['wake','conversation','commands'].includes(request.mode)?request.mode:'dictation';
+    if(!this.permitted({mode}))return {ok:false,error:'speech-paused'};
     if(this.current)return {ok:false,error:'speech-busy'};
     const checkIn=mode==='conversation'&&request.checkIn===true;
     const slot={id:request.id,mode,checkIn,inputBlocked:checkIn,
       phase:'starting',queue:[],running:false,total:0,revision:0,recent:[],abort:new AbortController()};
-    this.current=slot;slot.segmenter=new SpeechSegmenter((pcm,meta)=>this.enqueue(slot,pcm,meta),{maxSamples:mode==='wake'?5*16000:20*16000});
+    this.current=slot;slot.segmenter=new SpeechSegmenter((pcm,meta)=>this.enqueue(slot,pcm,meta),{maxSamples:mode==='wake'||mode==='commands'?5*16000:20*16000});
     if(slot.checkIn)slot.timeout=setTimeout(()=>{if(this.current===slot)this.cancel();},CHECK_IN_LIMIT_MS);
-    this.engine.start(progress=>this.emit(slot,{type:'setup',percent:progress.percent})).then(()=>{
+    this.engine.start(progress=>this.emit(slot,{type:'setup',percent:progress.percent}),mode==='commands'?{download:false}:undefined).then(()=>{
       if(this.current!==slot)return;
       if(!this.permitted(slot)){this.cancel();return;}
       slot.phase='listening';if(mode==='dictation')slot.timeout=setTimeout(()=>this.cancel(),95000);
@@ -28,8 +29,18 @@ class SpeechInput {
     });
     return {ok:true,id:slot.id};
   }
+  // The wake address was heard: the same slot (and microphone stream) becomes the user's dictation.
+  wake(slot,wake,complete){
+    slot.mode='dictation';slot.wakeActivated=true;slot.total=0;
+    slot.segmenter.maxSamples=20*16000;
+    slot.timeout=setTimeout(()=>this.cancel(),95000);
+    this.emit(slot,{type:'wake',text:wake.text,complete});
+  }
   emit(slot,event){if(this.current===slot)this.notify({id:slot.id,...event});}
-  permitted(slot){return slot.mode==='wake'||slot.wakeActivated?this.wakeAllowed():this.allowed();}
+  // Commands-only listening has its own rule (a walkthrough or reminder window), which holds in fullscreen and Gaming mode.
+  // It also needs the user's own opt-in to voice (the wake word) and an already installed runtime: it never downloads.
+  commandsReady(){return Boolean(this.commandsAllowed()&&this.wakeEnabled()&&this.engine.installed?.());}
+  permitted(slot){return slot.mode==='commands'?this.commandsReady():slot.mode==='wake'||slot.wakeActivated?this.wakeAllowed():this.allowed();}
   audio({id,samples}={}){
     const slot=this.current;
     if(!slot||slot.id!==id||slot.phase!=='listening')return;
@@ -51,7 +62,7 @@ class SpeechInput {
     if(slot.running)return;slot.running=true;
     try{
       while(this.current===slot&&slot.queue.length){
-        const {pcm,complete,revision}=slot.queue.shift();if(slot.mode!=='wake')this.emit(slot,{type:'processing'});
+        const {pcm,complete,revision}=slot.queue.shift();if(slot.mode!=='wake'&&slot.mode!=='commands')this.emit(slot,{type:'processing'});
         const text=await this.engine.transcribe(pcm,slot.abort.signal);
         if(this.current!==slot)return;
         if(revision!==slot.revision)continue;
@@ -59,10 +70,15 @@ class SpeechInput {
         if(slot.mode==='wake'){
           const wake=wakePhrase(text);
           if(!wake)continue; // Ambient transcripts are discarded here, never sent to the renderer or Codex.
-          slot.mode='dictation';slot.wakeActivated=true;slot.total=0;
-          slot.segmenter.maxSamples=20*16000;
-          slot.timeout=setTimeout(()=>this.cancel(),95000);
-          this.emit(slot,{type:'wake',text:wake.text,complete});
+          this.wake(slot,wake,complete);
+        }else if(slot.mode==='commands'){
+          const command=commandPhrase(text);
+          if(command){this.emit(slot,{type:'command',...command});continue;}
+          // Commands mode owns the microphone, so the wake word is heard here too (when wake listening is allowed)
+          // and hands off exactly as wake mode does.
+          const wake=this.wakeAllowed()?wakePhrase(text):null;
+          if(!wake)continue; // Same rule as wake: any other transcript is dropped here, never emitted or logged.
+          this.wake(slot,wake,complete);
         }else if(text)this.emit(slot,{type:'final',text:text.slice(0,slot.mode==='conversation'?1501:slot.wakeActivated?501:500),complete});
       }
     }catch{if(this.current===slot){this.emit(slot,{type:'error',text:'recognizer-failed'});this.cancel();}}
@@ -98,7 +114,7 @@ class SpeechInput {
   finish(slot,cancelled=false){
     if(this.current!==slot)return;
     clearTimeout(slot.timeout);this.current=null;slot.queue=[];slot.segmenter.reset();
-    if(!this.wakeAllowed()||slot.phase==='starting')this.engine.stop();
+    if(!(this.wakeAllowed()||this.commandsReady())||slot.phase==='starting')this.engine.stop();
     this.notify({id:slot.id,type:'stopped',cancelled});
   }
   cancel(cold=false){const slot=this.current;if(!slot){this.engine.stop();return;}slot.abort.abort();this.finish(slot,true);if(cold)this.engine.stop();}
