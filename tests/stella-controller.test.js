@@ -781,3 +781,222 @@ test('C#9 concurrent pointAt, and stopPointing during a glide', async () => {
   assert.ok(dist(stella.pos, { x: 1700, y: 900 }) <= 200, 'home');
   assert.equal(stella.aimAngle, null);
 });
+
+// ---------- Task 11: folding away ----------
+
+const F = 1000 / 60;
+
+const FOLD_MEMBERS = ['fold', 'stowed', 'gaming', 'fullscreen', 'fullscreenProgress', 'hidden', 'root', 'fx', 'voice',
+  'drawFrame', 'stow', 'unstow', 'stowNow', 'materialize', 'intro', 'gamingDeparture', 'prepareGamingReturn',
+  'gamingArrival', 'presenceEffect'];
+
+test('exposes the fold surface', async () => {
+  const { stella } = await make();
+  for (const k of FOLD_MEMBERS) assert.ok(k in stella, `missing ${k}`);
+  assert.equal(stella.fx, null);
+  assert.equal(stella.fold, 0);
+  assert.equal(stella.stowed, false);
+  assert.equal(stella.fullscreen, false);
+  assert.equal(stella.fullscreenProgress, 0);
+});
+
+// Steps until `done()` or `max` frames, recording her fold, the drawn scene fold and the root opacity.
+function watch(t, done, max = 200) {
+  const folds = [], scene = [], opacity = [];
+  for (let i = 0; i < max && !done(); i++) {
+    const n = t.draws.length;
+    t.step(F);
+    folds.push(t.stella.fold);
+    if (t.draws.length > n) scene.push(t.draws[t.draws.length - 1].fold);
+    opacity.push(Number(t.stella.root.style.opacity ?? 1));
+  }
+  return { folds, scene, opacity };
+}
+const monotonic = (xs, up) => xs.every((x, i) => i === 0 || (up ? x >= xs[i - 1] - 1e-9 : x <= xs[i - 1] + 1e-9));
+const maxJump = xs => xs.reduce((m, x, i) => (i ? Math.max(m, Math.abs(x - xs[i - 1])) : 0), 0);
+
+test('stow folds and unstow unfolds smoothly', async () => {
+  const t = await make({ anchor: { x: 1700, y: 900 } });
+  const { stella } = t;
+  const seen = [];
+  stella.onStow = () => seen.push('stow');
+  stella.onUnstow = () => seen.push('unstow');
+  stella.onTeleport = phase => seen.push(phase);
+  t.step(F, 3);
+  const at = { ...stella.pos };
+  const stowing = stella.stow();
+  assert.equal(stella.stow(), stowing, 'a second stow joins the first');
+  const out = watch(t, () => stella.fold >= 1);
+  await stowing;
+  assert.ok(out.folds.length >= 30 && out.folds.length <= 40, `about 600 ms (${out.folds.length} frames)`);
+  assert.ok(monotonic(out.folds, true), 'folds monotonically');
+  assert.ok(maxJump(out.folds) < 0.1, 'no snap');
+  assert.ok(out.scene.some(f => f > 0.3 && f < 0.9), 'the scene draws the fold');
+  assert.equal(stella.fold, 1);
+  assert.equal(stella.stowed, true);
+  assert.deepEqual(seen, ['start', 'stow']);
+  assert.equal(stella.root.style.visibility, 'hidden');
+  assert.equal(stella.hit(stella.pos.x, stella.pos.y), false);
+  const n = t.draws.length;
+  t.step(F, 400); // nearly 7 s folded: no drawing, no wandering, no idle variations
+  assert.equal(t.draws.length, n, 'rendering paused');
+  assert.deepEqual(stella.pos, at, 'no wandering');
+  assert.equal(stella.travel, null);
+  const unstowing = stella.unstow();
+  assert.equal(stella.stowed, false);
+  const back = watch(t, () => stella.fold <= 0);
+  await unstowing;
+  assert.ok(monotonic(back.folds, false), 'unfolds monotonically');
+  assert.ok(maxJump(back.folds) < 0.1, 'no snap');
+  assert.equal(stella.fold, 0);
+  assert.equal(stella.root.style.visibility, '');
+  assert.ok(stella.hit(stella.pos.x, stella.pos.y));
+  assert.deepEqual(seen, ['start', 'stow', 'unstow', 'end']);
+  t.step(F);
+  assert.ok(t.draws.length > n, 'drawing again');
+});
+
+test('unstow mid-fold turns around without a snap; stowNow is instant', async () => {
+  const t = await make();
+  const { stella } = t;
+  let stows = 0;
+  stella.onStow = () => stows++;
+  t.step(F);
+  const stowing = stella.stow();
+  t.step(F, 15);
+  const mid = stella.fold;
+  assert.ok(mid > 0.2 && mid < 0.8);
+  stella.unstow();
+  t.step(F);
+  assert.ok(Math.abs(stella.fold - mid) < 0.1, 'turns around from where she is');
+  watch(t, () => stella.fold <= 0);
+  await stowing;
+  assert.equal(stows, 0, 'never reported stowed');
+  assert.equal(stella.stowed, false);
+  stella.stowNow();
+  assert.equal(stella.stowed, true);
+  assert.equal(stella.fold, 1);
+  assert.equal(stows, 1);
+  assert.equal(stella.root.style.visibility, 'hidden');
+});
+
+test('reduced motion fades in 120 ms and toggling mid-fold does not snap', async () => {
+  const t = await make({ reduced: true });
+  const { stella } = t;
+  t.step(F, 3);
+  const stowing = stella.stow();
+  const out = watch(t, () => stella.fold >= 1);
+  await stowing;
+  assert.ok(out.folds.length <= 9, `about 120 ms (${out.folds.length} frames)`);
+  assert.ok(out.scene.every(f => f < 1e-9), 'no folding shape, only a fade');
+  assert.ok(monotonic(out.opacity.slice(0, -1), false) && out.opacity.some(o => o > 0.2 && o < 0.8), 'opacity fades');
+  const unstowing = stella.unstow();
+  watch(t, () => stella.fold <= 0);
+  await unstowing;
+  assert.equal(stella.root.style.opacity, '1');
+  // toggled mid-fold: shape and opacity stay continuous
+  const u = await make();
+  u.step(F, 3);
+  u.stella.stow();
+  u.step(F, 12);
+  u.setReduced(true);
+  const a = watch(u, () => u.stella.fold >= 1);
+  assert.ok(maxJump(a.scene) < 0.15, `scene fold continuous (${maxJump(a.scene)})`);
+  assert.ok(maxJump(a.opacity) < 0.2, `opacity continuous (${maxJump(a.opacity)})`);
+});
+
+test('gaming departure resolves after folding', async () => {
+  const t = await make({ anchor: { x: 1700, y: 900 } });
+  const { stella } = t;
+  t.step(F, 3);
+  stella.glideTo({ x: 300, y: 900 });
+  t.step(F, 5);
+  let resolved = false;
+  const departing = stella.gamingDeparture().then(() => { resolved = true; });
+  assert.equal(stella.gaming, true);
+  t.step(F, 10);
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(resolved, false, 'still folding');
+  watch(t, () => stella.fold >= 1);
+  await departing;
+  assert.equal(resolved, true);
+  assert.equal(stella.fold, 1);
+  t.step(F);
+  assert.equal(stella.travel, null, 'her travel stops in place');
+  const at = { ...stella.pos };
+  t.step(F, 60);
+  assert.deepEqual(stella.pos, at);
+  stella.pos = { x: 500, y: 500 };
+  stella.prepareGamingReturn();
+  assert.deepEqual(stella.pos, stella.anchor, 'placed at her anchor');
+  assert.equal(stella.fold, 1);
+  assert.equal(stella.root.style.visibility, 'hidden');
+  stella.gaming = false;
+  const arriving = stella.gamingArrival();
+  const back = watch(t, () => stella.fold <= 0);
+  await arriving;
+  assert.ok(back.folds.length > 20 && monotonic(back.folds, false), 'unfolds');
+  assert.equal(stella.fold, 0);
+});
+
+test('materialize starts folded at the spot and unfolds', async () => {
+  const t = await make();
+  const { stella } = t;
+  const spot = { x: 1600, y: 880 };
+  const p = stella.intro(spot);
+  assert.deepEqual(stella.pos, spot);
+  assert.equal(stella.fold, 1);
+  const out = watch(t, () => stella.fold <= 0);
+  await p;
+  assert.ok(out.folds.length > 20 && monotonic(out.folds, false));
+});
+
+test('fullscreen progress drives the fold', async () => {
+  const t = await make();
+  const { stella } = t;
+  t.step(F, 3);
+  stella.fullscreen = true;
+  stella.fullscreenProgress = 0.4;
+  assert.equal(stella.fold, 0.4);
+  t.step(F);
+  assert.equal(t.draws[t.draws.length - 1].fold, 0.4);
+  const n = t.draws.length;
+  stella.fullscreenProgress = 0.7;
+  stella.drawFrame(t.clock.t);
+  assert.equal(t.draws.length, n + 1, 'drawFrame renders at once');
+  assert.equal(t.draws[n].fold, 0.7);
+  stella.fullscreenProgress = 1;
+  t.step(F, 5);
+  assert.equal(t.draws.length, n + 1, 'paused while folded away');
+  assert.equal(stella.root.style.visibility, 'hidden');
+  assert.equal(stella.hit(stella.pos.x, stella.pos.y), false);
+  stella.stowNow(); // own fold 1 while fullscreen: the effective fold is the larger
+  stella.fullscreenProgress = 0; stella.fullscreen = false;
+  assert.equal(stella.fold, 1);
+  stella.unstow();
+  stella.fullscreen = true; stella.fullscreenProgress = 0.5;
+  t.step(F);
+  assert.ok(stella.fold >= 0.5, 'max of her fold and the fullscreen one');
+});
+
+test('presence effect uses no fx', async () => {
+  const { stella } = await make();
+  const sounds = [];
+  stella.voice = { play: (name, o) => sounds.push([name, o]) };
+  stella.presenceEffect(true);
+  stella.presenceEffect(false);
+  assert.deepEqual(sounds, [['teleport-out', { soft: true }], ['teleport-in', { soft: true }]]);
+  assert.equal(stella.fx, null);
+  stella.voice = null;
+  stella.presenceEffect(true); // no voice: nothing to play
+});
+
+test('setView with an unchanged size changes nothing', async () => {
+  const t = await make({ anchor: { x: 1700, y: 900 }, random: lcg(7) });
+  const { stella } = t;
+  stella.glideTo({ x: 300, y: 900 });
+  t.step(F, 5);
+  const route = stella.travel.route;
+  stella.setView(1920, 1080);
+  assert.equal(stella.travel.route, route, 'not re-planned');
+});

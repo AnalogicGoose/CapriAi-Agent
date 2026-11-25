@@ -130,3 +130,16 @@ test('fullscreen changes while gaming stay silent, then restore effects after re
   assert.deepEqual(sounds,['teleport-out','teleport-in']);
   assert.equal(f.capri.fullscreen,false);
 });
+
+test('a character with presenceEffect gets it instead of the beam and burst, with no fx',async()=>{
+  const f=await fixture(),calls=[];
+  f.capri.fx=null;
+  f.capri.presenceEffect=active=>calls.push(active);
+  f.send({active:true,revision:1});f.step(200);
+  f.send({active:false,revision:2});f.step(500);
+  assert.deepEqual(calls,[true,false]);
+  assert.equal(f.capri.fullscreenProgress,0);
+  f.capri.gaming=true;
+  f.send({active:true,revision:3});f.step(800);
+  assert.deepEqual(calls,[true,false],'still silent while gaming');
+});

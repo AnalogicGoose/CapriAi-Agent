@@ -2,7 +2,7 @@
 // frame. It exposes the same surface the rest of the renderer used on the old sprite
 // character, so callers keep calling `capri.*` unchanged. Split by concern: acts.js
 // (motions), drag.js (press/drag/drop), focus.js (functions: pointing, walkthrough
-// focus, body actions), travel.js (where she goes). No DOM access at import time.
+// focus, body actions), fold.js (folding away), travel.js (where she goes). No DOM access at import time.
 import { clamp } from './math.js';
 import { P } from './params.js';
 import { StateBlend } from './blend.js';
@@ -15,6 +15,7 @@ import { BOB, Traveler, nearestBandPoint } from './travel.js';
 import { Drag } from './drag.js';
 import { Acts } from './acts.js';
 import { Focus, isPoint, live } from './focus.js';
+import { Fold, foldState } from './fold.js';
 
 const MAX_DT = 0.05;        // s
 const SPEAK_LEVEL = 0.015, SPEAK_HOLD = 400;
@@ -54,6 +55,9 @@ export class Stella {
     this.stance = 'float';
     this.dormant = false;
     this.hidden = false;
+    this.stowed = false; this.stowing = null; this.gaming = false; this.fx = null;
+    this.fullscreen = false; this.fullscreenProgress = 0; // FullscreenPresence drives these
+    this.folding = foldState(reduced());
     this.chatThinking = false;
     this.companion = null;
     this.windows = { fg: 0, wins: [] };
@@ -134,6 +138,7 @@ export class Stella {
 
   // A new view: her route is planned again, and an anchor that was in the band stays in it.
   setView(w, h) {
+    if (this.view.w === w && this.view.h === h) return;
     const wasIn = this.anchor && inBand(this.anchor, this.bandRadius, this.view);
     this.view = { w, h };
     this.reclamp();
@@ -155,7 +160,7 @@ export class Stella {
   towardCenter() { return this.pos.x < this.view.w / 2 ? 1 : -1; }
 
   hit(x, y) {
-    if (this.hidden || (this.fold || 0) > 0.5) return false;
+    if (this.hidden || this.fold > 0.5) return false;
     return Math.hypot(x - this.pos.x, y - this.pos.y) <= 0.45 * this.size;
   }
 
@@ -229,7 +234,7 @@ export class Stella {
   possess() { return resolved(); }
   doze() { return resolved(); }
   unpeek() { return resolved(); }
-  intro(spot, opts) { return this.materialize ? this.materialize(spot, opts) : resolved(); }
+  intro(spot) { return this.materialize(spot); }
   canSit() { return false; }
   pickSeat() { return null; }
   requestPosture() { return Promise.resolve(bodyResponse('sit').reply); }
@@ -260,6 +265,7 @@ export class Stella {
     }
     for (const [tool, at] of this.agentThink) if (now - at > AGENT_THINK_MS) this.agentThink.delete(tool);
     if (this._act && (now >= this._act.until || !live(this._act.entry, now))) this.endAct(now >= this._act.until);
+    this.stepFold(dt, reduced);
     this.stepMusic(now);
     this.stepHolds(now);
     this.stepPosition(dt, reduced);
@@ -269,20 +275,24 @@ export class Stella {
     this.lastBlend = mode;
     this.blend.setMode(mode);
     this.blend.step(dt);
-    const calm = mode === 'idle' && this.mode === 'idle' && !this.dragging && !this.travel?.fn && !reduced;
+    const calm = mode === 'idle' && this.mode === 'idle' && !this.dragging && !this.travel?.fn && !reduced && !this.fold;
     this.traveler.wander(now, calm && this.wander && !this.down && !this.focus && !this.approvalOn && !this.chatThinking
-      && !this.hidden && !this.dormant && !this.fullscreen && !this.gaming && !this.fold);
+      && !this.hidden && !this.dormant && !this.fullscreen && !this.gaming);
     const idle = this.idle.update(now, { allowed: calm && this.companion?.options?.idleAnimations !== false });
     const motions = this.motions.update(now);
     this.stepAim(dt, motions);
     const aim = this.aimAngle;
     this.clock.step(dt, this.blend, idle, motions, { reduced, aim });
+    this.drawn = { idle, motions, aim, reduced };
+    this.drawFrame(now);
+  }
 
-    const paused = this.hidden || (this.fold || 0) >= 1 || globalThis.document?.hidden;
-    if (!paused && this.renderer && !this.renderer.lost) {
+  // Draws one frame now from the last step's state (paused while hidden or folded away), and places her.
+  drawFrame(now = this.now()) {
+    const d = this.drawn;
+    if (d && !this.hidden && this.fold < 1 && !globalThis.document?.hidden && this.renderer && !this.renderer.lost) {
       const t = now / 1000;
-      const scene = buildScene({ s: this.size, t, clock: this.clock, blend: this.blend, idle, motions, aim, reduced,
-        fold: this.fold || 0 });
+      const scene = buildScene({ s: this.size, t, clock: this.clock, blend: this.blend, ...d, fold: this.sceneFold });
       try { this.renderer.draw(scene, t); } catch (error) { console.error?.('Stella: draw failed', error); }
     }
     this.place();
@@ -296,8 +306,9 @@ export class Stella {
       this.root.style.transform = `translate3d(${(this.pos.x - half).toFixed(1)}px, ${(y - half).toFixed(1)}px, 0)`;
     }
     if (this.canvas?.style) this.canvas.style.transform = `rotate(${this.lean.toFixed(4)}rad)`;
-    const o = this.traveler.opacity;
+    const o = this.traveler.opacity * this.foldOpacity, away = this.fold >= 1;
     if (this.root?.style && o !== this.shownOpacity) { this.root.style.opacity = String(Number(o.toFixed(3))); this.shownOpacity = o; }
+    if (this.root?.style && away !== this.shownAway) { this.root.style.visibility = away ? 'hidden' : ''; this.shownAway = away; }
     const m = this.moved;
     if (!m || m.x !== this.pos.x || m.y !== this.pos.y || m.size !== this.size) {
       this.moved = { x: this.pos.x, y: this.pos.y, size: this.size };
@@ -306,4 +317,4 @@ export class Stella {
   }
 }
 
-Object.assign(Stella.prototype, Acts, Drag, Focus);
+for (const part of [Acts, Drag, Focus, Fold]) Object.defineProperties(Stella.prototype, Object.getOwnPropertyDescriptors(part));

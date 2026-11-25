@@ -41,11 +41,14 @@ export class FullscreenPresence {
     if (Math.abs(this.target - this.from) > 0.00001 && !reducedMotion.matches
         && now - (this.lastEffect ?? -Infinity) > 120 && !this.capri.hidden && !this.capri.gaming) {
       this.lastEffect = now;
-      const head = this.capri.head();
-      const ground = this.capri.pos.y;
-      this.capri.fx.beam(this.capri.pos.x, ground, { down: !active, width: 40 * this.capri.scale + 8, life: 160 });
-      this.capri.fx.burst(head.x, head.y, { count: 10, power: 0.5, spread: 75 * this.capri.scale, inward: !active });
-      this.capri.voice.play(active ? 'teleport-out' : 'teleport-in', { soft: true });
+      if (this.capri.presenceEffect) this.capri.presenceEffect(active); // a character with its own (Stella: folding)
+      else {
+        const head = this.capri.head();
+        const ground = this.capri.pos.y;
+        this.capri.fx.beam(this.capri.pos.x, ground, { down: !active, width: 40 * this.capri.scale + 8, life: 160 });
+        this.capri.fx.burst(head.x, head.y, { count: 10, power: 0.5, spread: 75 * this.capri.scale, inward: !active });
+        this.capri.voice.play(active ? 'teleport-out' : 'teleport-in', { soft: true });
+      }
     }
     this.onChange(Boolean(active));
     this.tick(now);
