@@ -7,6 +7,7 @@ import { CO_HOLDS, MOTIONS, bodyResponse } from './motions.js';
 import { approachCenter, nearestBandPoint } from './travel.js';
 
 const AIM_TURN = 2;         // rad/s: fastest her aim swings to a new target
+const TRAIL_TURN = 4;       // rad/s: fastest the drawing trail swings to a new direction
 const RETURN_MS = 1500;     // after pointing, before she heads back
 const NUDGE = 120;          // px: how far a reminder or approval brings her toward the middle
 const REMIND_STAY = 10000;  // ms near the middle after a reminder
@@ -125,6 +126,26 @@ export const Focus = {
     if (r.motion) this.play(r.motion);
     if (r.come) void this.summon(cursor);
     return r.reply ?? 'done';
+  },
+
+  // capri_draw finished drawing: { rect } on her display, { direction } of another display, or null
+  // (unknown: toward the middle). Aims the trail there (replaying it if it's over); she doesn't move.
+  drawAt(info) {
+    const rect = toRect(info?.rect), angle = DIRECTIONS[info?.direction];
+    this.drawTarget = rect ? { at: { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 } } : angle === undefined ? null : { angle };
+    const now = this.now();
+    if (this.motions.list.some(a => a.name === 'trail' && live(a, now))) return;
+    this.motions.lastRoutine = -Infinity; // a function's cue, not a routine flourish: the routine gap doesn't apply
+    this.start('trail');
+  },
+
+  // The trail's direction follows the drawing from where she is, swinging at most TRAIL_TURN rad/s.
+  stepTrail(dt, motions) {
+    if (!(motions.trail > 0)) { this.trailAngle = null; return; }
+    const d = this.drawTarget, at = d?.at || (d ? null : { x: this.view.w / 2, y: this.view.h / 2 });
+    const want = at ? Math.atan2(at.y - this.pos.y, at.x - this.pos.x) : d.angle;
+    if (this.trailAngle == null) this.trailAngle = want;
+    else this.trailAngle = wrap(this.trailAngle + clamp(wrap(want - this.trailAngle), -TRAIL_TURN * dt, TRAIL_TURN * dt));
   },
 
   // Keeps her function holds up and lets them go when done. Aim and approval coexist (CO_HOLDS);

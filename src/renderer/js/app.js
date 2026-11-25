@@ -196,6 +196,7 @@ async function boot() {
   };
   host.onAgentActivity?.(e => capri.agentActivity(e));
   host.onGuideFocus?.(f => capri.guideFocus(f));
+  host.onStellaDraw?.(d => capri.drawAt?.(d));
   capri.onClick = () => {
     voiceCall?.end();
     if (panel.visible) panel.hide('user'); // the user clicked it away (a reminder card is dismissed, not re-queued)

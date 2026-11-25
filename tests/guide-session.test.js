@@ -9,7 +9,7 @@ const box = (x, y, width, height) => ({ x, y, width, height });
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const ctx = { check() {}, signal: undefined };
 
-function fixture({ allowed = () => true, keep, render, yieldFocus } = {}) {
+function fixture({ allowed = () => true, keep, render, yieldFocus, onDrawn } = {}) {
   const state = { now: 0, win: { id: 5, pid: 9, ...box(0, 0, 800, 600) }, found: new Map(), reasons: new Map(),
     resolves: [], scenes: [], renders: [], clears: 0, interval: null };
   const targets = {
@@ -26,7 +26,7 @@ function fixture({ allowed = () => true, keep, render, yieldFocus } = {}) {
     clear: () => { state.clears += 1; },
   };
   const layout = scene => { state.scenes.push(scene); return new Map([[1, { marks: scene.marks, cards: scene.cards }]]); };
-  const session = new GuideSession({ targets, layer, layout, allowed, ...(keep ? { keep } : {}), ownPid: 77, yieldFocus,
+  const session = new GuideSession({ targets, layer, layout, allowed, ...(keep ? { keep } : {}), ownPid: 77, yieldFocus, onDrawn,
     foreground: () => state.win, now: () => state.now,
     setInterval: (fn, ms) => { state.interval = { fn, ms }; return 'timer'; },
     clearInterval: token => { if (token === 'timer') state.interval = null; } });
@@ -273,4 +273,23 @@ test('main never clears a drawing just because a new request arrives', () => {
   const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/main/main.js'), 'utf8');
   const reasons = [...src.matchAll(/guide\.clear\('([^']+)'\)/g)].map(m => m[1]).sort();
   assert.deepEqual([...new Set(reasons)], ['locked', 'paused', 'quit'], 'lifetime: lock/suspend, Gaming mode or screen awareness off, quit');
+});
+
+test('a drawing reports where it went, so Stella can aim her trail at it', async () => {
+  const drawn = [];
+  const f = fixture({ onDrawn: laid => drawn.push(laid) });
+  f.state.found.set('Save', box(100, 100, 60, 20));
+  await f.session.draw({ clear: false, cards: [], marks: [mark('a', 'ring', tgt('text', 'Save'))] }, ctx);
+  assert.equal(drawn.length, 1);
+  assert.ok(drawn[0] instanceof Map, 'the laid-out scene per display');
+  await f.session.draw({ clear: false, cards: [], marks: [mark('b', 'ring', tgt('text', 'Gone'))] }, ctx);
+  assert.equal(drawn.length, 2, 'reported even when nothing new resolved');
+  const { layoutTarget } = require('../src/main/guide-session');
+  const displays = [{ id: 1, bounds: box(0, 0, 1920, 1080) }, { id: 2, bounds: box(1920, 0, 1280, 1024) }];
+  assert.deepEqual(layoutTarget(new Map([[2, { marks: [{ box: box(10, 20, 30, 40) }], cards: [] }]]), displays),
+    { displayId: 2, rect: box(1930, 20, 30, 40) }, 'first mark, in absolute DIP');
+  assert.deepEqual(layoutTarget(new Map([[1, { marks: [], cards: [{ box: box(5, 6, 7, 8) }] }]]), displays),
+    { displayId: 1, rect: box(5, 6, 7, 8) }, 'else the first card');
+  assert.equal(layoutTarget(new Map([[1, { marks: [], cards: [] }]]), displays), null);
+  assert.equal(layoutTarget(new Map([[9, { marks: [{ box: box(1, 1, 1, 1) }] }]]), displays), null, 'unknown display');
 });

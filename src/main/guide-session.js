@@ -12,6 +12,18 @@ const rect = w => ({ x: w.x, y: w.y, width: w.width, height: w.height });
 const sameRect = (a, b) => ['x', 'y', 'width', 'height'].every(k => a[k] === b[k]);
 const shift = (b, dx, dy) => ({ ...b, x: b.x + dx, y: b.y + dy });
 
+// Where a laid-out drawing is, for Stella to aim at: its first mark (else its first card) as { displayId, rect } in
+// absolute DIP, or null. `laid` is layout()'s Map of displayId -> { marks, cards } with display-relative boxes.
+function layoutTarget(laid, displays) {
+  for (const kind of ['marks', 'cards']) {
+    for (const [id, s] of laid || []) {
+      const display = displays.find(d => d.id === id), b = s?.[kind]?.[0]?.box;
+      if (display && b) return { displayId: id, rect: { x: b.x + display.bounds.x, y: b.y + display.bounds.y, width: b.width, height: b.height } };
+    }
+  }
+  return null;
+}
+
 // capri_draw's schema requires every field, so the tool uses empty values for "none":
 // to [] (or one target for an arrow), nth 0. Empty id/text/title are already treated as absent by validateDraw.
 function fromTool(args) {
@@ -34,11 +46,13 @@ function fromTool(args) {
 
 class GuideSession {
   constructor({ targets, layer, layout, foreground, now = Date.now, setInterval: every = setInterval,
-    clearInterval: stopEvery = clearInterval, allowed = () => true, keep = allowed, ownPid = process.pid, yieldFocus = async () => {}, gate = null }) {
+    clearInterval: stopEvery = clearInterval, allowed = () => true, keep = allowed, ownPid = process.pid, yieldFocus = async () => {}, gate = null,
+    onDrawn = null }) {
     // foreground is the raw foreground window; windows of ownPid (her overlay, chat panel, guide layer) never own a drawing.
     // allowed(): a new drawing may start. keep(): a drawing already shown may stay. They differ in Gaming mode: a drawing
     // the user asked for by voice outlives that voice session (Gaming mode turning on clears it explicitly in main).
-    Object.assign(this, { targets, layer, layout, foreground, now, every, stopEvery, allowed, keep, ownPid, yieldFocus, gate });
+    // onDrawn(laid): after each capri_draw that shows something, with the laid-out scene (see layoutTarget).
+    Object.assign(this, { targets, layer, layout, foreground, now, every, stopEvery, allowed, keep, ownPid, yieldFocus, gate, onDrawn });
     this.marks = new Map(); // id -> { id, kind, target, to?, text?, bounds, toBounds? }
     this.cards = [];
     this.window = null;     // the annotated window, native px, as last seen
@@ -96,6 +110,7 @@ class GuideSession {
     this.touch();
     this.render();
     this.start();
+    try { this.onDrawn?.(this.layout(this.scene())); } catch { /* her trail's aim is best effort */ }
     return { drawn, failed };
   }
 
@@ -225,4 +240,4 @@ class GuideSession {
   }
 }
 
-module.exports = { GuideSession, fromTool };
+module.exports = { GuideSession, fromTool, layoutTarget };

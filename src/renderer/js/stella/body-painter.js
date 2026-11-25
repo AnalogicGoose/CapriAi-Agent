@@ -90,7 +90,7 @@ export class BodyPainter {
 
     // Dot swarms; keep them readable at small sizes.
     const dotMin = s < 200 ? 0.9 : 0;
-    for (const d of sc.dots) {
+    for (const d of [...sc.dots, ...(sc.trail || [])]) {
       if (d.alpha <= 0) continue;
       ctx.globalAlpha = clamp(d.alpha, 0, 1);
       ctx.fillStyle = d.color;

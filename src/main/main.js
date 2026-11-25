@@ -26,6 +26,7 @@ const { CodexTools } = require('./codex-tools');
 const { ScreenAccess } = require('./screen-access');
 const { WindowsAccessibility } = require('./windows-accessibility');
 const { desktopHighlight } = require('./desktop-highlight');
+const { layoutTarget } = require('./guide-session');
 const { GuideTargets } = require('./guide-targets');
 const { layoutScene } = require('./guide-scene');
 const { createGuideLayer } = require('./guide-layer');
@@ -298,9 +299,12 @@ const yieldOverlayFocus = async () => {
 };
 const highlight = desktopHighlight({ BrowserWindow, screen, foreground: externalForeground,
   enabled: () => screenAccess.enabled() && config.load().visible !== false,
-  onError: () => console.error('[capri] Could not keep the desktop highlight visible.') });
+  onError: () => console.error('[capri] Could not keep the desktop highlight visible.'),
+  // capri_point: she glides beside the outlined control and points at it until it expires (a walkthrough owns her focus).
+  onFocus: focus => { if (!walkthroughs?.active) sendGuideFocus(focus); } });
 const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
-  settings: () => config.load(), foreground: externalForeground, highlight: highlight.show, readLift: guideReadLift,
+  settings: () => config.load(), foreground: externalForeground,
+  highlight: (bounds, window, check, label) => highlight.show(bounds, window, check, label, { focus: true }), readLift: guideReadLift,
   yieldFocus: yieldOverlayFocus,
   confirm: async (message, detail) => (await dialog.showMessageBox({ type: 'question', title: 'Capri - Desktop action', message,
     detail, buttons: ['Cancel', 'Confirm'], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
@@ -351,6 +355,8 @@ const guide = new GuideSession({
   allowed: () => screenAccess.enabled(), gate: exclusiveGate,
   // A drawing already shown is not cleared when the voice session that asked for it ends (Gaming mode on clears it).
   keep: () => config.load().screenAwareness !== false,
+  // capri_draw: her trail of dots runs toward what was drawn (she doesn't move for a drawing).
+  onDrawn: laid => sendStellaDraw(layoutTarget(laid, screen.getAllDisplays())),
 });
 // One walkthrough at a time (walkthrough-controller.js). Re-plans use the decision brain with one fresh screenshot,
 // outside chat history. Each line goes to the overlay's normal TTS path with a one-time voice grant, so it is spoken while
@@ -592,19 +598,29 @@ function targetDisplay() {
   return screen.getAllDisplays().find((d) => d.id === displayId) || screen.getPrimaryDisplay();
 }
 
-// Tells Stella where the walkthrough target is: a rect in overlay coordinates on her display, else the direction of its display.
-function sendGuideFocus(focus) {
-  if (!overlay || overlay.isDestroyed()) return;
-  if (!focus) { overlay.webContents.send('guide:focus', null); return; }
+// A { displayId, rect } target (absolute DIP) for Stella: a rect in overlay coordinates on her display, else the
+// direction of its display, else null.
+function overlayTarget(focus) {
+  if (!focus) return null;
   const home = targetDisplay(), other = screen.getAllDisplays().find(d => d.id === focus.displayId);
   const r = focus.rect;
-  if (focus.displayId === home.id) overlay.webContents.send('guide:focus', { rect: { x: r.x - home.workArea.x, y: r.y - home.workArea.y, w: r.width, h: r.height } });
-  else if (!other) overlay.webContents.send('guide:focus', null);
-  else {
-    const dx = other.bounds.x + other.bounds.width / 2 - (home.bounds.x + home.bounds.width / 2);
-    const dy = other.bounds.y + other.bounds.height / 2 - (home.bounds.y + home.bounds.height / 2);
-    overlay.webContents.send('guide:focus', { direction: Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down') });
-  }
+  if (focus.displayId === home.id) return { rect: { x: r.x - home.workArea.x, y: r.y - home.workArea.y, w: r.width, h: r.height } };
+  if (!other) return null;
+  const dx = other.bounds.x + other.bounds.width / 2 - (home.bounds.x + home.bounds.width / 2);
+  const dy = other.bounds.y + other.bounds.height / 2 - (home.bounds.y + home.bounds.height / 2);
+  return { direction: Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down') };
+}
+
+// Tells Stella where the walkthrough or capri_point target is (null: let go and go back).
+function sendGuideFocus(focus) {
+  if (!overlay || overlay.isDestroyed()) return;
+  overlay.webContents.send('guide:focus', overlayTarget(focus));
+}
+
+// Tells Stella where capri_draw drew (null: unknown, her trail runs toward the middle).
+function sendStellaDraw(target) {
+  if (!overlay || overlay.isDestroyed()) return;
+  overlay.webContents.send('stella:draw', overlayTarget(target));
 }
 
 function fitOverlay() {

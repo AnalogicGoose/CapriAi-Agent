@@ -41,7 +41,7 @@ speed shift, counter-turn, sway, breath pulse, shine wave, dot drift, globe tilt
 - Rhythm: travel to a new spot, rest 30 s to 3 min (floating a few px so she never fully stops), repeat.
 - No wandering while chat is open or she is listening, thinking, speaking or working, or during a walkthrough. She resumes after a short grace period.
 - She lives on one display (`displayId`). If a walkthrough target is on another display she goes to the nearest edge and aims a blade at it.
-- Her anchor (where she was last dropped or settled) is saved as `stellaAnchor` and restored at startup; first run is the lower-right of the band. After a walkthrough, point or reminder she glides back to it. With `wander` off she stays at her anchor.
+- Her anchor is where she was last dropped or where her last wander hop ended. Only a drop saves it (as `stellaAnchor`, restored at startup); first run is the lower-right of the band. After a walkthrough, point or reminder she glides back to it. With `wander` off she stays at her anchor.
 - Reduced motion: no travel (she is placed with a short fade), spin and sheen nearly still, no variations.
 - Drag: press and move; she follows with a slight lag and leans, and settles where dropped (no gravity). A plain click keeps its old behavior.
 
@@ -58,15 +58,15 @@ Put away (Ctrl+Alt+C), a game, or a fullscreen app on her display: her points re
 | Web / news search, Steam deals, YouTube lookup | One stick lights up and sweeps around like a radar |
 | Read screen, files, context | A scan line passes down through the globe |
 | Type / click / desktop steps | Quick ticks of light run along the sticks |
-| Point / highlight | She glides toward the target and aims her nearest blade at it |
+| Point / highlight (`capri_point`) | She glides beside the outlined control and aims her nearest blade at it until the outline goes (8 s, or the window moves), then heads back. A screenshot highlight (`capri_point_on_snapshot`) only scans |
 | Walkthrough / visual guide | Point, held for each step; she sits beside the target, never over it or its highlight, then returns to her band |
-| Draw on screen | A trail of LED dots runs from her toward the drawing |
+| Draw on screen | A short stream of LED dots runs from her toward what was drawn (toward the middle of her display until the drawing is placed, or toward the edge of another display); she stays where she is |
 | Reminder due | Ring pulses brightly three times; she drifts a little toward the center (outside the forbidden zone) |
 | Memory save / recall | Dots swirl into the globe (save) or out of it (recall) |
 | Approval needed | Ring glows steadily; she comes slightly closer and stays until answered |
 | Error / alert | Short flicker and small shake |
 | Task done | One full spin and a small burst of light |
-| Music playing | Blades pulse gently while playback she started is active |
+| Music playing | Blades pulse gently for 45 s after she starts music or a video (a fixed time; it doesn't follow the actual playback) |
 | Wake word heard | Quick brighten and turn toward listening |
 
 `capri_body` actions (the reply comes as soon as she starts; nothing waits for her to arrive): `come` glides toward the cursor (stops at the center zone's edge), `nap` rests (dimmed, no wandering) until `wake`, `mood` and `wave` give soft pulses, `dance` a spin burst, `stretch` a breath pulse, `sit`/`stand` a short reply that she no longer sits.

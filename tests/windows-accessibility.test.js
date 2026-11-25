@@ -131,3 +131,31 @@ test('Windows OCR finds words next to punctuation and small text, with scaled bo
     assert.deepEqual((await runWindowsOcr({ image, query: 'absent word' })).matches, []);
   } finally { fs.rmSync(file, { force: true }); }
 });
+
+test('a capri_point highlight reports its rect for Stella to point at, and null once it expires', async () => {
+  const original = { id: 1, pid: 2, x: 0, y: 0, width: 300, height: 200 };
+  let foreground = original;
+  class Window {
+    setIgnoreMouseEvents() {} setContentProtection() {} setAlwaysOnTop() {}
+    async loadFile() {} showInactive() { this.visible = true; }
+    isDestroyed() { return this.destroyed; } destroy() { this.destroyed = true; }
+  }
+  const focus = [];
+  const highlight = desktopHighlight({ BrowserWindow: Window, foreground: () => foreground, enabled: () => true, onFocus: f => focus.push(f),
+    screen: { screenToDipRect: (_window, rect) => ({ ...rect, x: rect.x / 2, y: rect.y / 2, width: rect.width / 2, height: rect.height / 2 }),
+      getDisplayMatching: () => ({ id: 42, bounds: original }) } });
+  try {
+    await highlight.show({ x: 20, y: 40, width: 60, height: 30 }, original, () => {}, 'Save');
+    assert.deepEqual(focus, [], 'a plain highlight (capri_point_on_snapshot) does not move her');
+    await highlight.show({ x: 20, y: 40, width: 60, height: 30 }, original, () => {}, 'Save', { focus: true });
+    assert.deepEqual(focus, [{ displayId: 42, rect: { x: 10, y: 20, width: 30, height: 15 } }], 'DIP rect on its display');
+    await highlight.show({ x: 100, y: 40, width: 60, height: 30 }, original, () => {}, 'Open', { focus: true });
+    assert.deepEqual(focus.at(-1), { displayId: 42, rect: { x: 50, y: 20, width: 30, height: 15 } }, 'a replacement points at the new one');
+    assert.equal(focus.length, 2, 'no null in between');
+    foreground = { ...original, x: 10 }; // the window moved: the highlight goes, and so does her focus
+    await new Promise(resolve => setTimeout(resolve, 220));
+    assert.equal(focus.at(-1), null);
+    highlight.clear();
+    assert.equal(focus.length, 3, 'null once');
+  } finally { highlight.clear(); }
+});

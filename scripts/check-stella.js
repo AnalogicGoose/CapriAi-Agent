@@ -98,9 +98,10 @@ app.whenReady().then(async () => {
           const mode = MODES3.includes(name) ? name : 'idle';
           blend.setMode(mode); if (mode === 'speak') blend.setVoice(0.7);
           const motions = MOTIONS[name] ? {[name]: 1} : {}, aim = name === 'aim' ? 0.3 : null;
+          const trailAngle = name === 'trail' ? 0.3 : null;
           let t = 1;
           for (let i = 0; i < frames; i++) { blend.step(1 / 60); clock.step(1 / 60, blend, null, motions, {aim}); t += 1 / 60; }
-          return {scene: buildScene({s: size, t, clock, blend, idle: null, motions, aim}), t};
+          return {scene: buildScene({s: size, t, clock, blend, idle: null, motions, aim, trailAngle}), t};
         };
         // Draws and copies the WebGL canvas synchronously (no await between).
         const snap = (scene, t) => {
@@ -183,6 +184,40 @@ app.whenReady().then(async () => {
           let rd = 0; for (let i = 0; i < ripA.length; i++) if (Math.abs(ripA[i] - ripB[i]) > 2) rd++;
           check(rd < ripA.length * 0.001, 'ripple wrap by 2pi changed the frame: ' + rd + ' channels');
           return names.length + ' tiles ok (min off-center lit ' + (100 * minOuter).toFixed(1) + '%); idle t vs t+0.5s differs in ' + diff + ' channels; phase wrap ok at t up to 1e7 s; ripple+2pi*1e6 frame matches';
+        });
+
+        // ---- section: trail (capri_draw: LED dots stream out toward the drawing) ----
+        await section('trail', async () => {
+          check(R3, 'renderer missing');
+          const {buildScene, SceneClock} = await import('${url('scene.js')}');
+          const {StateBlend} = await import('${url('blend.js')}');
+          const frame = (motions, trailAngle) => {
+            const clock = new SceneClock(), blend = new StateBlend();
+            let t = 1;
+            for (let i = 0; i < 30; i++) { blend.step(1 / 60); clock.step(1 / 60, blend, null, motions); t += 1 / 60; }
+            const {c, err} = snap(buildScene({s: S, t, clock, blend, idle: null, motions, trailAngle}), t);
+            check(err === G3.NO_ERROR, 'gl error ' + err);
+            return c;
+          };
+          // Lit pixels (alpha > 40) in a wedge toward \`angle\`, 0.25..0.47 of her size from the center.
+          const wedge = (c, angle) => {
+            const d = pixels(c); let n = 0;
+            for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+              const dx = x + 0.5 - S / 2, dy = y + 0.5 - S / 2, r = Math.hypot(dx, dy) / S;
+              const off = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle)));
+              if (r >= 0.25 && r <= 0.47 && off < 0.3 && d[(y * S + x) * 4 + 3] > 40) n++;
+            }
+            return n;
+          };
+          const notes = [];
+          for (const angle of [0.3, 2.2, -1.9]) {
+            const idle = frame({}, null), trail = frame({trail: 1}, angle);
+            const toward = wedge(trail, angle) - wedge(idle, angle), away = wedge(trail, angle + Math.PI) - wedge(idle, angle + Math.PI);
+            check(toward >= 12 && toward > 2 * Math.max(away, 0) + 6, 'angle ' + angle + ': trail adds ' + toward + ' lit px toward it, ' + away + ' away');
+            notes.push(angle + ': +' + toward + ' toward / +' + away + ' away');
+            if (angle === 0.3) files['trail.png'] = await png(trail);
+          }
+          return 'trail lit through the LED finish ' + notes.join('; ');
         });
 
         // ---- section: perf (300 idle frames at s=150) ----

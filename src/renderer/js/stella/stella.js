@@ -76,6 +76,8 @@ export class Stella {
     this.focus = null;    // what her blade aims at: { at: {x,y} } | { angle }
     this.pointing = null; // { dir, rect?, label? } while she points (dir feeds the panel's lean)
     this.aimAngle = null;
+    this.drawTarget = null; // where capri_draw's trail runs: { at } | { angle } | null (toward the middle)
+    this.trailAngle = null;
     this.homeToken = 0;   // bumped by anything that should cancel a pending return
     this.lean = 0;
     this.nextMove = now() + restDuration(random);
@@ -283,9 +285,10 @@ export class Stella {
     const idle = this.idle.update(now, { allowed: calm && this.companion?.options?.idleAnimations !== false });
     const motions = this.motions.update(now);
     this.stepAim(dt, motions);
-    const aim = this.aimAngle;
+    this.stepTrail(dt, motions);
+    const aim = this.aimAngle, trailAngle = this.trailAngle;
     this.clock.step(dt, this.blend, idle, motions, { reduced, aim });
-    this.drawn = { idle, motions, aim, reduced };
+    this.drawn = { idle, motions, aim, reduced, trailAngle };
     this.drawFrame(now);
   }
 

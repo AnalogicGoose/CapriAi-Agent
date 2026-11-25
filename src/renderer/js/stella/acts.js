@@ -60,7 +60,7 @@ export const Acts = {
     if (phase === 'start') {
       if (tool === 'capri_apps') this.releaseMusic();
       if (motion === 'think') { this.agentThink.set(tool, now); return; }
-      // trail has no direction input in the scene; the overlay doesn't know where the drawing is anyway.
+      if (tool === 'capri_draw') this.drawTarget = null; // toward the middle until the drawing reports where it is
       const act = this.start(motion);
       if (act && MOTIONS[motion].hold) this.agentHolds.set(tool, act);
       return;

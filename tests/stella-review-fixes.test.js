@@ -103,3 +103,57 @@ test("a finished task doesn't move her: spot('stage') is where she is", async ()
   assert.ok(t.stella.pointing && t.stella.focus, 'still pointing');
 });
 
+
+// ---------- 3. capri_draw trail, aimed ----------
+
+test('the trail is a stream of dots leaving her toward trailAngle, inside her canvas', async () => {
+  const { SceneClock, buildScene } = await loadRenderer('stella/scene.js');
+  const clock = new SceneClock(), blend = { listen: 0, think: 0, speak: 0, rest: 0, level: 0 };
+  const s = 360;
+  for (let i = 0; i < 20; i++) clock.step(1 / 60, blend, null, { trail: 1 });
+  for (const angle of [0, Math.PI / 2, -2.5]) {
+    const sc = buildScene({ s, t: 1, clock, blend, idle: null, motions: { trail: 1 }, trailAngle: angle });
+    assert.ok(sc.trail.length >= 8, 'a stream of dots');
+    const lit = sc.trail.filter(d => d.alpha > 0.05);
+    assert.ok(lit.length >= 4, 'several lit');
+    for (const d of lit) {
+      const dx = d.x - sc.cx, dy = d.y - sc.cy, r = Math.hypot(dx, dy);
+      assert.ok(r <= 0.48 * s, `inside the LED disc: ${r}`);
+      const off = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle)));
+      assert.ok(off < 0.35, `toward ${angle}: off by ${off}`);
+    }
+  }
+  const none = buildScene({ s, t: 1, clock, blend, idle: null, motions: {}, trailAngle: 0 });
+  assert.equal(none.trail.length, 0, 'nothing without the trail motion');
+  // the stream flows outward between frames
+  const a = buildScene({ s, t: 1, clock, blend, idle: null, motions: { trail: 1 }, trailAngle: 0 });
+  clock.step(1 / 60, blend, null, { trail: 1 });
+  const b = buildScene({ s, t: 1 + 1 / 60, clock, blend, idle: null, motions: { trail: 1 }, trailAngle: 0 });
+  assert.ok(b.trail[0].x > a.trail[0].x || b.trail[0].x < a.trail[0].x - 50, 'dot 0 moved outward (or wrapped to the start)');
+});
+
+test('a drawing aims the trail at its rect; without one, toward the middle', async () => {
+  const t = await make({ anchor: { x: 1700, y: 900 } });
+  const s = t.stella;
+  s.agentActivity({ tool: 'capri_draw', phase: 'start' });
+  t.step(F, 3);
+  assert.ok(heldTrail(s) > 0, 'trail plays');
+  const toward = p => Math.atan2(p.y - s.pos.y, p.x - s.pos.x);
+  assert.ok(Math.abs(wrapA(s.drawn.trailAngle - toward({ x: 960, y: 520 }))) < 1e-6, 'toward the view center');
+  s.drawAt({ rect: { x: 100, y: 100, w: 200, h: 100 } });
+  t.step(F, 60);
+  assert.ok(Math.abs(wrapA(s.drawn.trailAngle - toward({ x: 200, y: 150 }))) < 0.02, 'toward the drawing');
+  assert.ok(dist(s.pos, { x: 1700, y: 900 }) < 1e-6 && !s.travel, "she doesn't move for a drawing");
+  s.agentActivity({ tool: 'capri_draw', phase: 'end', ok: true });
+  t.step(F, 120);
+  assert.equal(heldTrail(s), 0, 'trail over');
+  assert.equal(s.drawn.trailAngle, null);
+  // a drawing reported after the trail ended plays it again, aimed
+  s.drawAt({ direction: 'left' });
+  t.step(F, 3);
+  assert.ok(heldTrail(s) > 0, 'played again');
+  assert.ok(Math.abs(wrapA(s.drawn.trailAngle - Math.PI)) < 1e-6, 'toward the other display');
+});
+
+const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
+const heldTrail = s => s.motions.update(s.now()).trail || 0;

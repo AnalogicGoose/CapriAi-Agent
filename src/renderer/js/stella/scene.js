@@ -11,6 +11,7 @@ const AIM_SWING = 1.2;  // fastest the aimed blade swings toward/away from its t
 const BURSTS = ['celebrate', 'spinBurst'];
 const TIMED = ['chime', 'doublePulse'];   // motions shaped by time since they started
 const QUARTER = TAU / P.blades.count;
+const TRAIL = {count: 12, rate: 0.9, rIn: 0.3, rOut: 0.98, lim: 0.46, spread: 0.05}; // capri_draw's stream of dots
 
 // Small seeded PRNG so the dot swarm is the same every run.
 function stellaRandom(seed) {
@@ -50,6 +51,7 @@ export class SceneClock {
     this.orbit = 0; this.radar = 0; this.ripple = 0; this.rippleSpeed = 3; this.music = 0;
     this.scan = 0; this.burst = 0;
     this.sheen = 0;            // sheen band phase, accumulated and wrapped to [0, 1.4)
+    this.trail = 0;            // trail stream phase, wrapped to [0, 1)
     this.red = null;            // eased reduced-motion factor, 0..1
     this.since = {};            // seconds since a timed motion started, per name
     this.aimIndex = null; this.aimAngle = null; this.aimDelta = 0; this.aimEnv = 0;
@@ -103,6 +105,7 @@ export class SceneClock {
     this.music += 8 * dt * slow;
     this.rippleSpeed = damp(this.rippleSpeed, (speak > 0.5 ? 9 : 3) * slow, SPEED_EASE, dt);
     this.ripple += this.rippleSpeed * dt;
+    this.trail = (this.trail + dt * TRAIL.rate * slow) % 1;
     // Accumulated so a speed change (shineWave) never makes the band jump.
     this.sheen = (this.sheen + dt * P.sheen.speed * (1 + ie('shineWave'))) % 1.4;
     this.scan = env(motions, 'scan') > 0 ? this.scan + dt / (MOTIONS.scan.duration / 1000) : 0;
@@ -153,7 +156,7 @@ const radarLight = (angle, sweep) => smoothstep(1 - Math.abs(wrap(angle - sweep)
 const progress = (clock, name) =>
   (clock.since && clock.since[name] != null ? clamp(clock.since[name] / (MOTIONS[name].duration / 1000), 0, 1) : null);
 
-export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, reduced = false, fold = 0}) {
+export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, reduced = false, fold = 0, trailAngle = null}) {
   const b = blend || {}, mo = motions || {};
   const listen = b.listen || 0, think = b.think || 0, rest = b.rest || 0;
   const E = (b.speak || 0) * (b.level || 0);
@@ -242,6 +245,22 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
     };
   });
 
+  // Trail (drawing on screen): a short stream of dots leaving her toward trailAngle, inside the LED disc.
+  const tr = env(mo, 'trail'), trail = [];
+  if (tr > 0 && Number.isFinite(trailAngle)) {
+    const ca = Math.cos(trailAngle), sa = Math.sin(trailAngle);
+    const rIn = R * TRAIL.rIn, rOut = Math.min(R * TRAIL.rOut, TRAIL.lim * s);
+    for (let i = 0; i < TRAIL.count; i++) {
+      const p = ((clock.trail || 0) + i / TRAIL.count) % 1;
+      const r = lerp(rIn, rOut, p), side = TRAIL.spread * R * Math.sin(TAU * (0.8 * p + 0.37 * i));
+      trail.push({
+        x: cx + ca * r - sa * side, y: cy + sa * r + ca * side, r: (3.6 - 1.6 * p) * sc,
+        alpha: tr * Math.sin(Math.PI * p) * brightness * body,
+        color: P.colors.dots[i % 2],
+      });
+    }
+  }
+
   // Globe and its heart.
   const gr = R * P.ring * breath * P.globe * (1 - f);
   const globe = {
@@ -265,7 +284,7 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
 
   return {
     s, R, cx, cy, scale, brightness, fold: f,
-    ring, blades, sticks, dots, globe,
+    ring, blades, sticks, dots, trail, globe,
     ambient: (0.16 + E * 0.15 + listen * 0.06 + 0.1 * env(mo, 'trail')) * brightness * body,
     sheen,
     point: {r: R * 0.06, alpha: smoothstep(f / 0.5) * (1 - smoothstep((f - 0.75) / 0.25))},

@@ -44,18 +44,25 @@ function markerLayout(target, display, label) {
   };
 }
 
-function desktopHighlight({ BrowserWindow, screen, foreground, enabled, onError }) {
-  let active;
-  function clear() {
+// onFocus({ displayId, rect } | null): a highlight shown with { focus: true } (capri_point) reports its DIP rect once
+// visible, and null once it is gone (expired, the window moved, cleared); a replacing highlight reports only the new rect.
+function desktopHighlight({ BrowserWindow, screen, foreground, enabled, onError, onFocus }) {
+  let active, focused = false;
+  const report = focus => { try { onFocus?.(focus); } catch { /* her position is best effort */ } };
+  function drop() {
     const current = active;
     active = null;
     if (!current) return;
     clearInterval(current.watch);
     if (!current.marker.isDestroyed()) current.marker.destroy();
   }
+  function clear() {
+    drop();
+    if (focused) { focused = false; report(null); }
+  }
   return {
     clear,
-    async show(bounds, window, check, label = '') {
+    async show(bounds, window, check, label = '', { focus = false } = {}) {
       const stillVisible = () => {
         const now = foreground();
         return enabled() && now?.id === window.id && now.pid === window.pid &&
@@ -67,10 +74,10 @@ function desktopHighlight({ BrowserWindow, screen, foreground, enabled, onError 
       }
       const native = Object.fromEntries(Object.entries(bounds).map(([key, value]) => [key, Math.round(value)]));
       const target = screen.screenToDipRect(null, native);
-      const display = screen.getDisplayMatching(target).bounds;
+      const matching = screen.getDisplayMatching(target), display = matching.bounds;
       const caption = typeof label === 'string' ? label.replace(/[\p{Cc}\p{Cf}\s]+/gu, ' ').trim().slice(0, 160) : '';
       const layout = markerLayout(target, display, caption);
-      clear();
+      drop();
       const marker = new BrowserWindow({ ...layout.window,
         frame: false, transparent: true, show: false, focusable: false, skipTaskbar: true,
         alwaysOnTop: true, hasShadow: false, resizable: false,
@@ -89,6 +96,10 @@ function desktopHighlight({ BrowserWindow, screen, foreground, enabled, onError 
         check();
         if (active?.marker !== marker || !stillVisible()) throw Error('The window changed before the highlight appeared.');
         marker.showInactive();
+        if (focus) {
+          focused = true;
+          report({ displayId: matching.id, rect: { x: target.x, y: target.y, width: target.width, height: target.height } });
+        } else if (focused) { focused = false; report(null); }
       } catch (error) {
         if (active?.marker === marker) clear();
         throw error;
