@@ -1,3 +1,12 @@
+# Animation notes (retired Capri renderer)
+
+> **The character on screen is now Stella.** See [docs/STELLA.md](docs/STELLA.md) for how she
+> looks, moves and is tuned. Everything below documents the old sprite renderer "Capri"
+> (`capri.js`, `sprite*.js`, the cel art). Those modules are no longer used by the overlay and
+> are removed in the rename project; `npm run test:animations` still exercises them in isolation.
+
+---
+
 # Animation Overhaul 2.0
 
 Current direction: improve movement using the existing art. Standing floats,
