@@ -103,6 +103,52 @@ export function makePath(from, to, random) {
   return path;
 }
 
+function bandStrips(radius, view) {
+  const z = centerZone(view);
+  const hiX = view.w - radius, hiY = view.h - radius;
+  return [
+    [radius, radius, z.x - radius, hiY],
+    [z.x + z.w + radius, radius, hiX, hiY],
+    [radius, radius, hiX, z.y - radius],
+    [radius, z.y + z.h + radius, hiX, hiY],
+  ].filter(r => r[2] > r[0] && r[3] > r[1]);
+}
+
+export function pathClear(path, radius, view, samples = 32) {
+  for (let i = 0; i <= samples; i++) {
+    if (!inBand(pointOnPath(path, i / samples), radius, view)) return false;
+  }
+  return true;
+}
+
+export function planWander({ from, radius, view, random }) {
+  for (let i = 0; i < 60; i++) {
+    const to = pickWanderTarget({ from, radius, view, random });
+    const path = makePath(from, to, random);
+    if (pathClear(path, radius, view)) return path;
+  }
+  // Fallback: straight hop inside the strip nearest to `from`.
+  const strips = bandStrips(radius, view);
+  const stripDist = r => Math.hypot(
+    Math.max(r[0] - from.x, 0, from.x - r[2]), Math.max(r[1] - from.y, 0, from.y - r[3]));
+  strips.sort((a, b) => stripDist(a) - stripDist(b));
+  if (strips.length) {
+    const r = strips[0];
+    let best = null, bestD = -1;
+    for (let i = 0; i < 20; i++) {
+      const p = { x: lerp(r[0], r[2], random()), y: lerp(r[1], r[3], random()) };
+      const d = Math.hypot(p.x - from.x, p.y - from.y);
+      if (d > bestD) { best = p; bestD = d; }
+    }
+    const path = makePath(from, best, random);
+    path.control = { x: (from.x + best.x) / 2, y: (from.y + best.y) / 2 };
+    path.length = Math.hypot(best.x - from.x, best.y - from.y);
+    if (pathClear(path, radius, view)) return path;
+  }
+  const still = { from, to: from, control: { ...from }, length: 0 };
+  return still;
+}
+
 export function pointOnPath(path, u) {
   if (u <= 0) return { x: path.from.x, y: path.from.y };
   if (u >= 1) return { x: path.to.x, y: path.to.y };

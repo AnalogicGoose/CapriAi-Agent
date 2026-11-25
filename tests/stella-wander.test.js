@@ -159,3 +159,26 @@ test('edge placement faces the other display', async () => {
   assert.deepEqual(w.edgeToward({ direction: 'down', radius: R, view, from }), { x: 400, y: 600 - R });
   assert.deepEqual(w.edgeToward({ direction: 'left', radius: R, view, from: { x: 5, y: 9999 } }), { x: R, y: 600 - R });
 });
+
+test('planWander paths never cross the center or leave the view', async () => {
+  const w = await loadRenderer('stella/wander.js');
+  for (const view of VIEWS) {
+    const random = mulberry32(view.w * 13 + view.h);
+    let from = { x: R, y: R };
+    for (let i = 0; i < 2000; i++) {
+      const path = w.planWander({ from, radius: R, view, random });
+      assert.ok(w.pathClear(path, R, view), `clear path in ${view.w}x${view.h}`);
+      assert.deepEqual(w.pointOnPath(path, 0), from);
+      from = w.pointOnPath(path, 1);
+    }
+  }
+});
+
+test('pathClear rejects a left-to-right hop through the center', async () => {
+  const w = await loadRenderer('stella/wander.js');
+  const view = { w: 1280, h: 680 };
+  const path = w.makePath({ x: 100, y: 340 }, { x: 1180, y: 340 }, () => 0.5);
+  assert.equal(w.pathClear(path, R, view), false);
+  const ok = w.makePath({ x: 100, y: 100 }, { x: 100, y: 500 }, () => 0.5);
+  assert.equal(w.pathClear({ ...ok, control: { x: 100, y: 300 } }, R, view), true);
+});
