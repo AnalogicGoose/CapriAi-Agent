@@ -67,12 +67,11 @@ async function boot() {
     reduced: () => reducedMotion.matches,
     anchor: knownAnchor,
     wander: config.wander,
-    saveAnchor: p => { knownAnchor = { x: p.x, y: p.y }; host.setConfig({ stellaAnchor: knownAnchor }); },
+    saveAnchor: p => { knownAnchor = { x: Math.round(p.x), y: Math.round(p.y) }; host.setConfig({ stellaAnchor: knownAnchor }); },
   });
   if (globalThis.stellaCheck) globalThis.stellaCheck.capri = capri; // scripts/check-stella.js (stub host) only
   capri.gaming = Boolean(config.gamingMode);
   capri.setScale(config.scale);
-  capri.idleAnimations = config.idleAnimations !== false;
   let companionStorage;
   try { companionStorage = window.localStorage; } catch {}
   capri.companion = new Companion({ capri, host, storage: companionStorage });
@@ -256,7 +255,7 @@ async function boot() {
         void capri.bodyAction(action);
       } else {
         // come: to the pointer when it's on her display, else toward the middle
-        const cursor = action === 'come' ? await host.cursor?.().catch(() => null) : null;
+        const cursor = action === 'come' ? await host.cursor?.()?.catch(() => null) : null;
         result = await capri.bodyAction(action, { cursor: cursor && cursor.inside !== false ? cursor : undefined });
       }
     }
@@ -454,7 +453,6 @@ async function boot() {
     capri.gaming = Boolean(cfg.gamingMode);
     if (capri.gaming || cfg.visible === false) { talkMenu.hide(); if (!dictation.fromWake) dictation.cancel(); }
     capri.wander = cfg.wander !== false;
-    capri.idleAnimations = cfg.idleAnimations !== false;
     if (cfg.scale !== capri.scale) capri.setScale(cfg.scale);
     // Her anchor only when it changed elsewhere (a reset, another window); her own drops echo back unchanged.
     if (!sameAnchor(cfg.stellaAnchor, knownAnchor)) {
