@@ -34,3 +34,8 @@ test('overlay blocks navigation', () => {
   assert.match(main, /ipcMain\.handle\('link:open'/);
   assert.match(fs.readFileSync(path.join(__dirname, '../src/preload.js'), 'utf8'), /openLink: url => ipcRenderer\.invoke\('link:open', url\)/);
 });
+
+test('a missing browser says which and how to fix it', async () => {
+  const open = createLinkOpener({ publicUrl, openUrl: spy(async () => { throw Error('I couldn’t find a verified browser executable for “Firefox”. Give me another installed browser or choose the Windows default (system).'); }) });
+  assert.deepEqual(await open('https://a.com/'), { ok: false, error: 'Firefox isn’t installed. Pick another browser in her control room (App).' });
+});

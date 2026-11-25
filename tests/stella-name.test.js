@@ -47,3 +47,23 @@ test('main-process notices name Stella', () => {
     assert.ok(!main.includes(text), text);
   }
 });
+
+test('typed commands addressed to Stella reach the local parsers', () => {
+  const { musicRequest } = require('../src/main/music-playback');
+  const { actionIntent, launchTarget } = require('../src/main/action-agent');
+  assert.deepEqual(musicRequest('Stella, play the song Around the World'), musicRequest('play the song Around the World'));
+  assert.ok(musicRequest('Stella, play the song Around the World'));
+  assert.equal(actionIntent('Stella, open notepad'), actionIntent('Capri, open notepad'));
+  assert.equal(actionIntent('Stella, open notepad'), true);
+  assert.deepEqual(launchTarget('hey Stella open notepad'), launchTarget('hey Capri open notepad'));
+});
+
+test('no name-stripping regex knows only the old name', () => {
+  for (const file of fs.readdirSync(path.join(__dirname, '../src/main')).filter(f => f.endsWith('.js'))) {
+    const source = read(`src/main/${file}`);
+    for (const line of source.split('\n')) {
+      if (/(^|[^\w])capri(?=[,\[\(\!:.?)\s])/i.test(line.replace(/capri_\w+|capri:\/\/|'capri'|caprigpt|CapriGPT/gi, '')) && !/stella/i.test(line) && /\/\^/.test(line))
+        assert.fail(`${file}: ${line.trim().slice(0, 120)}`);
+    }
+  }
+});

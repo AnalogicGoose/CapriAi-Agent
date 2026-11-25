@@ -71,10 +71,34 @@ function parseLine(s) {
   return out;
 }
 
-// Chunks are blank-line separated; each holds paragraph and list blocks.
+// ``` fences are cut out first and kept verbatim (an unclosed fence runs to the end: text still arriving).
+// The rest splits into blank-line separated chunks of paragraph and list blocks.
+// Each chunk: { sep, blocks } where sep is what separated it from the previous one in plain text.
+const FENCE = /^\s*```\s*([\w+-]*)\s*$/;
 function parseChunks(source) {
   const raw = String(source ?? '').replace(/\r\n?/g, '\n');
-  const plain = raw.length > MAX;
+  if (raw.length > MAX) return textChunks(raw, true).map((blocks, i) => ({ sep: i ? '\n\n' : '', blocks }));
+  const chunks = [];
+  let prose = [], code = null;
+  const flush = () => {
+    if (prose.length) textChunks(prose.join('\n'), false).forEach((blocks, i) => chunks.push({ sep: i ? '\n\n' : '\n', blocks }));
+    prose = [];
+  };
+  for (const line of raw.split('\n')) {
+    const fence = line.match(FENCE);
+    if (code) {
+      if (fence && !fence[1]) { chunks.push({ sep: '\n', blocks: [{ type: 'pre', lang: code.lang, text: code.lines.join('\n') }] }); code = null; }
+      else code.lines.push(line);
+    } else if (fence) { flush(); code = { lang: fence[1], lines: [] }; }
+    else prose.push(line);
+  }
+  if (code) chunks.push({ sep: '\n', blocks: [{ type: 'pre', lang: code.lang, text: code.lines.join('\n') }] });
+  flush();
+  if (chunks[0]) chunks[0].sep = '';
+  return chunks;
+}
+
+function textChunks(raw, plain) {
   return raw.split(/\n{2,}/).filter(chunk => chunk.trim()).map(chunk => {
     const blocks = [];
     let para = null, list = null;
@@ -95,12 +119,14 @@ function parseChunks(source) {
   });
 }
 
-export function parseRichText(text) { return parseChunks(text).flat(); }
+export function parseRichText(text) { return parseChunks(text).flatMap(chunk => chunk.blocks); }
 
 const inlineText = inlines => inlines.map(item => item.text).join('');
+const blockText = block => block.type === 'p' ? inlineText(block.inlines)
+  : block.type === 'pre' ? block.text : block.items.map(item => `- ${inlineText(item)}`).join('\n');
+const joinChunks = (chunks, text) => chunks.map(chunk => chunk.sep + text(chunk)).join('');
 export function plainText(text) {
-  return parseChunks(text).map(blocks => blocks.map(block => block.type === 'p' ? inlineText(block.inlines)
-    : block.items.map(item => `- ${inlineText(item)}`).join('\n')).join('\n')).join('\n\n');
+  return joinChunks(parseChunks(text), chunk => chunk.blocks.map(blockText).join('\n'));
 }
 
 const TAG = { b: 'strong', i: 'em', code: 'code' };
@@ -115,7 +141,7 @@ function appendInlines(doc, parent, inlines, onLink) {
       a.setAttribute('class', 'rich-link');
       a.setAttribute('title', item.href);
       a.textContent = item.text;
-      a.addEventListener('click', event => { event.preventDefault(); onLink?.(item.href); });
+      a.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); onLink?.(item.href); });
       parent.appendChild(a);
     } else {
       const el = doc.createElement(TAG[item.type]);
@@ -133,6 +159,11 @@ export function renderRichText(node, text, { onLink } = {}) {
       const p = doc.createElement('p');
       appendInlines(doc, p, block.inlines, onLink);
       node.appendChild(p);
+    } else if (block.type === 'pre') {
+      const pre = doc.createElement('pre'), code = doc.createElement('code');
+      code.textContent = block.text;
+      pre.appendChild(code);
+      node.appendChild(pre);
     } else {
       const ul = doc.createElement('ul');
       for (const item of block.items) {
@@ -146,10 +177,12 @@ export function renderRichText(node, text, { onLink } = {}) {
 }
 
 // Text still arriving: no half-typed markers, no raw link syntax.
+// Code inside a fence is shown as it is.
 export function partialText(text) {
-  return plainText(text)
-    .replace(/\[([^\]\n]*)\]\([^)\s]*$/, '$1')
-    .replace(/\[([^\]\n]*)$/, '$1')
-    .replace(/\*\*|`/g, '')
-    .replace(/(^|\s)[*_](?=\S)/g, '$1');
+  return joinChunks(parseChunks(text), chunk => chunk.blocks[0]?.type === 'pre' ? chunk.blocks[0].text
+    : chunk.blocks.map(blockText).join('\n')
+      .replace(/\[([^\]\n]*)\]\([^)\s]*$/, '$1')
+      .replace(/\[([^\]\n]*)$/, '$1')
+      .replace(/\*\*|`/g, '')
+      .replace(/(^|\s)[*_](?=\S)/g, '$1'));
 }

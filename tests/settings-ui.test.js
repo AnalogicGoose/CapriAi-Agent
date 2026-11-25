@@ -126,3 +126,13 @@ test('size and mute save from their controls', async () => {
   await tick(); room.saves[0].resolve(); await tick(); room.saves[1].resolve(); await tick();
   assert.deepEqual(room.changes, [{ scale: 0.8 }, { muted: true }]);
 });
+
+test('control room markup never reuses an overlay class that disables the pointer', async () => {
+  const css = fs.readFileSync(path.join(__dirname, '../src/renderer/styles/capri.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const blocked = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, , body]) => /pointer-events:\s*none/.test(body))
+    .flatMap(([, selector]) => selector.split(',').map(s => s.trim()).filter(s => /^\.[\w-]+$/.test(s)).map(s => s.slice(1)));
+  const room = await controlRoom();
+  room.click({ section: 'behavior' });
+  const used = [...room.content.innerHTML.matchAll(/class="([^"]+)"/g)].flatMap(m => m[1].split(/\s+/));
+  for (const name of blocked) assert.ok(!used.includes(name), `control room uses overlay class .${name}`);
+});

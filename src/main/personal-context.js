@@ -1,6 +1,6 @@
 'use strict';
 
-const ADDRESS = /^(?:(?:hey[,\s]+)?capri[,!:.\s]+|(?:by the way|for context|actually|just so you know|you know|well|yeah|yep|por cierto)[,\s]+)+/i;
+const ADDRESS = /^(?:(?:hey[,\s]+)?(?:stella|stela|capri)[,!:.\s]+|(?:by the way|for context|actually|just so you know|you know|well|yeah|yep|por cierto)[,\s]+)+/i;
 const FIRST_PERSON = /^(?:i (?:really |usually |regularly |currently |also )?(?:like|love|enjoy|prefer|dislike|own|have|use|play|watch|read|train|practice|practise|collect|work|study|build|make)\b|i(?:'m| am) (?:into|working|studying|building|making|learning|a |an )\b|i(?:'ve| have) got\b|my (?:name|favorite|favourite|job|hobby|pc|computer|phone|laptop)\b|me (?:gusta[n]?|encanta[n]?)\b|(?:prefiero|tengo|uso|juego|veo|leo|entreno|practico|colecciono|trabajo|estudio)\b|estoy (?:trabajando|estudiando|creando|aprendiendo)\b|mi (?:nombre|trabajo|pasatiempo|favorit[oa])\b)/i;
 const HYPOTHETICAL = /\b(?:if|imagine|suppose|pretend|for example|hypothetically|said|quoted|por ejemplo|imagina|supongamos|dijo)\b/i;
 const PRIVATE = /\b(?:password|passcode|pin|secret|token|api[ _-]?key|private[ _-]?key|seed phrase|recovery phrase|address|social security|credit card|bank account|diagnosis|contrase[ñn]a|direcci[oó]n|diagn[oó]stico)\b|\bsk-[\w-]{16,}|\b\d{7,}\b|[\w.+-]+@[\w.-]+\.[a-z]{2,}/i;

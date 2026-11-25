@@ -382,7 +382,7 @@ class CodexTools {
       shape(args, ['changes']);
       const p = permissions(this.settings().privacy);
       if (!p.memoryEnabled) throw Error('Personal memory is disabled.');
-      const direct = text.trim().replace(/^(?:hey\s+)?capri[,!:.]?\s*/i, '')
+      const direct = text.trim().replace(/^(?:hey\s+)?(?:stella|stela|capri)[,!:.]?\s*/i, '')
         .replace(/^(?:(?:please|can you|could you|would you|puedes|por favor)\s+)+/i, '');
       const explicit = interpreted || !hypothetical(text) && /^(?:remember|forget|recuerda|olvida|(?:update|change|correct|remove|delete|edit|save)\b.{0,40}\b(?:memory|memories|profile)|(?:actualiza|cambia|corrige|borra|elimina|edita|guarda)\b.{0,40}\b(?:memoria|recuerdo|perfil))\b/i.test(direct);
       if (!explicit) {

@@ -19,7 +19,7 @@ function actionRequest(evidence, text, history = []) {
   const unquotedEvidence = quote.replace(quoted, '');
   if (!quote || !current.includes(quote) || !unquotedEvidence.trim() ||
       !outside.includes(unquotedEvidence)) throw Error('The action needs evidence from the current user request.');
-  const request = outside.replace(/^(?:hey\s+)?capri(?:[,!:.]\s*|\s+|$)/, '')
+  const request = outside.replace(/^(?:hey\s+)?(?:stella|stela|capri)(?:[,!:.]\s*|\s+|$)/, '')
     .replace(/^(?:(?:please|can you|could you|would you|por favor|puedes|podrías)\s+)+/, '');
   const affirmative = /^(?:yes|yeah|yep|sure|ok(?:ay)?|go ahead|do it|that one|sí|si|dale|hazlo|esa|ese)[.!?]*$/iu.test(request);
   if (affirmative && history.at(-1)?.role !== 'assistant') throw Error('Ask which action the user is agreeing to.');

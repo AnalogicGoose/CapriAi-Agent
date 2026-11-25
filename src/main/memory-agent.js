@@ -36,7 +36,7 @@ function memoryIntent(text,followup=false) {
   if(/^(?:recall|recuerda sobre)\s+/i.test(t))return false;
   if(/\b(?:if|imagine|pretend|for example|how (?:do|can|to)|what would)\b/i.test(t))return false;
   if(/\b(?:forget|remember|olvida|recuerda)\b/i.test(t)
-    &&/^(?:(?:hey\s+)?capri[,\s]+)?(?:(?:please|can you|could you|would you|quiero que|puedes|por favor)\s+)*(?:forget|remember|olvida|recuerda)\b/i.test(t))return true;
+    &&/^(?:(?:hey\s+)?(?:stella|stela|capri)[,\s]+)?(?:(?:please|can you|could you|would you|quiero que|puedes|por favor)\s+)*(?:forget|remember|olvida|recuerda)\b/i.test(t))return true;
   if(/\b(memory|memories|profile|recuerdos?|memoria|perfil)\b/i.test(t)
     &&/\b(update|change|correct|remove|delete|save|keep|know|have|remember|stored|tell|show|actualiza|actualizar|cambia|cambiar|corrige|corregir|borra|borrar|elimina|eliminar|guarda|guardar|sabes|tienes|muestra)\b/i.test(t))return true;
   if(/^(?:what|do you|tell me|que)\b.*\b(?:remember|recall|recuerdas)\b/i.test(t))return true;

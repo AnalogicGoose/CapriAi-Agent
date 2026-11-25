@@ -9,7 +9,7 @@ const ACTIONS = ['add-goal', 'edit-goal', 'next-step', 'pause-goal', 'resume-goa
 const normalize = text => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 function taskResumeTarget(text) {
   if (typeof text !== 'string' || text.length > 350) return undefined;
-  const request = text.trim().replace(/^(?:hey\s+)?capri(?:[,!:.]\s*|\s+)/i, '');
+  const request = text.trim().replace(/^(?:hey\s+)?(?:stella|stela|capri)(?:[,!:.]\s*|\s+)/i, '');
   const polite = /^(?:please\s+)?(?:can|could|would) you\s+/i.test(request);
   const direct = request.replace(/^(?:(?:please|can you|could you|would you|let['’]s|por favor|puedes)\s+)+/i, '')
     .replace(polite ? /[.!?]+$/ : /[.!]+$/, '').trim();
@@ -21,7 +21,7 @@ function explicitRequest(text, action) {
   // Quoted content can be saved, but cannot supply the instruction to save it.
   const t = normalize(text).replace(/"[^"]*"|“[^”]*”|`[^`]*`/g, '').trim();
   if (/\b(?:if|imagine|pretend|for example|what would|how (?:do|can|to)|don't|do not|never|si yo|imagina|por ejemplo|no (?:guardes|recuerdes|cambies|borres|marques))\b/.test(t)) return false;
-  const direct = t.replace(/^(?:hey\s+)?capri[,!:.]?\s*/i, '')
+  const direct = t.replace(/^(?:hey\s+)?(?:stella|stela|capri)[,!:.]?\s*/i, '')
     .replace(/^(?:(?:please|can you|could you|would you|i want you to|puedes|por favor)\s+)+/i, '');
   if (/^(?:what|which|when|where|why|how|show|list|tell me|explain|is|are|was|were|did|does|do|has|have|should|whether)\b/.test(direct)) return false;
   const write = /^(?:remember|save|record|keep|update|change|correct|edit|replace|forget|delete|remove|mark|set|add|pause|resume|reactivate|recuerda|guarda|anota|actualiza|cambia|corrige|edita|olvida|borra|elimina|marca|agrega|pausa|reanuda|reactiva)\b/.test(direct);

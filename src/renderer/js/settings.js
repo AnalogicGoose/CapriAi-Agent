@@ -54,7 +54,7 @@ function control(row, label) {
     }
     case 'text': return `<input class="field" type="text" maxlength="${row.key === 'crunchyrollProfile' ? 80 : 2000}" data-key="${esc(row.key)}" value="${esc(value(row))}" aria-label="${esc(label)}" spellcheck="false">`;
     case 'buttons': return buttons(row);
-    case 'toggles': return `<div class="chips">${row.toggles.map(t => `<label class="chip"><input type="checkbox" data-key="${esc(t.key)}" ${pathGet(state.config, t.key) === true ? 'checked' : ''}><span>${esc(t.label)}</span></label>`).join('')}</div>`;
+    case 'toggles': return `<div class="see-chips">${row.toggles.map(t => `<label class="see-chip"><input type="checkbox" data-key="${esc(t.key)}" ${pathGet(state.config, t.key) === true ? 'checked' : ''}><span>${esc(t.label)}</span></label>`).join('')}</div>`;
     case 'preview': return `<select class="field" data-key="previewStyle" aria-label="Voice style">${row.options.map(([v, t]) =>
       `<option value="${v}" ${v === previewStyle ? 'selected' : ''}>${t}</option>`).join('')}</select><button class="pill" data-action="${row.action}">Play</button>`;
     case 'status': return `<span class="value ${state.integration?.lastSeen ? 'is-ok' : ''}">${esc(row.value(state))}</span>`;

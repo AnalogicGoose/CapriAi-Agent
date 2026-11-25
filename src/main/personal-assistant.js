@@ -7,7 +7,7 @@ const { validateMessages } = require('./conversation-context');
 
 const simple = text => text.toLowerCase().replace(/\.exe\b/g, '').replace(/[^\p{L}\p{N}]/gu, '');
 function namedAppQuestion(text, followUp) {
-  const clean = text.trim().replace(/^capri[,\s]+/i, '').replace(/[?!.]+$/, '').trim();
+  const clean = text.trim().replace(/^(?:stella|stela|capri)[,\s]+/i, '').replace(/[?!.]+$/, '').trim();
   const match = /^(?:is|are)\s+(.{1,80}?)\s+(?:open|running|active)(?:\s+(?:rn|right now|now|currently))?$/i.exec(clean)
     || (followUp && /^what about\s+(.{1,80})$/i.exec(clean));
   if (!match) return null;

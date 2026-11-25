@@ -52,7 +52,7 @@ function authorizePlan(goal,plan,{semantic=false,interpreted=false,musicAction=n
 }
 function launchTarget(text) {
   if(typeof text!=='string'||text.length>300)return null;
-  const match=/^(?:hey\s+)?(?:capri[,\s]+)?(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:please\s+)?(?:open|launch|start|abre|abrir|inicia)\s+(?:(?:the|my|a|an|el|la|mi|un|una)\s+)?(.+?)(?:\s+(?:for me|please|pls|plz|por favor))*[.!?]*$/i.exec(text.trim());
+  const match=/^(?:hey\s+)?(?:(?:stella|stela|capri)[,\s]+)?(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:please\s+)?(?:open|launch|start|abre|abrir|inicia)\s+(?:(?:the|my|a|an|el|la|mi|un|una)\s+)?(.+?)(?:\s+(?:for me|please|pls|plz|por favor))*[.!?]*$/i.exec(text.trim());
   return match?.[1]?.trim()||null;
 }
 function actionIntent(text) {
@@ -64,8 +64,8 @@ function actionIntent(text) {
   if(/\b(?:if i|for example|could she|can she|what can you|imagine|pretend|how (?:do|to)|si te|por ejemplo)\b/i.test(t))return false;
   const verb=/\b(open|launch|start|play|watch|search|find|check|look for|look up|browse|show me|abre|abrir|inicia|pon|reproduce|busca|buscar|encuentra|muestrame|revisa)\b/i.test(t);
   const target=/\b(music|songs?|playlist|musica|anime|crunchyroll|youtube|video|rubius|steam|discounts?|deals?|news|noticias|AI|models?|modelos?|web|internet|browser|navegador|explorer|explorador|notepad|calculator|calculadora|paint|app|program|spotify|chrome|firefox|discord)\b|@[\w.-]+/i.test(t);
-  if(/^(?:capri[,\s]+)?(?:please\s+)?(?:open|launch|abre|inicia)\s+[^?!]{2,100}[.!]?$/i.test(t))return true;
-  const freshQuestion=/^(?:capri[,\s]+)?(?:what|which|any|are there|que|cuales|hay)\b/i.test(t)
+  if(/^(?:(?:stella|stela|capri)[,\s]+)?(?:please\s+)?(?:open|launch|abre|inicia)\s+[^?!]{2,100}[.!]?$/i.test(t))return true;
+  const freshQuestion=/^(?:(?:stella|stela|capri)[,\s]+)?(?:what|which|any|are there|que|cuales|hay)\b/i.test(t)
     &&/\b(latest|newest|current|today|recent|ultim[oa]s?|actuales?|hoy|recientes?)\b/i.test(t);
   return (verb||freshQuestion)&&target;
 }
@@ -149,7 +149,7 @@ class ActionAgent {
       const lookup=this.desktop.resolve(requested,{record:true});
       if(lookup.status!=='found')return this.clarifyApp(command,{choices:lookup.candidates,note:lookup.status==='unavailable'?'App discovery is unavailable right now; I can’t determine whether it is installed.':`I couldn’t find a launch entry for “${requested}” in the places I checked. That doesn’t prove it isn’t installed.`});
     }
-    const followup=this.lastFound&&this.lastFound.expires>this.now()&&/^(?:capri[,\s]+)?(?:please\s+)?(?:open|play|show|abre|reproduce|muestra)\b.{0,60}\b(?:first|second|third|it|that|one|primero|segundo|tercero|eso)\b/i.test(text);
+    const followup=this.lastFound&&this.lastFound.expires>this.now()&&/^(?:(?:stella|stela|capri)[,\s]+)?(?:please\s+)?(?:open|play|show|abre|reproduce|muestra)\b.{0,60}\b(?:first|second|third|it|that|one|primero|segundo|tercero|eso)\b/i.test(text);
     if(!actionIntent(text)&&!followup) {if(!/^(thanks|thank you|okay|ok|great|cool|gracias)[.!\s]*$/i.test(text))this.context.interrupt();return null;}
     return this.run(text.replace(/^\/do\s+/i,''),id);
   }
@@ -181,7 +181,7 @@ class ActionAgent {
       // Common local launch stays instant; broader requests use the local planner.
       if(options.plan)plan=options.plan;
       else if(directApp)plan={message:'',steps:[{tool:'open_app',query:directApp,index:0}]};
-      else if(/^(?:capri[,\s]+)?(?:please\s+)?(?:open|launch|abre)\s+(?:the\s+)?(?:file explorer|explorer|explorador de archivos)[.!\s]*$/i.test(goal))plan={message:'',steps:[{tool:'open_app',query:'File Explorer',index:0}]};
+      else if(/^(?:(?:stella|stela|capri)[,\s]+)?(?:please\s+)?(?:open|launch|abre)\s+(?:the\s+)?(?:file explorer|explorer|explorador de archivos)[.!\s]*$/i.test(goal))plan={message:'',steps:[{tool:'open_app',query:'File Explorer',index:0}]};
       else {
         tell('Planning your task…');
         if(!(await this.models()).includes(AGENT_MODEL))throw Error('Download local qwen3.5:9b before using action planning.');check();

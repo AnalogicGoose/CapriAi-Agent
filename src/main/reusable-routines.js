@@ -39,7 +39,7 @@ function steps(value) {
   return result;
 }
 function direct(text) {
-  return key(text).replace(/^(?:hey\s+)?capri(?:[,!:.]\s*|\s+|$)/, '').replace(/^(?:(?:please|can you|could you|would you|por favor|puedes)\s+)+/, '');
+  return key(text).replace(/^(?:hey\s+)?(?:stella|stela|capri)(?:[,!:.]\s*|\s+|$)/, '').replace(/^(?:(?:please|can you|could you|would you|por favor|puedes)\s+)+/, '');
 }
 function recoveryTarget(text) {
   if (typeof text !== 'string' || text.length > 200) return undefined;
@@ -110,7 +110,7 @@ class ReusableRoutines {
   }
   invocation(text) {
     if (typeof text !== 'string' || text.length > 200) return null;
-    const politeRun = /^(?:(?:hey\s+)?capri[,!:.]?\s*)?(?:please\s+)?(?:can|could|would) you\s+(?:please\s+)?(?:run|start|execute|do|use)\b/i.test(text.trim());
+    const politeRun = /^(?:(?:hey\s+)?(?:stella|stela|capri)[,!:.]?\s*)?(?:please\s+)?(?:can|could|would) you\s+(?:please\s+)?(?:run|start|execute|do|use)\b/i.test(text.trim());
     const raw = direct(text).replace(politeRun ? /[.!?]+$/ : /[.!]+$/, '');
     if (/\?|^(?:if|what|how|why|should|don't|do not|never|imagine|pretend|no\b)/.test(raw) || raw.startsWith('/')) return null;
     let name = raw.replace(/^(?:run|start|execute|do|use|inicia|ejecuta|haz|usa)\s+/, '')

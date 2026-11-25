@@ -166,10 +166,10 @@ input[type='range'] { width: 118px; accent-color: var(--st-gold); }
 output { width: 34px; text-align: right; font-size: 11px; color: var(--st-muted); font-variant-numeric: tabular-nums; }
 
 /* "She can see" chips */
-.chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.chip { position: relative; }
-.chip input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-.chip span {
+.see-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.see-chip { position: relative; }
+.see-chip input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.see-chip span {
   display: inline-block;
   padding: 4px 10px;
   border: 1px solid rgba(185, 164, 245, .25);
@@ -178,8 +178,8 @@ output { width: 34px; text-align: right; font-size: 11px; color: var(--st-muted)
   color: var(--st-muted);
   pointer-events: none;
 }
-.chip input:checked + span { border-color: transparent; background: linear-gradient(90deg, rgba(139, 92, 246, .55), rgba(91, 140, 255, .45)); color: var(--st-warm); }
-.chip input:focus-visible + span { outline: 2px solid var(--st-gold); outline-offset: 2px; }
+.see-chip input:checked + span { border-color: transparent; background: linear-gradient(90deg, rgba(139, 92, 246, .55), rgba(91, 140, 255, .45)); color: var(--st-warm); }
+.see-chip input:focus-visible + span { outline: 2px solid var(--st-gold); outline-offset: 2px; }
 
 /* sub-view */
 .subview { padding-top: 6px; border-top: 1px solid rgba(185, 164, 245, .12); }

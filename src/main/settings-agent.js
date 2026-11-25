@@ -9,7 +9,7 @@ class SettingsAgent {
   async route(text) {
     if (typeof text !== 'string') return null;
     const request = text.trim();
-    const command = request.replace(/^(?:hey\s+)?capri[,!:.]?\s*/i, '').replace(/[.!?]+$/, '')
+    const command = request.replace(/^(?:hey\s+)?(?:stella|stela|capri)[,!:.]?\s*/i, '').replace(/[.!?]+$/, '')
       .replace(/^(?:can you|could you|i want you to)\s+/i, '');
     const game = command.match(/^(?:please\s+)?(activate|enable|enter|start|turn on|deactivate|disable|exit|stop|turn off)\s+(?:your\s+|the\s+)?(?:game|gaming)\s+mode(?:\s+please)?$/i);
     if (game) {

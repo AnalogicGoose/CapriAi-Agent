@@ -92,9 +92,10 @@ test('link click opens through callback', async () => {
   renderRichText(node, 'go https://a.com/', { onLink: href => opened.push(href) });
   const a = find(node, 'a');
   assert.equal(a.attrs.href, 'https://a.com/');
-  let prevented = false;
-  a.listeners.click({ preventDefault() { prevented = true; } });
+  let prevented = false, stopped = false;
+  a.listeners.click({ preventDefault() { prevented = true; }, stopPropagation() { stopped = true; } });
   assert.equal(prevented, true); assert.deepEqual(opened, ['https://a.com/']);
+  assert.equal(stopped, true, 'a link click must not reach the panel, which closes on click');
 });
 
 test('plain text strips markers', async () => {
@@ -118,4 +119,33 @@ test('partial text hides half-typed markers', async () => {
   assert.equal(partialText('see [Reci'), 'see Reci');
   assert.equal(partialText('2 * 3 = 6 and *it'), '2 * 3 = 6 and it');
   assert.equal(partialText('**Hi** there'), 'Hi there');
+});
+
+const L = (...lines) => lines.join(String.fromCharCode(10));
+const FENCE = '`'.repeat(3);
+
+test('fenced code stays verbatim', async () => {
+  const { parseRichText, plainText } = await load();
+  const text = L('Look:', FENCE + 'python', 'return x*2 + y*3', '- not a bullet', '', '[a](https://a.com)', FENCE, 'done');
+  assert.deepEqual(parseRichText(text), [
+    { type: 'p', inlines: [{ type: 'text', text: 'Look:' }] },
+    { type: 'pre', lang: 'python', text: L('return x*2 + y*3', '- not a bullet', '', '[a](https://a.com)') },
+    { type: 'p', inlines: [{ type: 'text', text: 'done' }] }]);
+  assert.equal(plainText(text), L('Look:', 'return x*2 + y*3', '- not a bullet', '', '[a](https://a.com)', 'done'));
+});
+
+test('an unfinished fence is code until the end', async () => {
+  const { parseRichText, partialText } = await load();
+  assert.deepEqual(parseRichText(L('a', FENCE, 'x*2 **y**')), [
+    { type: 'p', inlines: [{ type: 'text', text: 'a' }] }, { type: 'pre', lang: '', text: 'x*2 **y**' }]);
+  assert.equal(partialText(L('Run **this**:', FENCE + 'js', 'a ** b `c`')), L('Run this:', 'a ** b `c`'));
+});
+
+test('fenced code renders as pre code text', async () => {
+  const { renderRichText } = await load();
+  const doc = fakeDocument(), node = doc.createElement('div');
+  renderRichText(node, L(FENCE, '<b>x</b> *y*', FENCE));
+  const pre = find(node, 'pre'), code = find(pre, 'code');
+  assert.equal(code.textContent, '<b>x</b> *y*');
+  assert.equal(find(node, 'em'), undefined);
 });

@@ -228,6 +228,18 @@ body {
   font-family: var(--st-mono);
   font-size: .86em;
 }
+.panel__line pre, .panel__reply pre {
+  margin: .5em 0 0;
+  padding: 8px 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: 10px;
+  background: rgba(8, 7, 26, .55);
+  white-space: pre;
+  user-select: text;
+  scrollbar-width: thin;
+}
+.panel__line pre code, .panel__reply pre code { padding: 0; background: none; font-size: .84em; }
 .rich-link {
   color: var(--st-link);
   text-decoration: underline;

@@ -7,8 +7,9 @@ function createLinkOpener({ publicUrl, openUrl }) {
       if (typeof url !== 'string' || url.length > 2048) throw Error('Invalid link.');
       await openUrl(publicUrl(url), 'default');
       return { ok: true };
-    } catch {
-      return { ok: false, error: 'Couldn’t open that link.' };
+    } catch (error) {
+      const missing = /verified browser executable for “([^”]{1,40})”/.exec(String(error?.message));
+      return { ok: false, error: missing ? `${missing[1]} isn’t installed. Pick another browser in her control room (App).` : 'Couldn’t open that link.' };
     }
   };
 }

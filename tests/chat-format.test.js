@@ -3,6 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path');
 const uri = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
+const { withRichText } = require('./helpers/rich-text-source');
 const read = rel => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 async function loadPanel({ reduced = true } = {}) {
@@ -85,6 +86,19 @@ test('no portrait', () => {
   assert.doesNotMatch(read('src/renderer/js/panel.js'), /Portrait/);
 });
 
-test('spoken text has no formatting markers', () => {
-  assert.match(read('src/renderer/js/speech-output.js'), /partialText\(text\)/);
+test('speech gets the original text so main can drop code blocks', async () => {
+  const source = withRichText(read('src/renderer/js/speech-output.js'));
+  const { SpeechPlayer } = await import(uri(source));
+  const old = { window: global.window, document: global.document, cancelAnimationFrame: global.cancelAnimationFrame };
+  global.window = global.document = { addEventListener() {} }; global.cancelAnimationFrame = () => {};
+  try {
+    const sent = [];
+    const player = new SpeechPlayer({ host: { ttsCancel() {}, ttsSpeak: async request => { sent.push(request.text); return { ok: false, error: 'cancelled' }; } }, voice: { ensure() {} } });
+    player.configure({ ttsEnabled: true });
+    const text = ['Run:', '```py', 'x = 1', '```', 'ok'].join(String.fromCharCode(10));
+    await player.speak(text);
+    assert.deepEqual(sent, [text]);
+    const { spokenText } = require('../src/main/tts');
+    assert.doesNotMatch(spokenText(sent[0]), /x = 1/);
+  } finally { Object.assign(global, old); }
 });
