@@ -158,3 +158,91 @@ test('celebrate adds a full turn smoothly', async () => {
   near(b.burst, TAU, 1e-9, 'burst');
   assert.ok(maxStep < 0.15, `burst step ${maxStep}`);
 });
+
+// ---- review round 1 ----
+const ramp = (x, a, b) => Math.min(1, Math.max(0, (x - a) / (b - a)));
+const maxima = xs => xs.filter((v, i) => i > 0 && i < xs.length - 1 && v > xs[i - 1] && v >= xs[i + 1] && v - Math.min(...xs) > 1e-6).length;
+
+test('angular rates stay continuous when think switches abruptly', async () => {
+  const m = await load();
+  const clock = new m.SceneClock(), dt = 1 / 60, keys = ['spin', 'blades', 'sticks', 'chase', 'ringTurn'];
+  const hist = [];
+  for (let i = 0; i < 300; i++) {
+    clock.step(dt, blendOf({ think: i < 60 ? 0 : 1 }), IDLE, {});
+    hist.push(Object.fromEntries(keys.map(k => [k, clock[k]])));
+  }
+  for (let i = 2; i < hist.length; i++) for (const k of keys) {
+    const d2 = hist[i][k] - 2 * hist[i - 1][k] + hist[i - 2][k];
+    assert.ok(Math.abs(d2) < 0.004, `${k} second difference ${d2} at ${i}`);
+  }
+});
+
+test('a held aim never makes a blade jump', async () => {
+  const m = await load();
+  const clock = new m.SceneClock(), dt = 1 / 60;
+  let prev = null;
+  for (let i = 0; i < 600; i++) {
+    const t = i * dt, motions = { aim: ramp(t, 0, 0.3) };
+    clock.step(dt, blendOf(), IDLE, motions, { aim: 1.0 });
+    const sc = m.buildScene({ s: 360, t, clock, blend: blendOf(), idle: IDLE, motions, aim: 1.0 });
+    if (prev) sc.blades.forEach((b, k) => assert.ok(Math.abs(wrap(b.angle - prev[k])) < 0.05, `blade ${k} at ${t}`));
+    if (t > 0.5) assert.ok(sc.blades.some(b => Math.abs(wrap(b.angle - 1.0)) < 1e-6), 'one blade on target');
+    prev = sc.blades.map(b => b.angle);
+  }
+  // a jump in the input aim glides instead of passing straight through
+  const before = m.buildScene({ s: 360, t: 10, clock, blend: blendOf(), idle: IDLE, motions: { aim: 1 }, aim: 1.0 });
+  clock.step(dt, blendOf(), IDLE, { aim: 1 }, { aim: 2.5 });
+  const after = m.buildScene({ s: 360, t: 10 + dt, clock, blend: blendOf(), idle: IDLE, motions: { aim: 1 }, aim: 2.5 });
+  const moved = Math.max(...after.blades.map((b, k) => Math.abs(wrap(b.angle - before.blades[k].angle))));
+  assert.ok(moved > 0.01 && moved < 0.3, `aim jump glides: ${moved}`);
+});
+
+test('drifted phases settle back to the reference layout', async () => {
+  const m = await load();
+  const clock = new m.SceneClock(), dt = 1 / 60;
+  for (let i = 0; i < 6 * 60; i++) {
+    const t = i * dt; // dotDrift for 1.2 s, then counterTurn for 1.3 s, then 3.5 s of nothing
+    const name = t < 1.2 ? 'dotDrift' : t < 2.5 ? 'counterTurn' : null;
+    const e = name === 'dotDrift' ? Math.sin(Math.PI * t / 1.2) : name ? Math.sin(Math.PI * (t - 1.2) / 1.3) : 0;
+    clock.step(dt, blendOf(), { name, envelope: e, energy: 0.5 }, {});
+  }
+  const q = Math.PI / 2;
+  const off = x => Math.abs(x - Math.round(x / q) * q);
+  assert.ok(off(clock.orbit) < 0.01, `orbit residual ${off(clock.orbit)}`);
+  assert.ok(off(clock.sticks - clock.blades) < 0.01, `stick residual ${off(clock.sticks - clock.blades)}`);
+});
+
+async function timedSeries(m, name, pick) {
+  const clock = new m.SceneClock(), dt = 1 / 60, out = [];
+  for (let t = 0; t < 2; t += dt) {
+    const motions = t < 1.95 ? { [name]: 1 } : {};
+    clock.step(dt, blendOf(), IDLE, motions);
+    out.push(pick(m.buildScene({ s: 360, t: t + 0.123, clock, blend: blendOf(), idle: IDLE, motions })));
+  }
+  return out;
+}
+
+test('doublePulse swells twice and chime pulses three times', async () => {
+  const m = await load();
+  assert.equal(maxima(await timedSeries(m, 'doublePulse', sc => sc.scale)), 2);
+  assert.equal(maxima(await timedSeries(m, 'chime', sc => sc.ring.alpha)), 3);
+});
+
+test('toggling reduced motion at runtime does not snap', async () => {
+  const m = await load();
+  const clock = new m.SceneClock(), dt = 1 / 60;
+  const idle = { name: 'sway', envelope: 1, energy: 0.5 };
+  let prev = null;
+  for (let i = 0; i < 300; i++) {
+    const reduced = i >= 120;
+    clock.step(dt, blendOf(), idle, {}, { reduced });
+    const sc = m.buildScene({ s: 360, t: i * dt, clock, blend: blendOf(), idle, motions: {}, reduced });
+    if (prev) {
+      sc.blades.forEach((b, k) => assert.ok(Math.abs(b.angle - prev.blades[k].angle) < 0.05, `blade jump at ${i}`));
+      assert.ok(Math.abs(sc.scale - prev.scale) < 0.01, 'scale eases');
+      assert.ok(Math.abs(sc.globe.rippleSpeed - prev.globe.rippleSpeed) < 0.2, 'ripple speed eases');
+    }
+    prev = sc;
+  }
+  assert.ok(clock.rippleSpeed < 0.5, 'ripple slowed x0.1');
+});
