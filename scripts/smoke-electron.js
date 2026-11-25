@@ -537,6 +537,8 @@ app.whenReady().then(async () => {
         await pause(50);
       }
       assert.ok(controls);
+      // Section folds are animated; scripted clicks here take the reduced-motion path (unit tests cover the animation).
+      await controls.webContents.executeJavaScript("window.matchMedia = query => ({ matches: /reduced-motion/.test(query) }); true");
       let choose;
       require('electron').dialog.showOpenDialog = () => new Promise(resolve => { choose = resolve; });
       const selecting = controls.webContents.executeJavaScript('settingsHost.action("project-choose")');
@@ -1211,6 +1213,8 @@ app.whenReady().then(async () => {
         await pause(100);
       }
       assert.ok(controls);
+      // Section folds are animated; scripted clicks here take the reduced-motion path (unit tests cover the animation).
+      await controls.webContents.executeJavaScript("window.matchMedia = query => ({ matches: /reduced-motion/.test(query) }); true");
       controls.show(); // Explicitly show after readiness, including hidden test-process launches.
       const run = source => controls.webContents.executeJavaScript(source);
       assert.equal(await run('document.documentElement.dataset.settingsReady'), 'true');

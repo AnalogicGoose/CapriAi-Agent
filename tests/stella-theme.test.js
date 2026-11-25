@@ -66,3 +66,10 @@ test('guide and highlight use theme tokens', () => {
     assert.doesNotMatch(source, /\d+px \d+px 0 var\(--violet\)/, `${file} has no hard offset shadows`);
   }
 });
+
+test('hovering an overlay button never moves it out from under the pointer', () => {
+  // The overlay is click-through outside its buttons: a hover lift makes the hit test flip on and off.
+  const rules = overlayRules(read('src/renderer/styles/capri.css'));
+  for (const { selector, body } of rules.filter(r => /:hover/.test(r.selector)))
+    assert.doesNotMatch(body, /transform/, `${selector} moves on hover`);
+});

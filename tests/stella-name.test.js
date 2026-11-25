@@ -67,3 +67,14 @@ test('no name-stripping regex knows only the old name', () => {
     }
   }
 });
+
+test('tray, windows and the app build use Stella’s icon', () => {
+  const ico = fs.readFileSync(path.join(__dirname, '../assets/icons/stella.ico'));
+  assert.equal(ico.readUInt16LE(2), 1, 'an icon file'); assert.ok(ico.readUInt16LE(4) >= 6, 'several sizes');
+  const sizes = Array.from({ length: ico.readUInt16LE(4) }, (_, i) => ico[6 + i * 16] || 256);
+  for (const size of [16, 24, 32, 48, 256]) assert.ok(sizes.includes(size), `${size}px`);
+  const main = read('src/main/main.js');
+  assert.match(main, /'assets', 'icons', 'stella\.ico'/, 'tray');
+  assert.doesNotMatch(main + read('src/main/settings-window.js'), /capri\.ico|tray\.png/);
+  assert.equal(JSON.parse(read('package.json')).build.win.icon ?? JSON.parse(read('package.json')).build.icon, 'assets/icons/stella.ico');
+});

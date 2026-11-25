@@ -541,6 +541,8 @@ function routeSpeechCommand({ command, minutes }) {
   walkthroughs.voiceCommand(command, () => Boolean(reminders?.voice({ command, minutes })));
 }
 const speech = new SpeechInput({
+  // Listen in her conversation language (control room → App → Language; 'Follow Windows' resolves it).
+  language: () => resolveLang(config.load().lang),
   runtimeDir: app.isPackaged ? path.join(app.getPath('userData'),'speech-runtime') : path.join(ROOT,'.caprigpt-local','speech-runtime'),
   allowed: () => Boolean(overlay && !overlay.isDestroyed() && (voiceSession || (overlay.isVisible()
     && !config.load().gamingMode && !fullscreenState.active))),
@@ -1075,7 +1077,7 @@ function loginItemOptions() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromPath(path.join(ROOT, 'assets', 'icons', 'tray.png'));
+  const icon = nativeImage.createFromPath(path.join(ROOT, 'assets', 'icons', 'stella.ico'));
   tray = new Tray(icon);
   tray.setToolTip('Stella — local only');
   tray.on('click', openSettings);

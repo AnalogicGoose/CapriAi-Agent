@@ -14,8 +14,9 @@ function wave(pcm){
   return Buffer.concat([header,pcm]);
 }
 class WhisperEngine {
-  constructor({runtimeDir,launch=spawn,ensure=ensureRuntime,probe=installed}={}){
-    this.runtimeDir=runtimeDir||path.resolve(__dirname,'../../.caprigpt-local/speech-runtime');this.launch=launch;this.epoch=0;
+  // language(): the app language ('en', 'es'…) so short phrases are not guessed as another language; 'auto' detects.
+  constructor({runtimeDir,launch=spawn,ensure=ensureRuntime,probe=installed,language=()=>'auto'}={}){
+    this.language=language;this.runtimeDir=runtimeDir||path.resolve(__dirname,'../../.caprigpt-local/speech-runtime');this.launch=launch;this.epoch=0;
     this.ensure=ensure;this.probe=probe;this.probed=null;
   }
   // Is the runtime already on disk? Checked often (every commands-mode audio chunk), so cached briefly.
@@ -56,7 +57,7 @@ class WhisperEngine {
   async transcribe(pcm,signal){
     if(!this.url||!this.child||this.child.exitCode!==null)throw Error('speech-unavailable');
     const form=new FormData();form.append('file',new Blob([wave(pcm)],{type:'audio/wav'}),'utterance.wav');
-    form.append('response_format','json');form.append('language','auto');form.append('temperature','0');form.append('translate','false');
+    form.append('response_format','json');form.append('language',this.language()||'auto');form.append('temperature','0');form.append('translate','false');
     const response=await fetch(this.url+'/inference',{method:'POST',body:form,
       signal:signal?AbortSignal.any([signal,AbortSignal.timeout(90000)]):AbortSignal.timeout(90000)});
     if(!response.ok)throw Error('recognizer-failed');

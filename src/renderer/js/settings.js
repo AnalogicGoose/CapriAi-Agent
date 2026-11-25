@@ -6,6 +6,8 @@ import { QUICK, SECTIONS } from './settings-schema.js';
 const host = window.settingsHost;
 const content = document.querySelector('#content');
 let state, openSection = null, view = null, busy = false, previewStyle = 'neutral';
+let entering = null, folding = false; // a section that just opened (animates once) / one folding shut
+const still = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const text = (value, s = state) => typeof value === 'function' ? value(s) : value;
@@ -95,7 +97,8 @@ function sectionHtml(section) {
   const rows = section.rows.filter(row => !row.deeper && shown(row)).map(rowHtml).join('');
   const deeper = Object.entries(section.deepers || {}).filter(([id]) => section.rows.some(row => row.deeper === id && shown(row)))
     .map(([id, label]) => `<button class="row row--deeper" data-deeper="${id}"><span class="row__label">${esc(label)}</span><span class="chev" aria-hidden="true">›</span></button>`).join('');
-  return `<section class="section is-open">${head}<div class="section__body">${rows}${deeper}</div></section>`;
+  const motion = entering === section.id ? ' is-entering' : '';
+  return `<section class="section is-open">${head}<div class="section__body${motion}">${rows}${deeper}</div></section>`;
 }
 
 function deeperHtml() {
@@ -103,6 +106,22 @@ function deeperHtml() {
   const rows = section.rows.filter(row => row.deeper === view && shown(row)).map(rowHtml).join('');
   return `<div class="subview"><button class="subview__back" data-back aria-label="Back to ${esc(section.label)}"><span aria-hidden="true">‹</span> ${esc(section.label)}</button>` +
     `<h2 class="subview__title">${esc(section.deepers[view])}</h2><div class="section__body">${rows}</div></div>`;
+}
+
+// One section open at a time. The open one folds shut (CSS 'is-leaving'), then the next one unfolds ('is-entering').
+// A click while one is folding is remembered: the last section clicked opens when the fold ends.
+let queued;
+function toggleSection(id) {
+  if (folding) { queued = id === openSection ? null : id; return; }
+  queued = openSection === id ? null : id;
+  const open = openSection && !still() && content.querySelector('.section.is-open .section__body');
+  const finish = () => { folding = false; openSection = queued; entering = queued; render(); };
+  const next = queued;
+  if (!open) { openSection = next; entering = still() ? null : next; render(); return; }
+  folding = true;
+  open.addEventListener('animationend', finish, { once: true });
+  setTimeout(() => { if (folding) finish(); }, 400); // in case the animation never reports
+  open.classList.add('is-leaving');
 }
 
 function render() {
@@ -117,6 +136,7 @@ function render() {
   document.querySelector('#status').textContent = state.config.gamingMode ? 'Taking a break' : 'Here with you';
   document.body.classList?.toggle('is-paused', state.config.gamingMode === true);
   content.innerHTML = quickHtml() + (view ? deeperHtml() : `<div class="sections">${SECTIONS.map(sectionHtml).join('')}</div>`);
+  entering = null; // the opening animation plays once; later redraws (saves, updates) show it settled
   if (samePlace) content.scrollTop = scrollTop;
   if (focused && samePlace) {
     const replacement = [...content.querySelectorAll('[data-key], [data-segment], [data-action-switch]')].find(el =>
@@ -154,7 +174,7 @@ const patchKey = (key, v) => perform(() => host.patch(key.startsWith('privacy.')
 document.addEventListener('click', event => {
   const target = event.target;
   const section = target.closest('[data-section]');
-  if (section) { openSection = openSection === section.dataset.section ? null : section.dataset.section; render(); return; }
+  if (section) { toggleSection(section.dataset.section); return; }
   const deeper = target.closest('[data-deeper]');
   if (deeper) { view = deeper.dataset.deeper; render(); content.scrollTop = 0; return; }
   if (target.closest('[data-back]')) { view = null; render(); return; }
@@ -196,5 +216,5 @@ document.addEventListener('keydown', event => {
   if (view) { view = null; render(); } else host.action('close');
 });
 host.onUpdate(next => { state = next; if (!busy && !content.contains(document.activeElement)) render(); });
-try { state = await host.state(); render(); document.documentElement.dataset.settingsReady = 'true'; }
+try { state = await host.state(); render(); document.documentElement.dataset.settingsReady = 'true'; host.ready?.(); }
 catch (error) { notice(error.message, true); }

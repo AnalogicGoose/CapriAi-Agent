@@ -84,7 +84,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icons/capri.ico"
+      "icon": "assets/icons/stella.ico"
     },
     "nsis": {
       "oneClick": true,

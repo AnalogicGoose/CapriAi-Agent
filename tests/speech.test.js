@@ -230,3 +230,24 @@ test('commands mode ignores the wake word while wake listening is not allowed',a
     assert.equal(slot.mode,'commands');
   }finally{f.speech.cancel();}
 });
+
+test('WhisperEngine listens in the app language instead of guessing per phrase', async () => {
+  const { WhisperEngine } = require('../src/main/whisper-engine');
+  const sent = [], realFetch = global.fetch;
+  global.fetch = async (url, { body }) => { sent.push(body.get('language')); return { ok: true, json: async () => ({ text: ' Could you close Discord, please?' }) }; };
+  try {
+    let lang = 'en';
+    const engine = new WhisperEngine({ language: () => lang });
+    engine.url = 'http://127.0.0.1:1'; engine.child = { exitCode: null };
+    assert.equal(await engine.transcribe(Buffer.alloc(320)), 'Could you close Discord, please?');
+    lang = 'es'; await engine.transcribe(Buffer.alloc(320));
+    assert.deepEqual(sent, ['en', 'es']);
+    assert.equal(await new WhisperEngine().language(), 'auto', 'without a language source it still auto-detects');
+  } finally { global.fetch = realFetch; }
+});
+
+test('SpeechInput hands the language source to its engine', () => {
+  const { SpeechInput } = require('../src/main/speech');
+  const input = new SpeechInput({ allowed: () => true, notify() {}, language: () => 'pt' });
+  assert.equal(input.engine.language(), 'pt');
+});

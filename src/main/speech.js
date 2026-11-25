@@ -5,8 +5,8 @@ const {wakePhrase}=require('./wake-phrase');
 const {commandPhrase}=require('./command-phrases');
 const CHECK_IN_LIMIT_MS=40_000;
 class SpeechInput {
-  constructor({allowed,notify,engine,runtimeDir,wakeAllowed=()=>false,commandsAllowed=()=>false,wakeEnabled=()=>false}){
-    Object.assign(this,{allowed,notify,wakeAllowed,commandsAllowed,wakeEnabled});this.engine=engine||new WhisperEngine({runtimeDir});this.current=null;
+  constructor({allowed,notify,engine,runtimeDir,language,wakeAllowed=()=>false,commandsAllowed=()=>false,wakeEnabled=()=>false}){
+    Object.assign(this,{allowed,notify,wakeAllowed,commandsAllowed,wakeEnabled});this.engine=engine||new WhisperEngine({runtimeDir,language});this.current=null;
   }
   start(request={}){
     if(!request||typeof request.id!=='string'||!/^[a-zA-Z0-9-]{8,80}$/.test(request.id))return {ok:false,error:'invalid-request'};

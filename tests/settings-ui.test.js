@@ -43,7 +43,8 @@ async function controlRoom(config = {}) {
   global.document = { activeElement: null, documentElement: { dataset: {} }, body: { setAttribute() {}, removeAttribute() {} },
     querySelector: selector => ({ '#content': content, '#notice': notice, '.statusbar': statusbar, '#status': status, '#close': close })[selector],
     querySelectorAll: () => [], addEventListener: (event, handler) => { handlers[event] = handler; } };
-  global.window = { settingsHost: { state: async () => remote.value, onUpdate() {}, action: async (name, value) => { actions.push([name, value]); return { state: remote.value }; },
+  let ready = 0;
+  global.window = { settingsHost: { ready: () => { ready++; }, state: async () => remote.value, onUpdate() {}, action: async (name, value) => { actions.push([name, value]); return { state: remote.value }; },
     patch: patch => { const job = deferred(); changes.push(patch); saves.push(job); return job.promise.then(() => {
       remote.value = { ...remote.value, config: { ...remote.value.config, ...patch } }; return remote.value;
     }); } } };
@@ -52,7 +53,7 @@ async function controlRoom(config = {}) {
   await tick();
   const click = attrs => handlers.click({ target: { closest: selector => { const name = selector.match(/^\[data-([a-z-]+)/)?.[1];
     return name && attrs[name] !== undefined ? { dataset: { [name.replace(/-([a-z])/g, (_, c) => c.toUpperCase())]: attrs[name] } } : null; } } });
-  return { handlers, saves, changes, actions, content, status, notice, click, remote, get renders() { return renders; } };
+  return { handlers, saves, changes, actions, content, status, notice, click, remote, readyCalls: () => ready, get renders() { return renders; } };
 }
 
 test('quick controls and every section render', async () => {
@@ -135,4 +136,48 @@ test('control room markup never reuses an overlay class that disables the pointe
   room.click({ section: 'behavior' });
   const used = [...room.content.innerHTML.matchAll(/class="([^"]+)"/g)].flatMap(m => m[1].split(/\s+/));
   for (const name of blocked) assert.ok(!used.includes(name), `control room uses overlay class .${name}`);
+});
+
+test('the control room tells main it has drawn, and main shows it only then', async () => {
+  const win = fs.readFileSync(path.join(__dirname, '../src/main/settings-window.js'), 'utf8');
+  assert.doesNotMatch(win, /once\('ready-to-show'/, 'no showing an empty frame');
+  assert.match(win, /ipcMain\.on\('settings:ready'/);
+  assert.match(fs.readFileSync(path.join(__dirname, '../src/settings-preload.js'), 'utf8'), /ready: \(\) => ipcRenderer\.send\('settings:ready'\)/);
+  const room = await controlRoom();
+  assert.equal(room.readyCalls(), 1, 'ready after the first render');
+  assert.match(room.content.innerHTML, /data-section=/, 'content was already drawn');
+});
+
+test('the control room window is opaque so the cursor and first frame do not flicker', () => {
+  const win = fs.readFileSync(path.join(__dirname, '../src/main/settings-window.js'), 'utf8');
+  assert.doesNotMatch(win, /transparent:\s*true/);
+  assert.match(win, /backgroundColor: '#0d0b26'/);
+});
+
+test('a section animates open once, not again on every save, and animates closed', async () => {
+  const room = await controlRoom();
+  room.click({ section: 'sound' });
+  assert.match(room.content.innerHTML, /section__body is-entering/, 'opening animates');
+  room.handlers.change({ target: { dataset: { key: 'wakeWordEnabled' }, type: 'checkbox', checked: false } });
+  await tick(); room.saves[0].resolve(); await tick();
+  assert.doesNotMatch(room.content.innerHTML, /is-entering/, 'a save redraw does not replay the animation');
+  // Closing: the open body gets a leaving class and the section folds when it finishes.
+  const body = { classList: { added: [], add(name) { this.added.push(name); } }, addEventListener(type, fn) { this.end = fn; } };
+  room.content.querySelector = selector => selector === '.section.is-open .section__body' ? body : null;
+  room.click({ section: 'sound' });
+  assert.deepEqual(body.classList.added, ['is-leaving']);
+  assert.match(room.content.innerHTML, /aria-expanded="true"/, 'still open while it folds');
+  body.end();
+  assert.doesNotMatch(room.content.innerHTML, /aria-expanded="true"/);
+});
+
+test('clicking another section while one folds opens it when the fold ends', async () => {
+  const room = await controlRoom();
+  room.click({ section: 'sound' });
+  const body = { classList: { add() {} }, addEventListener(type, fn) { this.end = fn; } };
+  room.content.querySelector = selector => selector === '.section.is-open .section__body' ? body : null;
+  room.click({ section: 'memory' });
+  room.click({ section: 'app' });
+  body.end();
+  assert.match(room.content.innerHTML, /data-section="app" aria-expanded="true"/);
 });

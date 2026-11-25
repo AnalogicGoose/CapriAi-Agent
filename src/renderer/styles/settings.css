@@ -1,4 +1,4 @@
-/* Her control room (Orbit): one small rounded window, quick tiles, folding one-line sections. */
+/* Her control room (Orbit): one small window (Windows rounds its corners), quick tiles, folding one-line sections. */
 html, .settings-body { background: transparent; }
 .settings-body {
   color-scheme: dark;
@@ -6,7 +6,6 @@ html, .settings-body { background: transparent; }
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  padding: 10px;
   color: var(--st-text);
   font: 400 13px/1.35 var(--st-font);
   user-select: none;
@@ -22,8 +21,6 @@ html, .settings-body { background: transparent; }
   height: 100%;
   overflow: hidden;
   background: radial-gradient(130% 70% at 85% 0%, #1d1850 0%, #0d0b26 55%, var(--st-bg-0) 100%);
-  border-radius: 24px;
-  box-shadow: 0 8px 22px rgba(5, 4, 20, .55);
 }
 
 /* header: her orb, name and status; the whole bar drags the window */
@@ -103,6 +100,20 @@ html, .settings-body { background: transparent; }
 .section__head[aria-expanded='true'] .chev { transform: rotate(90deg); color: var(--st-gold); }
 .section__head:hover .section__label { color: var(--st-warm); }
 .section__body { display: grid; gap: 2px; padding: 0 2px 12px 38px; }
+/* Folding: height eases between 0 and its natural size (interpolate-size), with a soft fade and lift. */
+:root { interpolate-size: allow-keywords; }
+.section__body.is-entering { overflow: hidden; animation: section-open 240ms cubic-bezier(.2, .8, .2, 1) both; }
+.section__body.is-leaving { overflow: hidden; animation: section-close 190ms cubic-bezier(.4, 0, .9, .6) both; }
+.section.is-open:has(.is-leaving) .chev { transform: none; color: var(--st-muted-2); }
+@keyframes section-open {
+  from { height: 0; padding-bottom: 0; opacity: 0; transform: translateY(-4px); }
+  to { height: auto; opacity: 1; transform: none; }
+}
+@keyframes section-close {
+  from { height: auto; opacity: 1; transform: none; }
+  to { height: 0; padding-bottom: 0; opacity: 0; transform: translateY(-4px); }
+}
+.section.is-open:has(.section__body.is-entering) .chev { animation: chev-open 240ms cubic-bezier(.2, .8, .2, 1); }
 
 /* one-line rows */
 .row { display: flex; align-items: center; gap: 10px; min-height: 34px; font-size: 12.5px; }
@@ -209,4 +220,8 @@ output { width: 34px; text-align: right; font-size: 11px; color: var(--st-muted)
 .quit svg { display: block; }
 .quit:hover { background: rgba(242, 184, 198, .12); }
 
-@media (prefers-reduced-motion: reduce) { .chev, .pill { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .chev, .pill { transition: none; }
+  .section__body.is-entering, .section__body.is-leaving, .section .chev { animation: none; }
+}
+@keyframes chev-open { from { transform: none; } to { transform: rotate(90deg); } }

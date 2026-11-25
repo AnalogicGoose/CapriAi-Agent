@@ -5,9 +5,12 @@ const { settingsPatch } = require('./settings-policy');
 const { validateReminderAction } = require('./reminder-settings');
 
 function createSettingsWindow({ state, patch, action }) {
-  let window;
+  let window, shown = false;
   const trusted = event => window && !window.isDestroyed() && event.sender === window.webContents;
+  const reveal = () => { if (!shown && window && !window.isDestroyed()) { shown = true; window.show(); window.focus(); } };
   ipcMain.handle('settings:state', event => { if (!trusted(event)) throw Error('Settings window required.'); return state(); });
+  // The page says when its controls are drawn, so the window never appears as an empty frame.
+  ipcMain.on('settings:ready', event => { if (trusted(event)) reveal(); });
   ipcMain.handle('settings:patch', async (event, input) => {
     if (!trusted(event)) throw Error('Settings window required.');
     patch(settingsPatch(input, screen.getAllDisplays())); return state();
@@ -26,19 +29,22 @@ function createSettingsWindow({ state, patch, action }) {
     open() {
       if (!window || window.isDestroyed()) {
         const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
-        // Small rounded Orbit window: transparent so the CSS draws its corners (10px margin for the soft shadow).
-        const width = Math.min(400, area.width), height = Math.min(640, area.height);
-        window = new BrowserWindow({ width, height, minWidth: Math.min(360, area.width), minHeight: Math.min(420, area.height),
+        // Small opaque frameless window: Windows 11 rounds its corners and draws the shadow natively.
+        // (A transparent window repaints its cursor on every hover transition, which made it flicker.)
+        const width = Math.min(380, area.width), height = Math.min(620, area.height);
+        window = new BrowserWindow({ width, height, minWidth: Math.min(340, area.width), minHeight: Math.min(400, area.height),
           x: area.x + Math.max(0, Math.round((area.width - width) / 2)), y: area.y + Math.max(0, Math.round((area.height - height) / 2)),
-          title: 'Stella — Control room', frame: false, transparent: true, backgroundColor: '#00000000', resizable: true, maximizable: false,
-          autoHideMenuBar: true, show: false, icon: path.resolve(__dirname, '../../assets/icons/capri.ico'),
+          title: 'Stella — Control room', frame: false, backgroundColor: '#0d0b26', resizable: true, maximizable: false,
+          autoHideMenuBar: true, show: false, icon: path.resolve(__dirname, '../../assets/icons/stella.ico'),
           webPreferences: { preload: path.resolve(__dirname, '../settings-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
         });
+        shown = false;
         window.setMenu(null);
         window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
         window.webContents.on('will-navigate', e => e.preventDefault());
         window.loadURL('capri://app/src/renderer/settings.html');
-        window.once('ready-to-show', () => { window?.show(); });
+        // If the page never reports (an error while drawing), still show it rather than nothing.
+        window.webContents.once('did-finish-load', () => setTimeout(reveal, 1500));
         window.on('closed', () => { window = null; });
       } else { window.show(); window.focus(); this.update(); }
     },
