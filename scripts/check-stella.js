@@ -1,8 +1,9 @@
 'use strict';
 // Isolated Stella renderer check: hidden window, no main app, model or profile.
 // node_modules/electron/dist/electron.exe scripts/check-stella.js
-// Sections are named; each returns {name, ok, notes}. Add new sections to SECTIONS in the page.
-const { app, BrowserWindow } = require('electron');
+// Sections are named; each returns {name, ok, notes}. Page sections run in one window; app-boot
+// (below) loads the real overlay page in a second window with a stub host.
+const { app, BrowserWindow, protocol, net } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -12,6 +13,10 @@ fs.mkdirSync(output, { recursive: true });
 app.setPath('userData', path.join(output, 'profile'));
 const timeout = setTimeout(() => { console.error('Stella check timed out'); app.exit(1); }, 60000);
 const fail = message => { console.error('Stella check failed: ' + message); app.exit(1); };
+// The overlay page is served as in the app (capri://app/... -> this repo), so its CSP and modules behave the same.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'capri', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+]);
 
 app.whenReady().then(async () => {
   try {
@@ -243,6 +248,8 @@ app.whenReady().then(async () => {
     fs.writeFileSync(page, html);
     await win.loadFile(page);
     const {results, files} = await win.webContents.executeJavaScript('window.stellaResult');
+    results.push(await appBoot(files)); // before the first window goes: the last window closing quits the app
+    win.destroy();
     for (const [name, data] of Object.entries(files)) {
       fs.writeFileSync(path.join(output, name), Buffer.from(data.split(',')[1], 'base64'));
     }
@@ -255,3 +262,116 @@ app.whenReady().then(async () => {
     app.exit(bad ? 1 : 0);
   } catch (error) { fail(error.stack || error); }
 });
+
+// ---- section: app-boot ----
+// The real overlay page (src/renderer/index.html) in its own hidden window, with a stub
+// `window.host` instead of the main process: every on* is recorded and never fires on its own,
+// getConfig returns the defaults (stellaAnchor null, wake word off so no microphone), setConfig
+// records patches. The page hands its Stella to window.stellaCheck once built.
+async function appBoot(files) {
+  const name = 'app-boot';
+  let win = null;
+  try {
+    const { DEFAULTS } = require('../src/main/config.js');
+    const config = { ...DEFAULTS, lang: 'en', stellaAnchor: null, wakeWordEnabled: false };
+    const preload = path.join(output, 'host-stub.js');
+    fs.writeFileSync(preload, `'use strict';
+const config = ${JSON.stringify(config)};
+const patches = [], listeners = {};
+const known = {
+  getConfig: async () => ({ ...config }),
+  setConfig: async patch => { patches.push(patch); Object.assign(config, patch); return { ...config }; },
+  listSounds: async () => [],
+  windowsNow: async () => null,
+  cursor: async () => null,
+  fullscreenState: async () => ({ active: false, revision: 0 }),
+};
+window.stellaCheck = { patches, listeners, capri: null };
+window.host = new Proxy({}, { get(_, key) {
+  if (typeof key !== 'string') return undefined;
+  if (Object.hasOwn(known, key)) return known[key];
+  if (/^on[A-Z]/.test(key)) return fn => { (listeners[key] ||= []).push(fn); return () => {}; };
+  return () => Promise.resolve(null);
+} });
+`);
+    win = new BrowserWindow({ show: false, width: 900, height: 700,
+      webPreferences: { preload, contextIsolation: false, sandbox: false, backgroundThrottling: false, offscreen: true } });
+    win.webContents.setFrameRate(60); // offscreen rendering: frames (and requestAnimationFrame) run without ever showing a window
+    const errors = [];
+    win.webContents.on('console-message', e => { if (e.level === 'error') errors.push(String(e.message)); });
+    win.webContents.on('preload-error', (_e, _p, error) => errors.push('preload: ' + error));
+    win.webContents.on('render-process-gone', (_e, d) => errors.push('renderer gone: ' + d.reason));
+    if (!protocol.isProtocolHandled('capri')) {
+      protocol.handle('capri', request => {
+        const url = new URL(request.url);
+        const target = path.resolve(root, '.' + decodeURIComponent(url.pathname));
+        if (url.host !== 'app' || !target.startsWith(root + path.sep)) return new Response('forbidden', { status: 403 });
+        return net.fetch(pathToFileURL(target).toString());
+      });
+    }
+    await win.loadURL('capri://app/src/renderer/index.html');
+    let r;
+    try { r = await win.webContents.executeJavaScript(`(async () => {
+      const S = window.stellaCheck, wait = ms => new Promise(res => setTimeout(res, ms));
+      const check = (c, m) => { if (!c) throw Error(m); };
+      const until = async (done, ms, what) => {
+        for (const t0 = performance.now(); !done();) { if (performance.now() - t0 > ms) throw Error('timed out: ' + what); await wait(20); }
+      };
+      await until(() => S.capri, 5000, 'Stella built by the page');
+      const c = S.capri, canvas = document.getElementById('stella-canvas'), notes = [];
+      // non-blank pixels within 2 s (drawn and copied in one task, before the buffer is presented)
+      const copy = () => {
+        const k = document.createElement('canvas'); k.width = canvas.width; k.height = canvas.height;
+        const x = k.getContext('2d'); x.drawImage(canvas, 0, 0);
+        const d = x.getImageData(0, 0, k.width, k.height).data;
+        let lit = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 40) lit++;
+        return { k, lit };
+      };
+      let shot = null;
+      for (const t0 = performance.now(); performance.now() - t0 < 2000; await wait(50)) {
+        c.drawFrame(performance.now());
+        shot = copy();
+        if (shot.lit > 200) break;
+      }
+      check(shot && shot.lit > 200, 'stella-canvas still blank after 2 s (' + (shot ? shot.lit : 0) + ' lit px; hidden=' + document.hidden + ' drawn=' + Boolean(c.drawn) + ' fold=' + c.fold + ' renderer=' + Boolean(c.renderer) + ' size=' + canvas.width + ')');
+      notes.push('first lit frame ' + shot.lit + ' px');
+      await until(() => document.documentElement.dataset.caprigptReady === 'true', 5000, 'boot finished');
+      await until(() => c.fold === 0, 2000, 'materialized');
+      c.drawFrame(performance.now());
+      const full = copy();
+      check(full.lit > canvas.width * canvas.height * 0.1, 'materialized frame mostly blank (' + full.lit + ' lit px)');
+      notes.push('materialized ' + full.lit + ' px');
+      check(c.hit(c.pos.x, c.pos.y), 'capri.hit false at her center');
+      // her own agent searching the web: radar
+      const act = S.listeners.onAgentActivity || [];
+      check(act.length, 'no onAgentActivity listener');
+      for (const f of act) f({ tool: 'capri_apps', op: 'search_web', phase: 'start' });
+      check(c.act && c.act.player.name === 'radar', 'agent search_web start: act ' + (c.act && c.act.player.name));
+      for (const f of act) f({ tool: 'capri_apps', op: 'search_web', phase: 'end', ok: true });
+      notes.push('agent search_web -> radar');
+      // a drag with synthetic pointer events moves her and saves the anchor
+      const root = document.getElementById('stella'), from = { ...c.pos };
+      const ev = (type, x, y) => root.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0,
+        buttons: type === 'pointerup' ? 0 : 1, pointerId: 7, isPrimary: true, clientX: x, clientY: y }));
+      ev('pointerdown', from.x, from.y);
+      for (let i = 1; i <= 10; i++) { ev('pointermove', from.x - 15 * i, from.y - 10 * i); await wait(30); }
+      ev('pointerup', from.x - 150, from.y - 100);
+      await wait(900);
+      const moved = Math.hypot(c.pos.x - from.x, c.pos.y - from.y);
+      check(moved > 100, 'drag moved her only ' + moved.toFixed(1) + ' px');
+      const patch = S.patches.find(p => p && p.stellaAnchor);
+      check(patch && Number.isFinite(patch.stellaAnchor.x) && Number.isFinite(patch.stellaAnchor.y), 'no stellaAnchor patch: ' + JSON.stringify(S.patches));
+      notes.push('drag moved ' + moved.toFixed(0) + ' px, anchor ' + Math.round(patch.stellaAnchor.x) + ',' + Math.round(patch.stellaAnchor.y));
+      return { notes: notes.join('; '), png: full.k.toDataURL('image/png') };
+    })()`); } catch (error) {
+      throw Error(String(error && error.message || error) + (errors.length ? ' [console errors: ' + errors.join(' | ') + ']' : ''));
+    }
+    files['app-boot.png'] = r.png;
+    if (errors.length) throw Error('console errors: ' + errors.join(' | '));
+    return { name, ok: true, notes: r.notes + '; no console errors' };
+  } catch (error) {
+    return { name, ok: false, notes: String(error && error.stack || error) };
+  } finally {
+    win?.destroy();
+  }
+}

@@ -1,7 +1,8 @@
 import { SpeechPlayer } from './speech-output.js';
-import { Capri } from './capri.js';
+import { Stella } from './stella/stella.js';
+import { isPoint } from './stella/focus.js';
+import { clampToView } from './stella/wander.js';
 import { Companion } from './companion.js';
-import { FxLayer, GRAB_FRAMES } from './fx.js';
 import { Chip, Mask } from './chip.js';
 import { Panel } from './panel.js';
 import { Voice } from './voice.js';
@@ -17,43 +18,31 @@ import { WakeListener } from './wake-listener.js';
 import { CommandListener } from './command-listener.js';
 import { VoiceCall } from './voice-call.js';
 import { LINES } from './lines.js';
-import { pick } from './util.js';
+import { reducedMotion } from './util.js';
 import { ReminderCards } from './reminder-cards.js';
 
 const host = window.host;
 
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-}
-
-// close-ups of her for the cut-ins, frames of the show (tools/build-cutins.py)
-const CUTINS = ['grin', 'laugh', 'eyes', 'many', 'look'];
+// The demo's captions for Stella's part (brain.t.showcase keeps the stow and closing lines).
+const SHOWCASE = {
+  fr: { open: 'J’ouvre ce dont tu as besoin.', search: 'Je cherche pour toi.', think: 'Je réfléchis…', memory: 'Et je m’en souviendrai.' },
+  en: { open: 'I open what you need.', search: 'I search for you.', think: 'Thinking…', memory: 'And I’ll remember it.' },
+  es: { open: 'Abro lo que necesitas.', search: 'Busco por ti.', think: 'Pensando…', memory: 'Y lo recordaré.' },
+  pt: { open: 'Abro o que você precisa.', search: 'Eu pesquiso para você.', think: 'Pensando…', memory: 'E vou me lembrar disso.' },
+  ru: { open: 'Открою то, что нужно.', search: 'Поищу для тебя.', think: 'Думаю…', memory: 'И я это запомню.' },
+};
+// Stella has no cursor greetings or surprise flourishes: those companion options stay off whatever the settings say.
+const companionConfig = cfg => ({ ...cfg, cursorInteractions: false, surpriseAnimations: false });
+const sameAnchor = (a, b) => (isPoint(a) && isPoint(b) ? a.x === b.x && a.y === b.y : !isPoint(a) && !isPoint(b));
 
 async function boot() {
-  const [config, image, intro, ...cutins] = await Promise.all([
+  const [config] = await Promise.all([
     host.getConfig(),
-    loadImage('../../assets/capri/capri-full.png'),
-    // her intro: her close-up grabbing the screen, and its drawings with her mouth and arm moving
-    Promise.all(GRAB_FRAMES.map((name) => loadImage(`../../assets/capri/intro-${name}.webp`).catch(() => null)))
-      // decoded now, not the first time each one shows up (a hitch right on "hi", on the wave)
-      .then((cels) => Promise.all(cels.map((cel) => cel && createImageBitmap(cel))))
-      .then((cels) => (cels[0] ? Object.fromEntries(GRAB_FRAMES.map((name, i) => [name, cels[i]])) : null)),
-    ...CUTINS.map((name) => loadImage(`../../assets/capri/cutin-${name}.png`)),
     document.fonts.load('600 16px "Chakra Petch"'),
     document.fonts.load('400 11px "JetBrains Mono"'),
   ]);
   document.documentElement.lang = config.lang;
 
-  const fx = new FxLayer(document.getElementById('fx'), {
-    cutins: Object.fromEntries(CUTINS.map((name, i) => [name, cutins[i]])),
-    intro,
-  });
-  fx.resize(innerWidth, innerHeight);
   const chip = new Chip(document.getElementById('chip'));
   chip.place(innerWidth, innerHeight);
   const mask = new Mask(document.getElementById('mask'));
@@ -68,21 +57,26 @@ async function boot() {
     labels: LINES[config.lang] || LINES.fr,
   });
 
-  const capri = new Capri({
-    root: document.getElementById('capri'),
-    canvas: document.getElementById('sprite'),
-    image,
-    fx,
+  // Stella (stella/stella.js), still called `capri` here and by the modules it is handed to. With no renderer
+  // given she builds her own StellaRenderer, and without WebGL2 keeps working undrawn instead of failing boot.
+  let knownAnchor = isPoint(config.stellaAnchor) ? { x: config.stellaAnchor.x, y: config.stellaAnchor.y } : null;
+  const capri = new Stella({
+    root: document.getElementById('stella'),
+    canvas: document.getElementById('stella-canvas'),
     voice,
+    reduced: () => reducedMotion.matches,
+    anchor: knownAnchor,
+    wander: config.wander,
+    saveAnchor: p => { knownAnchor = { x: p.x, y: p.y }; host.setConfig({ stellaAnchor: knownAnchor }); },
   });
-  capri.wander = config.wander;
-  capri.possessWindows = config.possess;
+  if (globalThis.stellaCheck) globalThis.stellaCheck.capri = capri; // scripts/check-stella.js (stub host) only
   capri.gaming = Boolean(config.gamingMode);
   capri.setScale(config.scale);
+  capri.idleAnimations = config.idleAnimations !== false;
   let companionStorage;
   try { companionStorage = window.localStorage; } catch {}
   capri.companion = new Companion({ capri, host, storage: companionStorage });
-  capri.companion.configure(config);
+  capri.companion.configure(companionConfig(config));
 
   const mission = new Mission();
   const brain = new Brain({ capri, panel, voice, host, mission, lang: config.lang, generatedDialogue: config.generatedDialogue !== false });
@@ -193,10 +187,14 @@ async function boot() {
       mask.hide();
     }
   };
-  capri.onMode = (mode, prev) => chip.setMode(mode, prev);
-  // now and then she says something about the satellite: while she looks at it, or once
-  // the red light has gone up (never during, nothing should cover that)
-  capri.onGaze = () => host.companionEvent?.('idle');
+  // Waiting on a permission (integration.js / brain.js set 'alert'): her approval ring holds and she comes a
+  // little closer; leaving alert lets it go. approval() ignores a repeat, so this is safe to call on every change.
+  capri.onMode = (mode, prev) => {
+    chip.setMode(mode, prev);
+    if (mode === 'alert' || prev === 'alert') capri.approval(mode === 'alert');
+  };
+  host.onAgentActivity?.(e => capri.agentActivity(e));
+  host.onGuideFocus?.(f => capri.guideFocus(f));
   capri.onClick = () => {
     voiceCall?.end();
     if (panel.visible) panel.hide('user'); // the user clicked it away (a reminder card is dismissed, not re-queued)
@@ -252,7 +250,16 @@ async function boot() {
   setInterval(publishCompanionState, 15000);
   host.onBodyAction?.(async ({ id, action }) => {
     let result;
-    try { result = action === 'sit' || action === 'stand' ? await capri.requestPosture(action === 'sit') : await capri.companion.request(action); }
+    try {
+      if (action === 'mood' || action === 'help') { // the companion has the words; she plays the motion (none for help)
+        result = await capri.companion.request(action);
+        void capri.bodyAction(action);
+      } else {
+        // come: to the pointer when it's on her display, else toward the middle
+        const cursor = action === 'come' ? await host.cursor?.().catch(() => null) : null;
+        result = await capri.bodyAction(action, { cursor: cursor && cursor.inside !== false ? cursor : undefined });
+      }
+    }
     catch (error) { result = `Action failed: ${error.message}`; }
     host.bodyResult({ id, result }); publishCompanionState();
   });
@@ -304,6 +311,7 @@ async function boot() {
     blocked: () => Boolean(voiceCall.active || dictation.id || voice.spoken.pending || voice.spoken.source || commandListener.active),
     onSessionEnd: () => { if (voiceCall.fromWake) voiceCall.end(false); document.body.classList.remove('voice-session'); refreshHit(true); },
     onWake: async event => {
+      capri.wakeHeard();
       await voiceCall.start(event);
     } });
   chat.onClose = () => { if (!voiceCall.active && !panel.leaving && !wakeListener.transferring) wakeListener.endSession(); };
@@ -317,7 +325,12 @@ async function boot() {
     while (busy() && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 250));
     voice.spoken.speak(line, undefined, grant);
   };
-  const reminderCards = new ReminderCards({ panel, host, speak: (line, grant) => void sayReminder(line, grant),
+  // A card actually shown (main is told through reminderShown): her chime, and a small drift toward the middle.
+  const reminderHost = {
+    reminderShown: (...args) => { capri.remind(); return host.reminderShown?.(...args); },
+    reminderAction: (...args) => host.reminderAction(...args),
+  };
+  const reminderCards = new ReminderCards({ panel, host: reminderHost, speak: (line, grant) => void sayReminder(line, grant),
     blocked: () => Boolean(chat?.open || voiceCall?.active || talkMenu?.visible || wakeListener?.session
       || [...brain.sessions.values()].some(s => s.waiting)) });
   host.onReminderDue?.(message => reminderCards.receive(message));
@@ -329,63 +342,29 @@ async function boot() {
   const until = async (done, max = 15000) => {
     for (const t0 = Date.now(); !done() && Date.now() - t0 < max;) await wait(100);
   };
-  const free = () => !capri.busy && !capri.act && capri.stance !== 'fall';
+  const free = () => !capri.busy && !capri.act;
   brain.onShowcase = async () => {
-    const t = brain.t.showcase;
+    const t = brain.t.showcase, s = SHOWCASE[brain.lang] || SHOWCASE.en;
     const caption = (line) => panel.say({ kind: 'info', line, hold: 2200 });
     capri.nextMove = capri.nextGaze = performance.now() + 120000; // nothing of her own in between
     if (capri.stowed) await capri.unstow();
     if (capri.dormant) capri.wake();
     await until(free);
     panel.hide();
-
-    caption(t.minds);
-    await wait(1000);
-    await capri.perform('split');
-    await wait(900);
-
-    caption(t.zap);
-    await wait(1000);
-    const h = capri.head();
-    capri.zap(h.x + capri.towardCenter() * 280, h.y - 170);
-    await wait(1800);
-
-    panel.hide();
-    if (capri.gaze({ big: true })) await until(() => !capri.sky);
-    await wait(2500);
-
-    // a little terminal opens for her to take over, and closes under her once she's done with it
-    if (capri.possessWindows && (await host.demoWindow(true))) {
-      const top = () => capri.windows.wins.find((w) => capri.canSit(w)); // it opens on top of everything
-      await until(top, 4000);
-      const win = top();
-      const seat = win && { win, dx: win.w * 0.4 };
-      if (seat) {
-        panel.hide();
-        await capri.sitOn(seat);
-        await until(free);
-        caption(t.possess);
-        await wait(1400);
-        panel.hide();
-        await capri.possess();
-        await wait(1800);
-      }
-      host.demoWindow(false);
-      await wait(400);
-      await until(free); // she may have fallen off it
+    // one of her functions after the other, a caption before each
+    for (const [line, motion] of [[s.open, 'flare'], [s.search, 'radar']]) {
+      caption(line);
       await wait(900);
+      await capri.play(motion);
+      await wait(700);
     }
-
-    caption(t.sleep);
-    await wait(1400);
-    panel.hide();
-    capri.setMode('sleep');
-    await wait(2500); // dozing off
-    await capri.doze();
-    await wait(4500);
-    capri.wake();
-    await until(free);
-    await wait(1200);
+    caption(s.think);
+    capri.reactToAction('think'); // her think state, 2 s
+    await wait(2600);
+    caption(s.memory);
+    await wait(900);
+    await capri.play('swirlIn');
+    await wait(900);
 
     caption(t.chip);
     await wait(1600);
@@ -394,6 +373,7 @@ async function boot() {
     await wait(3500);
     await capri.unstow();
     await wait(600);
+    void capri.celebrate();
     panel.say({ kind: 'info', line: t.end, hold: 5000 });
   };
 
@@ -428,6 +408,7 @@ async function boot() {
         if (id === 'quiet') await host.personalRoute('/companion off');
       },
     });
+    capri.perform('curious'); // a little pulse as she speaks up
     const checkIn = panel.current;
     if (voiceUntil && checkIn?.line === text) {
       const canPlay = () => available() && panel.visible && panel.current === checkIn;
@@ -454,12 +435,10 @@ async function boot() {
   host.windowsNow().then((data) => data && capri.setWindows(data));
 
   host.onResize(({ width, height }) => {
-    fx.resize(width, height);
     chip.place(width, height);
     capri.setView(width, height);
   });
   window.addEventListener('resize', () => {
-    fx.resize(innerWidth, innerHeight);
     chip.place(innerWidth, innerHeight);
     capri.setView(innerWidth, innerHeight);
   });
@@ -468,15 +447,20 @@ async function boot() {
     if ((!cfg.wakeWordEnabled && voiceCall.fromWake) || !cfg.ttsEnabled || cfg.muted ||
         (voiceCall.checkIn && (!cfg.checkInReplies || !cfg.proactiveVoice || !cfg.proactiveEnabled || cfg.volume === 0 ||
           cfg.gamingMode || cfg.visible === false))) voiceCall.end();
-    capri.companion.configure(cfg);
+    capri.companion.configure(companionConfig(cfg));
     wakeListener.configure(cfg);
     voice.configure(cfg);
     voice.spoken.configure(cfg);
     capri.gaming = Boolean(cfg.gamingMode);
     if (capri.gaming || cfg.visible === false) { talkMenu.hide(); if (!dictation.fromWake) dictation.cancel(); }
-    capri.wander = cfg.wander;
-    capri.possessWindows = cfg.possess;
+    capri.wander = cfg.wander !== false;
+    capri.idleAnimations = cfg.idleAnimations !== false;
     if (cfg.scale !== capri.scale) capri.setScale(cfg.scale);
+    // Her anchor only when it changed elsewhere (a reset, another window); her own drops echo back unchanged.
+    if (!sameAnchor(cfg.stellaAnchor, knownAnchor)) {
+      knownAnchor = isPoint(cfg.stellaAnchor) ? { x: cfg.stellaAnchor.x, y: cfg.stellaAnchor.y } : null;
+      capri.anchor = knownAnchor ? clampToView(knownAnchor, capri.radius, capri.view) : capri.firstAnchor();
+    }
     if (cfg.lang !== brain.lang) {
       brain.lang = cfg.lang;
       panel.labels = LINES[cfg.lang] || LINES.fr;
@@ -505,7 +489,7 @@ async function boot() {
         await capri.gamingArrival();
         break;
       case 'teleport':
-        capri.teleport(capri.spot('random'));
+        capri.glideTo(capri.spot('random'));
         break;
       case 'status':
         brain.status();
@@ -563,31 +547,27 @@ async function boot() {
         if (cmd.on) capri.stow();
         else capri.unstow();
         break;
-      case 'satellite': // the whole sequence, on demand (tray)
+      case 'satellite': // tray: out of her biochip if put away, awake, a curious pulse
         if (capri.stowed) {
           host.setConfig({ visible: true });
           await capri.unstow();
         }
         capri.wake();
-        if (capri.stance === 'peek') await capri.unpeek();
-        if (!capri.gaze({ big: true })) setTimeout(() => capri.gaze({ big: true }), 1500);
+        capri.perform('curious');
         break;
       // --dev helpers
-      case 'intro': // her intro again, as when she starts (still: as with Windows' animations off)
+      case 'intro': // her entrance again, as when she starts
         panel.hide();
-        await capri.intro(capri.spot('post'), cmd.still ? { still: true } : {});
+        await capri.materialize(capri.spot('post'));
         break;
       case 'pose':
-        capri.debug = cmd.params || null;
         if (cmd.still) capri.nextMove = capri.nextGaze = Infinity; // no wandering off mid-test
         if (cmd.hush) {
           panel.setTicker(null);
           panel.hide();
         }
         if (cmd.scale) capri.setScale(cmd.scale);
-        if (cmd.stance) capri.setStance(cmd.stance, cmd);
         if (cmd.at) capri.pos = cmd.at;
-        if (cmd.facing) capri.facing = cmd.facing;
         capri.drawFrame();
         break;
       case 'config': // a setting, as if changed from her menu
@@ -601,14 +581,8 @@ async function boot() {
         capri.hidden = Boolean(cmd.on);
         break;
       case 'act':
-        // behaviours by method name (gaze, celebrate, hurt, shed, peek, fall, wanderStep...) or acts by name
-        if (cmd.act === 'sit') {
-          // pile: n-th window she could sit on from the top of the pile (0: the --dev test window
-          // opened last), instead of the usual choice
-          const top = cmd.pile !== undefined && capri.windows.wins.filter((w) => capri.canSit(w))[cmd.pile];
-          const seat = top ? { win: top, dx: top.w * 0.4 } : capri.pickSeat();
-          if (seat) capri.sitOn(seat);
-        } else if (typeof capri[cmd.act] === 'function') capri[cmd.act](...(cmd.args || []));
+        // her methods by name (celebrate, remind, pulse, wakeHeard...) or motions / acts by name
+        if (typeof capri[cmd.act] === 'function') capri[cmd.act](...(cmd.args || []));
         else capri.perform(cmd.act, cmd.dir || 0);
         break;
       default:
@@ -616,11 +590,9 @@ async function boot() {
     }
   });
 
-  // entrance: her face big in the corner says hi, then she dives down to her spot
-  // (put away last time: she starts in her biochip)
+  // entrance: she unfolds where she was left (first run: her post); put away last time, she starts in her biochip
   if (config.visible === false) capri.stowNow();
-  else if (intro) await capri.intro(capri.spot('post'));
-  else await capri.materialize(capri.spot('post'));
+  else await capri.materialize(knownAnchor ? capri.anchor : capri.spot('post'));
   if (!config.welcomed) host.setConfig({ welcomed: true });
   publishCompanionState();
   host.companionEvent?.('startup');
