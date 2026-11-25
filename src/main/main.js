@@ -599,7 +599,8 @@ function sendGuideFocus(focus) {
   const home = targetDisplay(), other = screen.getAllDisplays().find(d => d.id === focus.displayId);
   const r = focus.rect;
   if (focus.displayId === home.id) overlay.webContents.send('guide:focus', { rect: { x: r.x - home.workArea.x, y: r.y - home.workArea.y, w: r.width, h: r.height } });
-  else if (other) {
+  else if (!other) overlay.webContents.send('guide:focus', null);
+  else {
     const dx = other.bounds.x + other.bounds.width / 2 - (home.bounds.x + home.bounds.width / 2);
     const dy = other.bounds.y + other.bounds.height / 2 - (home.bounds.y + home.bounds.height / 2);
     overlay.webContents.send('guide:focus', { direction: Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down') });

@@ -183,7 +183,7 @@ class CodexTools {
   report(event) { try { this.activity?.(event); } catch { /* an animation never breaks a tool */ } }
   async run(name, args, context) {
     const op = args?.operation ?? args?.action ?? args?.tool ?? null;
-    const shortOp = typeof op === 'string' ? op.slice(0, 40) : null;
+    const shortOp = typeof op === 'string' && /^[a-z][a-z0-9_]{0,39}$/.test(op) ? op : null; // enum-like words only, never free text
     this.report({ tool: name, op: shortOp, phase: 'start' });
     let ok = false;
     try { const result = await this.runTool(name, args, context); ok = true; return result; }

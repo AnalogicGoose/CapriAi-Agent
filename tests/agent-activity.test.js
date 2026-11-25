@@ -29,7 +29,10 @@ test('run reports start and end with only the operation name', async () => {
   assert.equal(events[0].op, null);
   events.length = 0;
   await t.run('capri_body', { action: 'x'.repeat(100) }, ctx);
-  assert.equal(events[0].op.length, 40);
+  assert.equal(events[0].op, null);
+  events.length = 0;
+  await t.run('capri_body', { action: 'Remind me to call Bob' }, ctx);
+  assert.equal(events[0].op, null);
 });
 
 test('a throwing tool reports ok false and still throws; a throwing activity callback is ignored', async () => {

@@ -138,7 +138,43 @@ test('walkthrough reports its target and clears at the end', async () => {
   f.ctl.stop();
   await f.advance(0);
   assert.equal(focus.at(-1), null);
-  assert.doesNotThrow(() => fixture({ extra: { focus: () => { throw Error('x'); } } }).ctl.render([mark], null));
+  const g = fixture({ extra: { focus: () => { throw Error('x'); } } });
+  await assert.doesNotReject(g.ctl.render([mark], null));
+  await g.ctl.render([mark], null);
+  assert.equal(g.s.renders.length, 2, 'rendering continues after a throwing focus');
+});
+
+test('a render finishing after the walkthrough ended sends no stale focus', async () => {
+  const focus = [];
+  let release;
+  const f = fixture({ extra: { focus: e => focus.push(e) } });
+  const t = tools(f.ctl);
+  await t.execute('capri_walkthrough', PLAN, ctx());
+  await f.advance(0);
+  const real = f.ctl.layer.render;
+  f.ctl.layer.render = () => { f.ctl.layer.render = real; return new Promise(resolve => { release = resolve; }); }; // only this one render hangs
+  const late = f.ctl.render([{ id: 'm', kind: 'ring', bounds: box(100, 100, 60, 20) }], null);
+  f.ctl.stop();
+  await f.advance(0);
+  const before = focus.length;
+  assert.equal(focus.at(-1), null);
+  release();
+  await late;
+  assert.equal(focus.length, before, 'the late render must not send focus');
+});
+
+test('replacing a walkthrough does not clear focus; the new target takes over', async () => {
+  const focus = [];
+  const f = fixture({ extra: { focus: e => focus.push(e) } });
+  const t = tools(f.ctl);
+  await t.execute('capri_walkthrough', PLAN, ctx());
+  await f.advance(0);
+  assert.ok(focus.length > 0 && !focus.includes(null));
+  f.ctl.awaiting = true;
+  await t.execute('capri_walkthrough', PLAN, ctx());
+  await f.advance(0);
+  assert.ok(!focus.includes(null));
+  assert.ok(focus.at(-1)?.rect);
 });
 
 test('appName comes from the process table, cached per pid', () => {

@@ -184,7 +184,9 @@ class WalkthroughController {
     const win = this.window && (marks.length || cards.length)
       ? { x: this.window.x, y: this.window.y, width: this.window.width, height: this.window.height } : undefined;
     const scene = layoutScene({ marks, cards, window: win }, { displays, screenToDip: this.screenToDip });
+    const walk = this.current;
     await this.layer.render(scene);
+    if (this.current !== walk) return { cardBounds: null }; // ended or replaced mid-render: draw nothing stale
     let shown = null;
     for (const [id, s] of scene) {
       const placed = s.cards?.[0];
