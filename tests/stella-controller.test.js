@@ -1,5 +1,5 @@
 'use strict';
-const { test } = require('node:test');
+const { test, mock } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadRenderer } = require('./helpers/esm.js');
 
@@ -962,7 +962,7 @@ test('fullscreen progress drives the fold', async () => {
   assert.equal(t.draws[t.draws.length - 1].fold, 0.4);
   const n = t.draws.length;
   stella.fullscreenProgress = 0.7;
-  stella.drawFrame(t.clock.t);
+  stella.drawFrame(t.clock.t + 1);
   assert.equal(t.draws.length, n + 1, 'drawFrame renders at once');
   assert.equal(t.draws[n].fold, 0.7);
   stella.fullscreenProgress = 1;
@@ -999,4 +999,54 @@ test('setView with an unchanged size changes nothing', async () => {
   const route = stella.travel.route;
   stella.setView(1920, 1080);
   assert.equal(stella.travel.route, route, 'not re-planned');
+});
+
+test('a hidden window skips folding away but unfolds always animate', async () => {
+  const t = await make();
+  const { stella } = t;
+  t.step(F, 3);
+  const had = 'document' in globalThis, prev = globalThis.document;
+  globalThis.document = { hidden: true };
+  try {
+    stella.gamingDeparture();
+    assert.equal(stella.fold, 1, 'folding away while unseen is instant');
+    stella.prepareGamingReturn();
+    const arriving = stella.gamingArrival();
+    assert.equal(stella.fold, 1, 'no pop-in: the unfold waits for frames');
+    t.step(F, 10);
+    assert.ok(stella.fold > 0 && stella.fold < 1, 'unfolding');
+    watch(t, () => stella.fold <= 0);
+    await arriving;
+    assert.equal(stella.fold, 0);
+  } finally { if (had) globalThis.document = prev; else delete globalThis.document; }
+});
+
+test('gaming departure resolves within 1100 ms even without frames', async () => {
+  const { stella } = await make();
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    let resolved = false;
+    const departing = stella.gamingDeparture().then(() => { resolved = true; });
+    mock.timers.tick(1099);
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(resolved, false);
+    mock.timers.tick(1);
+    await departing;
+    assert.equal(resolved, true);
+    assert.equal(stella.fold, 1);
+  } finally { mock.timers.reset(); }
+});
+
+test('drawFrame draws once per timestamp', async () => {
+  const t = await make();
+  const { stella } = t;
+  t.step(F, 2);
+  const n = t.draws.length;
+  stella.fullscreen = true; stella.fullscreenProgress = 0.3;
+  stella.drawFrame(t.clock.t); // same `now` the loop just drew
+  assert.equal(t.draws.length, n, 'no second draw for the same frame');
+  stella.drawFrame(t.clock.t + 5);
+  assert.equal(t.draws.length, n + 1);
+  t.step(F);
+  assert.equal(t.draws.length, n + 2);
 });

@@ -287,10 +287,12 @@ export class Stella {
     this.drawFrame(now);
   }
 
-  // Draws one frame now from the last step's state (paused while hidden or folded away), and places her.
+  // Draws one frame now from the last step's state (paused while hidden or folded away; once per `now`), and places her.
   drawFrame(now = this.now()) {
     const d = this.drawn;
-    if (d && !this.hidden && this.fold < 1 && !globalThis.document?.hidden && this.renderer && !this.renderer.lost) {
+    if (d && now !== this.drawnAt && !this.hidden && this.fold < 1 && !globalThis.document?.hidden && this.renderer
+      && !this.renderer.lost) {
+      this.drawnAt = now;
       const t = now / 1000;
       const scene = buildScene({ s: this.size, t, clock: this.clock, blend: this.blend, ...d, fold: this.sceneFold });
       try { this.renderer.draw(scene, t); } catch (error) { console.error?.('Stella: draw failed', error); }

@@ -28,11 +28,13 @@ export const Fold = {
   get foldOpacity() { return 1 - this.fold * this.folding.fade; },
 
   // Eases her own fold toward `target` (1 folded, 0 shown). Resolves true once there, false when
-  // turned around first. Unseen (fullscreen, frozen, window hidden), it just goes there.
+  // turned around first. Unseen (fullscreen, frozen), it just goes there; a hidden window only skips
+  // folding away (right after the overlay shows again it may still report hidden: unfolds always animate).
   foldTo(target, { instant = false } = {}) {
     const f = this.folding;
     if (f.target !== target) { settle(f, false); f.target = target; }
-    if (instant || this.hidden || (this.fullscreenProgress || 0) >= 1 || globalThis.document?.hidden) f.q = target;
+    const unseen = this.hidden || (this.fullscreenProgress || 0) >= 1 || (target === 1 && globalThis.document?.hidden);
+    if (instant || unseen) f.q = target;
     if (f.q === target) { settle(f, true); return Promise.resolve(true); }
     return new Promise(done => f.waiters.push(done));
   },
