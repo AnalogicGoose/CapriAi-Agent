@@ -1,6 +1,6 @@
 # Evidence-backed curiosity
 
-Capri's existing private inquiry engine can now use saved project evidence, in
+Stella's existing private inquiry engine can now use saved project evidence, in
 addition to its original application-pattern detector. It reuses the existing
 Codex cognition adapter, foreground priority, cancellation and conversation
 scheduler. It adds no background executor, filesystem watcher, screenshot capture
@@ -67,7 +67,7 @@ Recognized short statements include:
 Task-outcome feedback needs a recognized project check in the preceding turn or
 a just-delivered project inquiry, within ten minutes and in the selected project.
 Without that anchor it stays session-only. Style feedback is an explicit report
-about Capri's response. Other wording can be handled normally in the conversation;
+about Stella's response. Other wording can be handled normally in the conversation;
 do not assume it was persisted. Only a category is saved, never the message text.
 Duplicate categories are deduplicated for six hours.
 
@@ -90,7 +90,7 @@ dismissal/resolution is respected for thirty days. `/curiosity clear` forgets th
 journal without resetting model/question budgets or immediately reconstructing
 old source events. Feedback has its own clear command.
 
-`capri_curiosity_lookup` lets the foreground model explain the permitted evidence
+`stella_curiosity_lookup` lets the foreground model explain the permitted evidence
 behind a question. It exposes source records and labels hypotheses as tentative,
 not internal reasoning or action authorization. It does not start a model turn or
 collect PC context on its own.

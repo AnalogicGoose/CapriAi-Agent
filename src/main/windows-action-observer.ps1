@@ -2,9 +2,9 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $timer = [Diagnostics.Stopwatch]::StartNew()
 
-if ($env:CAPRI_OBSERVE_ACTION -eq 'workspace') {
+if ($env:STELLA_OBSERVE_ACTION -eq 'workspace') {
     $shell = New-Object -ComObject Shell.Application
-    $expected = $env:CAPRI_OBSERVE_PATH.TrimEnd('\')
+    $expected = $env:STELLA_OBSERVE_PATH.TrimEnd('\')
     do {
         foreach ($window in @($shell.Windows())) {
             try {
@@ -34,13 +34,13 @@ function Media-Key([string]$text) {
     $text.Normalize([Text.NormalizationForm]::FormD).ToLowerInvariant() -replace '[\u2019\x27\p{M}]', '' -replace '[^\p{L}\p{N}]+', ' '
 }
 function Invoke-FirefoxTrack {
-    if ($env:CAPRI_OBSERVE_BROWSER -ne 'Firefox' -or $env:CAPRI_OBSERVE_VIDEO -notmatch '^[\w-]{11}$') { return $false }
+    if ($env:STELLA_OBSERVE_BROWSER -ne 'Firefox' -or $env:STELLA_OBSERVE_VIDEO -notmatch '^[\w-]{11}$') { return $false }
     Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
     $element = [System.Windows.Automation.AutomationElement]
     $kind = [System.Windows.Automation.ControlType]
     $scope = [System.Windows.Automation.TreeScope]::Descendants
     $matchVideo = '^(?:https://)?music\.youtube\.com/watch\?(?:[^#&]+&)*v=' +
-        [regex]::Escape($env:CAPRI_OBSERVE_VIDEO) + '(?:&|$)'
+        [regex]::Escape($env:STELLA_OBSERVE_VIDEO) + '(?:&|$)'
     $edit = [System.Windows.Automation.PropertyCondition]::new($element::ControlTypeProperty, $kind::Edit)
     $document = [System.Windows.Automation.PropertyCondition]::new($element::ControlTypeProperty, $kind::Document)
     $button = [System.Windows.Automation.PropertyCondition]::new($element::ControlTypeProperty, $kind::Button)
@@ -69,9 +69,9 @@ function Invoke-FirefoxTrack {
 }
 $manager = Wait-Operation ($managerType::RequestAsync()) $managerType
 if (!$manager) { return }
-$title = (Media-Key $env:CAPRI_OBSERVE_TITLE).Trim()
-$artist = (Media-Key $env:CAPRI_OBSERVE_ARTIST).Trim()
-$browserPattern = switch ($env:CAPRI_OBSERVE_BROWSER) {
+$title = (Media-Key $env:STELLA_OBSERVE_TITLE).Trim()
+$artist = (Media-Key $env:STELLA_OBSERVE_ARTIST).Trim()
+$browserPattern = switch ($env:STELLA_OBSERVE_BROWSER) {
     'Firefox' { '(^|[.\\/])firefox([.\\/-]|$)' }
     'Google Chrome' { '(^|[.\\/])chrome([.\\/]|$)' }
     'Microsoft Edge' { '(^|[.\\/])msedge([.\\/]|$)' }

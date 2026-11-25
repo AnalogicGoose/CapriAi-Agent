@@ -6,13 +6,13 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const { once } = require('node:events');
-process.env.CAPRI_PORT = '47824';
-const scratch = process.env.CAPRIGPT_SMOKE_ROOT || path.resolve(__dirname, '../.caprigpt-local/smoke');
+process.env.STELLA_PORT = '47824';
+const scratch = process.env.STELLA_SMOKE_ROOT || path.resolve(__dirname, '../.stella-local/smoke');
 fs.mkdirSync(scratch, { recursive: true });
 const personalContextSmoke = process.argv.includes('--personal-context-only');
-process.env.CAPRIGPT_TEST_PROFILE = personalContextSmoke && process.env.CAPRI_MEMORY_SMOKE_PROFILE
-  ? fs.realpathSync(process.env.CAPRI_MEMORY_SMOKE_PROFILE) : fs.mkdtempSync(path.join(scratch, 'caprigpt-smoke-'));
-process.env.CAPRIGPT_CONNECTION_FILE = path.join(process.env.CAPRIGPT_TEST_PROFILE, 'integration.json');
+process.env.STELLA_TEST_PROFILE = personalContextSmoke && process.env.STELLA_MEMORY_SMOKE_PROFILE
+  ? fs.realpathSync(process.env.STELLA_MEMORY_SMOKE_PROFILE) : fs.mkdtempSync(path.join(scratch, 'stella-smoke-'));
+process.env.STELLA_CONNECTION_FILE = path.join(process.env.STELLA_TEST_PROFILE, 'integration.json');
 const memoryPrompts = [];
 if (personalContextSmoke) {
   require('../src/main/ollama-runtime').executable = () => null;
@@ -36,7 +36,7 @@ if (personalContextSmoke) {
         if (prompt.endsWith('I like Black Clover. I have a Steam Deck.')) {
           assert.match(prompt, /"automaticMemory":[^\n]+I like Black Clover/);
           await this.onRequest({ id: 1, method: 'item/tool/call', params: {
-            ...ids, callId: 'redundant-memory-update', tool: 'capri_memory_change',
+            ...ids, callId: 'redundant-memory-update', tool: 'stella_memory_change',
             arguments: { changes: [{ kind: 'add', id: 0, text: 'The user likes Black Clover.' }] },
           } });
           const receipt = JSON.parse(this.toolResult.contentItems[0].text);
@@ -47,7 +47,7 @@ if (personalContextSmoke) {
           assert.match(prompt, /What sport do you play most often\?/);
           assert.match(prompt, /"personalMemory":[^\n]+I spend time on Table tennis/);
           await this.onRequest({ id: 1, method: 'item/tool/call', params: {
-            ...ids, callId: 'save-stated-activity', tool: 'capri_memory_learn',
+            ...ids, callId: 'save-stated-activity', tool: 'stella_memory_learn',
             arguments: { facts: [{ kind: 'activity', detail: 'Table tennis' }] },
           } });
           assert.match(this.toolResult.contentItems[0].text, /"saved":0/);
@@ -107,7 +107,7 @@ if (process.argv.includes('--cognitive-only')) {
   const { CodexBrain } = require('../src/main/codex-brain');
   CodexBrain.prototype.status = async () => ({ ok: true, backend: 'codex', model: 'codex' });
   CodexBrain.prototype.chat = async function(text, delta, progress, options = {}) {
-    if (this.cwd.endsWith('caprigpt-codex-cognition')) {
+    if (this.cwd.endsWith('stella-codex-cognition')) {
       assert.deepEqual(this.tools.specs(), []);
       assert.equal(options.recordHistory, false); assert.ok(options.outputSchema);
       cognitiveSchemaSeen = true;
@@ -143,11 +143,11 @@ if (process.argv.includes('--cognitive-only')) {
     foregroundWorkspace = typeof this.workspace === 'function' ? this.workspace() : this.workspace;
     if (text === 'Remember a routine named Smoke prep: open Notepad and mute') {
       this.tools.beginTurn(text);
-      await assert.rejects(this.tools.run('capri_desktop_step', { tool: 'open_app', query: 'Notepad', index: 0, browser: '' },
+      await assert.rejects(this.tools.run('stella_desktop_step', { tool: 'open_app', query: 'Notepad', index: 0, browser: '' },
         { text, check() {}, signal: new AbortController().signal }), /Teaching a routine saves it only/);
-      const result = await this.tools.run('capri_routines_save', { id: 0, name: 'Smoke prep', scope: 'project', steps: [
+      const result = await this.tools.run('stella_routines_save', { id: 0, name: 'Smoke prep', scope: 'project', steps: [
         { action: 'app', target: 'Notepad', value: '', instruction: 'Open Notepad' },
-        { action: 'setting', target: 'muted', value: 'true', instruction: 'Mute Capri' },
+        { action: 'setting', target: 'muted', value: 'true', instruction: 'Mute Stella' },
       ] }, { text, check() {}, signal: new AbortController().signal });
       assert.equal(result.saved, true); this.tools.endTurn(); this.tools.consumeHistoryReset(); this.history = [];
       delta?.('Saved Smoke prep.'); return 'Saved Smoke prep.';
@@ -155,12 +155,12 @@ if (process.argv.includes('--cognitive-only')) {
     if (text === 'Smoke prep') {
       const ctx = { text, check() {}, signal: new AbortController().signal };
       assert.equal(this.tools.beginTurn(text).name, 'Smoke prep');
-      await this.tools.run('capri_routine_step', { action: 'next', detail: '' }, ctx);
-      await this.tools.run('capri_desktop_step', { tool: 'open_app', query: 'Notepad', index: 0, browser: '' }, ctx);
-      await this.tools.run('capri_routine_step', { action: 'complete', detail: '' }, ctx);
-      await this.tools.run('capri_routine_step', { action: 'next', detail: '' }, ctx);
-      await this.tools.run('capri_settings_change', { patch: '{"muted":true}' }, ctx);
-      const result = await this.tools.run('capri_routine_step', { action: 'complete', detail: '' }, ctx);
+      await this.tools.run('stella_routine_step', { action: 'next', detail: '' }, ctx);
+      await this.tools.run('stella_desktop_step', { tool: 'open_app', query: 'Notepad', index: 0, browser: '' }, ctx);
+      await this.tools.run('stella_routine_step', { action: 'complete', detail: '' }, ctx);
+      await this.tools.run('stella_routine_step', { action: 'next', detail: '' }, ctx);
+      await this.tools.run('stella_settings_change', { patch: '{"muted":true}' }, ctx);
+      const result = await this.tools.run('stella_routine_step', { action: 'complete', detail: '' }, ctx);
       assert.equal(result.status, 'completed'); assert.equal(this.tools.finishRoutine().finished_steps, 2);
       this.tools.endTurn(); delta?.('Smoke prep completed: two steps recorded.'); return 'Smoke prep completed: two steps recorded.';
     }
@@ -173,20 +173,20 @@ if (process.argv.includes('--cognitive-only')) {
     const update = continuityChanges[text];
     if (update) {
       const ctx = { text, check() {}, signal: new AbortController().signal };
-      const data = await this.tools.run('capri_project_lookup', { query: '' }, ctx);
+      const data = await this.tools.run('stella_project_lookup', { query: '' }, ctx);
       const id = update.goal ? data.goals.find(row => row.text === 'Review the handoff').id : 0;
-      const result = await this.tools.run('capri_project_change', { action: update.action, id, text: update.text }, ctx);
+      const result = await this.tools.run('stella_project_change', { action: update.action, id, text: update.text }, ctx);
       assert.equal(result.changed, true);
       this.tools.endTurn(); this.tools.consumeHistoryReset(); this.history = [];
       delta?.(result.receipt); return result.receipt;
     }
     if (text === 'What did we do today?') {
-      const result = await this.tools.run('capri_daily_review', { action: 'today', day: '' },
+      const result = await this.tools.run('stella_daily_review', { action: 'today', day: '' },
         { text, check() {}, signal: new AbortController().signal });
       this.tools.endTurn(); delta?.(result.text); return result.text;
     }
     if (text === 'Why did you ask that?') {
-      const result = await this.tools.run('capri_curiosity_lookup', { id: 0 }, { text, check() {}, signal: new AbortController().signal });
+      const result = await this.tools.run('stella_curiosity_lookup', { id: 0 }, { text, check() {}, signal: new AbortController().signal });
       this.tools.endTurn(); const message = JSON.stringify(result); delta?.(message); return message;
     }
     if (!/goal context probe/i.test(text)) assert.ok(this.history.some(row => row.content.includes('What kind of game')));
@@ -254,7 +254,7 @@ if(compactVoiceSmoke) {
 if(process.argv.includes('--speech-whisper-live')) {
   app.commandLine.appendSwitch('use-fake-device-for-media-stream');
   app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
-  app.commandLine.appendSwitch('use-file-for-fake-audio-capture',path.resolve(__dirname,'../.caprigpt-local/speech-check/recorded-english.wav')+'%noloop');
+  app.commandLine.appendSwitch('use-file-for-fake-audio-capture',path.resolve(__dirname,'../.stella-local/speech-check/recorded-english.wav')+'%noloop');
   require('../src/main/ollama-runtime').executable=()=>null;
   require('../src/main/ollama').models=async()=>[];
   const module=require('../src/main/speech'),Original=module.SpeechInput;
@@ -306,11 +306,11 @@ app.whenReady().then(async () => {
     const win = BrowserWindow.getAllWindows()[0];
     if (win.webContents.isLoading()) await new Promise((r) => win.webContents.once('did-finish-load', r));
     const js = (source) => win.webContents.executeJavaScript(source);
-    for (let i = 0; i < 120 && !await js("document.documentElement.dataset.caprigptReady === 'true'"); i++) await pause(500);
-    assert.equal(await js("document.documentElement.dataset.caprigptReady"), 'true');
+    for (let i = 0; i < 120 && !await js("document.documentElement.dataset.stellaReady === 'true'"); i++) await pause(500);
+    assert.equal(await js("document.documentElement.dataset.stellaReady"), 'true');
     if (dependableActionsSmoke) {
       const route = text => js(`host.personalRoute(${JSON.stringify(text)}, Date.now(), [], false, null, 'dependable-actions-smoke')`);
-      const folder = fs.realpathSync(process.env.CAPRIGPT_TEST_PROFILE);
+      const folder = fs.realpathSync(process.env.STELLA_TEST_PROFILE);
       assert.equal((await route(`/project open ${folder}`)).handled, true);
       const workspace = await route('Open my workspace.');
       assert.equal(workspace.completed, true, workspace.text);
@@ -380,7 +380,7 @@ app.whenReady().then(async () => {
         await send('No spoilers past episode 15.');
         assert.match((await route('Show my topic recaps.')).text, /Black Clover[\s\S]+Asta and Yuno[\s\S]+Through episode 15/);
         const { DatabaseSync } = require('node:sqlite');
-        const recent = new DatabaseSync(path.join(process.env.CAPRIGPT_TEST_PROFILE, 'recent-conversation.sqlite'));
+        const recent = new DatabaseSync(path.join(process.env.STELLA_TEST_PROFILE, 'recent-conversation.sqlite'));
         recent.prepare("UPDATE exchanges SET at=? WHERE user LIKE '%episode 15%' OR user='We were comparing Asta and Yuno.'")
           .run(Date.now() - 8 * 86_400_000);
         recent.close();
@@ -432,7 +432,7 @@ app.whenReady().then(async () => {
         window.chatBlips=0;
         Voice.prototype.play=function(cue,...args){if(cue==='blip')window.chatBlips++;return original.call(this,cue,...args);};
       })()`);
-      win.webContents.send('capri:command',{name:'chat'});
+      win.webContents.send('stella:command',{name:'chat'});
       await until(()=>js("document.querySelector('#panel').classList.contains('is-chat')"),'typed chat');
       await js("document.querySelector('.panel__input').value='Hello';document.querySelector('.panel__chat').requestSubmit()");
       await until(()=>js("document.querySelector('.panel__line').textContent.includes('I am here')"),'typed reply');
@@ -445,7 +445,7 @@ app.whenReady().then(async () => {
           if(voice.ctx)throw Error('Muted blips must not create audio');
           const {Chat}=await import('./js/chat.js');
           const replies=[],blips=[];
-          const chat=new Chat({capri:{},panel:{current:{chat:{mode:'voice'}},stream(){}},
+          const chat=new Chat({stella:{},panel:{current:{chat:{mode:'voice'}},stream(){}},
             voice:{spoken:{enabled:true,updateResponse:t=>replies.push(t)},play:c=>blips.push(c)},
             brain:{},host:{onChatDelta(){}}});
           chat.turn=1;chat.onDelta(1,'Voice reply');
@@ -463,7 +463,7 @@ app.whenReady().then(async () => {
       const beforeWake=compactVoice.spoken.length;
       const blipsBeforeVoice=await js('window.chatBlips');
       await until(()=>speechService.current?.mode==='wake','wake listener');
-      compactVoice.transcripts.push('Hey Capri, hello again.');speechService.enqueue(speechService.current,Buffer.alloc(4000));
+      compactVoice.transcripts.push('Hey Stella, hello again.');speechService.enqueue(speechService.current,Buffer.alloc(4000));
       await until(()=>js("!document.getElementById('voice-indicator').hidden"),'compact microphone');
       await until(()=>compactVoice.spoken.length>beforeWake,'spoken wake reply');
       assert.equal(speechService.current.mode,'conversation');
@@ -511,12 +511,12 @@ app.whenReady().then(async () => {
       for (let i = 0; i < 100 && !await js("document.querySelector('.panel__line').textContent.includes('platformer sounds')"); i++) await pause(50);
       assert.match(await js("document.querySelector('.panel__line').textContent"), /platformer sounds/);
       require('../src/main/config').save({ privacy: { memoryEnabled: true, memoryRecall: true } });
-      assert.match((await route('/goals add Finish Capri roadmap')).text, /Saved goal #1/);
+      assert.match((await route('/goals add Finish Stella roadmap')).text, /Saved goal #1/);
       assert.match((await route('/goals next 1 Review test results')).text, /updated/);
       foregroundContext = null;
       await js("document.querySelector('.panel__input').value='Goal context probe';document.querySelector('.panel__chat').requestSubmit()");
       for (let i = 0; i < 100 && !foregroundContext; i++) await pause(50);
-      assert.equal(foregroundContext.savedContinuity.find(row => row.type === 'goal').text, 'Finish Capri roadmap');
+      assert.equal(foregroundContext.savedContinuity.find(row => row.type === 'goal').text, 'Finish Stella roadmap');
       assert.equal(foregroundContext.savedContinuity.find(row => row.type === 'goal').next_step, 'Review test results');
       assert.equal(foregroundContext.companionInterests[0].focus, 'Map a weather-shaped city');
       require('../src/main/config').save({ privacy: { memoryEnabled: true, memoryRecall: false } });
@@ -527,7 +527,7 @@ app.whenReady().then(async () => {
       assert.deepEqual(foregroundContext.savedContinuity, []);
       assert.match((await route('/goals delete 1')).text, /deleted/);
       require('../src/main/config').save({ privacy: { memoryEnabled: true, memoryRecall: true } });
-      const alpha = path.join(process.env.CAPRIGPT_TEST_PROFILE, 'alpha'), beta = path.join(process.env.CAPRIGPT_TEST_PROFILE, 'beta');
+      const alpha = path.join(process.env.STELLA_TEST_PROFILE, 'alpha'), beta = path.join(process.env.STELLA_TEST_PROFILE, 'beta');
       fs.mkdirSync(alpha); fs.mkdirSync(beta);
       await js('host.openMenu()');
       let controls;
@@ -797,7 +797,7 @@ app.whenReady().then(async () => {
     if(process.argv.includes('--requests-only')) {
       const until=async(check,label)=>{for(let i=0;i<100;i++){if(await check())return;await pause(30);}throw Error('Timed out: '+label);};
       await js('host.setConfig({lang:"en",privacy:{memoryEnabled:false,contextEvents:false}})');
-      win.webContents.send('capri:command',{name:'chat'});
+      win.webContents.send('stella:command',{name:'chat'});
       await until(()=>js("document.querySelector('#panel').classList.contains('is-chat')"),'chat');
       const submit=text=>js(`document.querySelector('.panel__input').value=${JSON.stringify(text)};document.querySelector('.panel__chat').requestSubmit()`);
       await submit('can you open netflix in firefox?');
@@ -824,7 +824,7 @@ app.whenReady().then(async () => {
         return originalFetch(url, options);
       };
       await js('host.setConfig({lang:"en",privacy:{memoryEnabled:false,contextEvents:false,contextTime:false,contextForeground:false,contextProcesses:false,contextPower:false,contextPerformance:false}})');
-      win.webContents.send('capri:command', { name: 'chat' });
+      win.webContents.send('stella:command', { name: 'chat' });
       for (let i = 0; i < 60 && !await js("document.querySelector('#panel').classList.contains('is-chat')"); i++) await pause(50);
       assert.equal(await js("document.querySelector('#panel').classList.contains('is-chat')"), true);
       for (let i = 0; i < 18; i++) {
@@ -850,7 +850,7 @@ app.whenReady().then(async () => {
     if(process.argv.includes('--speech-whisper-live')) {
       const until=async(check,label)=>{for(let i=0;i<700;i++){if(await check())return;await pause(50);}throw Error('Timed out: '+label);};
       win.webContents.on('console-message',event=>{if(event.level==='error')console.error(event.message);});
-      await js("host.setConfig({lang:'en'})");win.webContents.send('capri:command',{name:'memory'});
+      await js("host.setConfig({lang:'en'})");win.webContents.send('stella:command',{name:'memory'});
       await until(()=>js("document.querySelector('#panel').classList.contains('is-chat')"),'chat');
       await js("document.querySelector('.panel__input').value='';document.querySelector('.panel__mic').click()");
       await until(()=>js("/apostle.*middle classes/i.test(document.querySelector('.panel__input').value)"),'actual Whisper transcript through browser audio pipeline');
@@ -866,7 +866,7 @@ app.whenReady().then(async () => {
     if(process.argv.includes('--speech-only')) {
       const until=async(check,label)=>{for(let i=0;i<200;i++){if(await check())return;await pause(20);}throw Error('Timed out: '+label);};
       win.webContents.on('console-message',event=>{if(event.level==='error')console.error(event.message);});
-      await js("host.setConfig({lang:'en'})");win.webContents.send('capri:command',{name:'memory'});
+      await js("host.setConfig({lang:'en'})");win.webContents.send('stella:command',{name:'memory'});
       await until(()=>js("document.querySelector('#panel').classList.contains('is-chat')"),'local chat');
       const click=()=>js("document.querySelector('.panel__mic').click()");
       const listening=()=>js("document.querySelector('.panel__dictation-status').textContent.includes('Listening')");
@@ -888,7 +888,7 @@ app.whenReady().then(async () => {
       await until(()=>speechSessions[1].stopped,'cancel model startup');speechSessions[1].ready();
       await click();await until(()=>speechSessions.length===3,'fresh session');speechSessions[2].ready();await until(listening,'new capture');
       await js("document.querySelector('.panel__close').click()");await until(()=>speechSessions[2].stopped,'chat close');
-      win.webContents.send('capri:command',{name:'memory'});
+      win.webContents.send('stella:command',{name:'memory'});
       await until(()=>js("document.querySelector('#panel').classList.contains('is-chat') && !document.querySelector('#panel').hidden"),'reopen chat');
       await click();await until(()=>speechSessions.length===4,'capture before Gaming mode');speechSessions[3].ready();await until(listening,'capture ready');
       await js('host.setConfig({gamingMode:true})');await until(()=>speechSessions[3].stopped,'Gaming mode stops capture');
@@ -990,10 +990,10 @@ app.whenReady().then(async () => {
       await until(()=>js("!window.fullscreenPet.busy&&window.fullscreenPet.stance!=='fall'"),'drop settles before chat');
       require('../src/main/ollama').models=async()=>['qwen3.5:9b'];
       require('../src/main/ollama').chat=async(request,delta)=>{if(request.schema?.properties?.goals)return JSON.stringify({intent:'chat',message:'',goals:[],steps:[]});delta('Left click restored.');return 'Left click restored.';};
-      win.webContents.send('capri:command',{name:'chat'});
+      win.webContents.send('stella:command',{name:'chat'});
       await until(()=>js("document.querySelector('#panel').classList.contains('is-chat')"),'chat after fullscreen');
       await pause(500);
-      await js("document.querySelector('.panel__input').value='Hello Capri';document.querySelector('.panel__input').dispatchEvent(new Event('input'))");
+      await js("document.querySelector('.panel__input').value='Hello Stella';document.querySelector('.panel__input').dispatchEvent(new Event('input'))");
       const buttonPoint=selector=>js(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})()`);
       await clickAt(await buttonPoint('.panel__send'));
       try { await until(()=>js("document.querySelector('.panel__line').textContent==='Left click restored.'"),'Send button receives left click'); }
@@ -1012,7 +1012,7 @@ app.whenReady().then(async () => {
       assert.equal(await js('window.fullscreenPet.fold < 0.5'),true);
       assert.deepEqual(await js('({...window.fullscreenPet.pos})'),await js('window.beforeClosePos'));
       // A glide may still be running when fullscreen reverses.
-      win.webContents.send('capri:command',{name:'teleport'});
+      win.webContents.send('stella:command',{name:'teleport'});
       fullscreenProbe=fullscreen;await pause(100);fullscreenProbe=null;
       await until(async()=>await shown()&&win.isVisible(),'fullscreen while a glide is in progress');
       await pause(800);
@@ -1029,18 +1029,18 @@ app.whenReady().then(async () => {
       const gaming=on=>controls.webContents.executeJavaScript(`settingsHost.action('gaming',${on})`);
       fullscreenProbe=fullscreen;await until(away,'fullscreen before gaming');
       await gaming(true);assert.equal(win.isVisible(),false);
-      await gaming(false);assert.equal(win.isVisible(),false,'Resuming Gaming mode must not reveal Capri over fullscreen');
+      await gaming(false);assert.equal(win.isVisible(),false,'Resuming Gaming mode must not reveal Stella over fullscreen');
       fullscreenProbe=null;
       await until(async()=>await shown()&&win.isVisible(),'gaming resumes while fullscreen ends');
       await gaming(true);
       fullscreenProbe=fullscreen;await until(async()=>(await state()).active,'fullscreen during Gaming mode');
       await gaming(false);assert.equal(win.isVisible(),false);
       fullscreenProbe=null;await until(async()=>await shown()&&win.isVisible(),'gaming then fullscreen return');
-      // Stella unfolds over ~600 ms (Capri's teleport-in was shorter): wait for her to finish, not a fixed delay.
+      // Stella unfolds over ~600 ms (Stella's teleport-in was shorter): wait for her to finish, not a fixed delay.
       await until(()=>js(`(() => {const p=window.fullscreenPet,r=document.querySelector('#stella');return p.fold===0&&Number(r.style.opacity||1)>0.5&&r.style.visibility!=='hidden';})()`),'Combined gaming/fullscreen transitions leave her visible');
       fullscreenProbe=fullscreen;await until(away,'second departure');
       await js('host.setConfig({visible:false})');
-      win.webContents.send('capri:command',{name:'stow',on:true});
+      win.webContents.send('stella:command',{name:'stow',on:true});
       await until(()=>js('window.fullscreenPet.stowed'),'manual stow while fullscreen');
       fullscreenProbe=null;
       await until(async()=>await shown()&&win.isVisible(),'fullscreen ends with manually stowed pet');
@@ -1062,9 +1062,9 @@ app.whenReady().then(async () => {
       };
       await js('host.setConfig({privacy:{memoryEnabled:true,memoryConfirmChanges:true,contextEvents:false}})');
       const {MemoryStore}=require('../src/main/memory');
-      const store=new MemoryStore(path.join(process.env.CAPRIGPT_TEST_PROFILE,'personal-memory.sqlite'));
+      const store=new MemoryStore(path.join(process.env.STELLA_TEST_PROFILE,'personal-memory.sqlite'));
       store.remember('Gabriel lives in Nicaragua.','explicit',{profile:true});store.close();
-      win.webContents.send('capri:command',{name:'chat'});
+      win.webContents.send('stella:command',{name:'chat'});
       for(let i=0;i<80&&!await js("document.querySelector('#panel').classList.contains('is-chat')");i++)await pause(100);
       await priorityTestAgent.done;priorityTestAgent.lastEvent=-Infinity;
       const background=priorityTestAgent.run('','resume');
@@ -1093,7 +1093,7 @@ app.whenReady().then(async () => {
       };
       await js('host.setConfig({privacy:{memoryEnabled:true,memoryConfirmChanges:false,contextEvents:false}})');
       assert.match((await js('host.personalRoute("remember Uses English and Spanish. Plays Cyberpunk 2077 and WoW.")')).text,/Saved/);
-      win.webContents.send('capri:command',{name:'chat'});
+      win.webContents.send('stella:command',{name:'chat'});
       for(let i=0;i<80&&!await js("document.querySelector('#panel').classList.contains('is-chat')");i++)await pause(100);
       await js("document.querySelector('.panel__input').value='forget about wow. remember i like games and cool coding stuff';document.querySelector('.panel__chat').requestSubmit()");
       for(let i=0;i<100&&await js("document.querySelector('.panel__input').disabled");i++)await pause(100);
@@ -1111,7 +1111,7 @@ app.whenReady().then(async () => {
       ollama.models=async()=>['qwen3.5:9b'];
       ollama.chat=async()=>{modelCalls++;throw Error('Known app requests must bypass model text.');};
       await js('host.setConfig({privacy:{contextEvents:false}})');
-      win.webContents.send('capri:command',{name:'chat'});
+      win.webContents.send('stella:command',{name:'chat'});
       for(let i=0;i<80&&!await js("document.querySelector('#panel').classList.contains('is-chat')");i++)await pause(100);
       const submit=text=>js(`document.querySelector('.panel__input').value=${JSON.stringify(text)};document.querySelector('.panel__chat').requestSubmit()`);
       await submit('can you open my browser?');
@@ -1128,10 +1128,10 @@ app.whenReady().then(async () => {
     }
     if(process.argv.includes('--tasks-ui-live')) {
       await js('host.setConfig({privacy:{contextEvents:false}})');
-      win.webContents.send('capri:command',{name:'chat'});
+      win.webContents.send('stella:command',{name:'chat'});
       for(let i=0;i<80&&!await js("document.querySelector('#panel').classList.contains('is-chat')");i++)await pause(100);
       assert.equal(await js("document.querySelector('#panel').classList.contains('is-chat')"),true);
-      await js("document.querySelector('.panel__input').value='capri look for the best discounts in steam';document.querySelector('.panel__chat').requestSubmit()");
+      await js("document.querySelector('.panel__input').value='stella look for the best discounts in steam';document.querySelector('.panel__chat').requestSubmit()");
       for(let i=0;i<180;i++) {
         if(!await js("document.querySelector('.panel__input').disabled")&&await js("document.querySelector('.panel__line').textContent.includes('Current featured Steam')"))break;
         await pause(500);
@@ -1164,11 +1164,11 @@ app.whenReady().then(async () => {
         return JSON.stringify({intent:steps.length?'act':'unsupported',message:'unsupported',goals,steps});
       };
       const route=text=>js(`host.personalRoute(${JSON.stringify(text)},808)`);
-      assert.match((await route('capri open file explorer')).text,/visible desktop window/);assert.deepEqual(taskEffects.apps,['File Explorer']);
-      assert.match((await route('capri play the newest rubius video in youtube')).text,/^Playing/);assert.deepEqual(taskEffects.played,['abcdefghijk']);
-      assert.match((await route('capri look for the latest news of ai models')).text,/Fresh headlines/);
-      win.webContents.send('capri:command',{name:'memory'});await pause(400);
-      await js("document.querySelector('.panel__input').value='capri look for the best discounts in steam'; document.querySelector('.panel__chat').requestSubmit()");
+      assert.match((await route('stella open file explorer')).text,/visible desktop window/);assert.deepEqual(taskEffects.apps,['File Explorer']);
+      assert.match((await route('stella play the newest rubius video in youtube')).text,/^Playing/);assert.deepEqual(taskEffects.played,['abcdefghijk']);
+      assert.match((await route('stella look for the latest news of ai models')).text,/Fresh headlines/);
+      win.webContents.send('stella:command',{name:'memory'});await pause(400);
+      await js("document.querySelector('.panel__input').value='stella look for the best discounts in steam'; document.querySelector('.panel__chat').requestSubmit()");
       for(let i=0;i<60 && !await js("document.querySelector('.panel__line').textContent.includes('Current featured Steam')");i++)await pause(100);
       assert.match(await js("document.querySelector('.panel__line').textContent"),/75% · 5.00 USD/);
       assert.equal(await js("document.querySelectorAll('.panel__actions [data-id^=source-]').length"),1);
@@ -1293,14 +1293,14 @@ app.whenReady().then(async () => {
       assert.equal(departures,1,'Renderer acknowledges the gaming departure before hiding');
       assert.equal(await js('window.settingsPet.gaming && window.settingsPet.fold >= 1'),true,'Gaming departure leaves her folded away');
       require('electron').ipcMain.removeListener('gaming:animation-ready', departed);
-      assert.equal(controls.isVisible(),true,'Controls remain accessible while Capri is paused');
+      assert.equal(controls.isVisible(),true,'Controls remain accessible while Stella is paused');
       await run("document.querySelector('[data-action-switch=gaming]').click()"); await pause(300);
       assert.equal((await js('host.getConfig()')).gamingMode,false); assert.equal(win.isVisible(),true);
       for(let i=0;i<60 && await js('window.settingsPet.gaming || window.settingsPet.fold > 0');i++) await pause(50);
       assert.equal(await js('!window.settingsPet.gaming && window.settingsPet.fold === 0'),true,'Resume completes the unfold');
       await run("document.querySelector('#close').click()"); await pause(100); assert.equal(controls.isVisible(),false);
       await js('host.openMenu()'); await pause(150); assert.equal(controls.isVisible(),true);
-      win.webContents.send('capri:command',{name:'memory'});
+      win.webContents.send('stella:command',{name:'memory'});
       await pause(2300); // Let the opening listen pose finish.
       const gesture = async (text, expected) => {
         await js(`document.querySelector('.panel__input').value=${JSON.stringify(text)};document.querySelector('.panel__chat').requestSubmit()`);
@@ -1335,7 +1335,7 @@ app.whenReady().then(async () => {
       ollama.chat = async ({ messages, schema }) => {
         inferred++;
         assert.match(messages[0].content, /modifiable local Windows AI agent/);
-        if (!schema) return 'I’m Capri, your local agent.';
+        if (!schema) return 'I’m Stella, your local agent.';
         assert.match(messages[1].content, /observedAt/);
         return JSON.stringify({ kind: 'propose_close', app: 'notepad', message: 'Close Notepad?' });
       };
@@ -1350,7 +1350,7 @@ app.whenReady().then(async () => {
       accepted = true;
       assert.equal((await route(`/agent approve ${id}`)).text, 'App closed.');
       await route(`/agent approve ${id}`); assert.equal(closed, 1);
-      assert.equal((await js('host.chatSend({id:707,messages:[{role:"system",content:"Capri"},{role:"user",content:"Who are you?"}]})')).ok, true);
+      assert.equal((await js('host.chatSend({id:707,messages:[{role:"system",content:"Stella"},{role:"user",content:"Who are you?"}]})')).ok, true);
       assert.equal(inferred, 3);
       ollama.chat = async (_request, _delta, signal) => new Promise((_resolve, reject) => {
         signal.addEventListener('abort', () => reject(signal.reason), { once: true });
@@ -1382,12 +1382,12 @@ app.whenReady().then(async () => {
       };
       const timer = setInterval(sample, 40);
       try {
-        win.webContents.send('capri:command', { name: 'chat' });
+        win.webContents.send('stella:command', { name: 'chat' });
         for (let i = 0; i < 100 && !await js("document.querySelector('#panel').classList.contains('is-chat')"); i++) await pause(100);
         assert.equal(await js("document.querySelector('#panel').classList.contains('is-chat')"), true);
         assert.match(await js("document.querySelector('.panel__tag').textContent"), /v0\.4\.0/);
         const submit = text => js(`document.querySelector('.panel__input').value=${JSON.stringify(text)}; document.querySelector('.panel__chat').requestSubmit();`);
-        await submit('whats openned in my pc capri?');
+        await submit('whats openned in my pc stella?');
         let answer;
         for (let i = 0; i < 100; i++) {
           await pause(100);
@@ -1423,14 +1423,14 @@ app.whenReady().then(async () => {
       assert.equal(identity.contextBackend, 'native-win32');
       assert.equal(identity.currentSource, true);
       assert.equal((await js('host.getConfig()')).privacy.allApps, true);
-      const exactQuestion = await route('whats openned in my pc capri?');
+      const exactQuestion = await route('whats openned in my pc stella?');
       assert.equal(exactQuestion.handled, true);
       assert.match(exactQuestion.text, /^(Open desktop apps|Running app processes|No matching apps)/);
       await js('host.setConfig({privacy:{contextProcesses:false,contextEvents:false}})');
-      assert.match((await route('capri which apps are open rn?')).text, /Running-app context is off/);
+      assert.match((await route('stella which apps are open rn?')).text, /Running-app context is off/);
       assert.match((await route('remember I prefer coffee')).text, /off/);
       await js('host.setConfig({privacy:{memoryEnabled:true,memoryCandidates:true,memoryConfirmChanges:true}})');
-      assert.equal(JSON.parse(fs.readFileSync(path.join(process.env.CAPRIGPT_TEST_PROFILE, 'config.json'), 'utf8')).privacy.memoryEnabled, true);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(process.env.STELLA_TEST_PROFILE, 'config.json'), 'utf8')).privacy.memoryEnabled, true);
       // Verify the native addon also loads inside Electron, with no shell fallback.
       if (process.platform === 'win32') {
         const native = require('../src/main/native-windows');
@@ -1454,7 +1454,7 @@ app.whenReady().then(async () => {
       };
       assert.equal((await js('host.chatSend({id:900,messages:[{role:"system",content:"Persona"},{role:"user",content:"Which tea do I prefer?"}]})')).text, 'Tea.');
       assert.equal(modelCalls, 1);
-      win.webContents.send('capri:command', { name: 'memory' });
+      win.webContents.send('stella:command', { name: 'memory' });
       await pause(500);
       await js(`document.querySelector('.panel__input').value='/memory list'; document.querySelector('.panel__input').form.requestSubmit();`);
       await pause(300);
@@ -1514,11 +1514,11 @@ app.whenReady().then(async () => {
       clearTimeout(limit); app.exit(0); return;
     }
     const hook = async (hook_event_name, extra = {}) => {
-      const child = spawn('node', [path.resolve(__dirname, '../hooks/caprigpt-codex-hook.js'), '--test'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      const child = spawn('node', [path.resolve(__dirname, '../hooks/stella-codex-hook.js'), '--test'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
       let stdout = '';
       child.stdout.on('data', (chunk) => { stdout += chunk; });
       const finished = once(child, 'exit');
-      child.stdin.end(JSON.stringify({ hook_event_name, session_id: 'smoke-codex', turn_id: 'smoke-turn', cwd: 'C:/CapriGPT-test', ...extra }));
+      child.stdin.end(JSON.stringify({ hook_event_name, session_id: 'smoke-codex', turn_id: 'smoke-turn', cwd: 'C:/Stella-test', ...extra }));
       assert.equal((await finished)[0], 0);
       assert.deepEqual(JSON.parse(stdout), {});
       await pause(200);
@@ -1545,8 +1545,8 @@ app.whenReady().then(async () => {
       fs.mkdirSync(path.dirname(capture), { recursive: true });
       fs.writeFileSync(capture, (await win.webContents.capturePage(bounds)).toPNG());
     }
-    // This is the same status handler used when clicking Capri.
-    win.webContents.send('capri:command', { name: 'status' });
+    // This is the same status handler used when clicking Stella.
+    win.webContents.send('stella:command', { name: 'status' });
     await pause(900);
     assert.match(await js("document.querySelector('.panel__line').textContent"), /Codex is working|Codex está trabajando/);
     assert.equal(await js("document.querySelector('#panel').dataset.kind"), 'work');
@@ -1556,7 +1556,7 @@ app.whenReady().then(async () => {
     assert.equal(waiting.lastSeen, null, 'Test events must not claim real Codex connection');
     assert.doesNotMatch(JSON.stringify(waiting), /NEVER_FORWARD_THIS/);
     assert.match(await waitForApproval(), /approval|aprobación/);
-    assert.equal(await js("document.querySelector('.panel__actions').children.length"), 0, 'No approval button in Capri');
+    assert.equal(await js("document.querySelector('.panel__actions').children.length"), 0, 'No approval button in Stella');
     const integrationCapture = path.resolve(__dirname, '..', 'captures', 'codex-notifications.png');
     fs.mkdirSync(path.dirname(integrationCapture), { recursive: true });
     fs.writeFileSync(integrationCapture, (await win.webContents.capturePage()).toPNG());
@@ -1575,7 +1575,7 @@ app.whenReady().then(async () => {
     // Open chat via the activity panel's Talk action, not a separate tray command.
     await pause(2800); // allow the earlier completion message's priority hold to expire
     await hook('UserPromptSubmit', { turn_id: 'chat-live' });
-    win.webContents.send('capri:command', { name: 'status' });
+    win.webContents.send('stella:command', { name: 'status' });
     await pause(500);
     await js("document.querySelector('.panel__actions [data-id=\"talk\"]').click()");
     await pause(2000);
@@ -1618,7 +1618,7 @@ app.whenReady().then(async () => {
     const loaded = await (await fetch(`${require('../src/main/ollama').base()}/api/ps`)).json();
     assert.equal(loaded.models.some((m) => m.name === status.model), false, 'Model still loaded');
     await hook('PermissionRequest', { turn_id: 'paused-turn', tool_name: 'Bash' });
-    assert.equal(win.isVisible(), false, 'Notification must not reveal Capri during gaming');
+    assert.equal(win.isVisible(), false, 'Notification must not reveal Stella during gaming');
     await gaming.click({ checked: false });
     assert.equal(win.isVisible(), true);
     assert.match(await waitForApproval(), /approval|aprobación/, 'Outstanding approval should be visible after resume');

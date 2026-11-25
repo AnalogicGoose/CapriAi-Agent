@@ -14,8 +14,8 @@ const clean = (text, max = 1000) => {
 const SETTINGS = ['muted', 'volume', 'scale', 'lang', 'wander', 'possess', 'windowTracking', 'idleAnimations',
   'cursorInteractions', 'personality', 'dailyRoutine', 'surpriseAnimations', 'ttsEnabled'];
 const ACTIONS = ['app', 'url', 'setting', 'command', 'task'];
-const EFFECTS = ['capri_body', 'capri_input', 'capri_settings_change', 'capri_desktop_step', 'capri_close_app', 'capri_control'];
-const READS = ['capri_screen', 'capri_context', 'capri_apps', 'capri_settings_read', 'capri_approval', 'capri_window_controls'];
+const EFFECTS = ['stella_body', 'stella_input', 'stella_settings_change', 'stella_desktop_step', 'stella_close_app', 'stella_control'];
+const READS = ['stella_screen', 'stella_context', 'stella_apps', 'stella_settings_read', 'stella_approval', 'stella_window_controls'];
 function steps(value) {
   if (!Array.isArray(value) || !value.length || value.length > 8) throw Error('A routine needs one to eight ordered steps.');
   const result = value.map(step => {
@@ -39,7 +39,7 @@ function steps(value) {
   return result;
 }
 function direct(text) {
-  return key(text).replace(/^(?:hey\s+)?(?:stella|stela|capri)(?:[,!:.]\s*|\s+|$)/, '').replace(/^(?:(?:please|can you|could you|would you|por favor|puedes)\s+)+/, '');
+  return key(text).replace(/^(?:hey\s+)?(?:stella|stela)(?:[,!:.]\s*|\s+|$)/, '').replace(/^(?:(?:please|can you|could you|would you|por favor|puedes)\s+)+/, '');
 }
 function recoveryTarget(text) {
   if (typeof text !== 'string' || text.length > 200) return undefined;
@@ -110,7 +110,7 @@ class ReusableRoutines {
   }
   invocation(text) {
     if (typeof text !== 'string' || text.length > 200) return null;
-    const politeRun = /^(?:(?:hey\s+)?(?:stella|stela|capri)[,!:.]?\s*)?(?:please\s+)?(?:can|could|would) you\s+(?:please\s+)?(?:run|start|execute|do|use)\b/i.test(text.trim());
+    const politeRun = /^(?:(?:hey\s+)?(?:stella|stela)[,!:.]?\s*)?(?:please\s+)?(?:can|could|would) you\s+(?:please\s+)?(?:run|start|execute|do|use)\b/i.test(text.trim());
     const raw = direct(text).replace(politeRun ? /[.!?]+$/ : /[.!]+$/, '');
     if (/\?|^(?:if|what|how|why|should|don't|do not|never|imagine|pretend|no\b)/.test(raw) || raw.startsWith('/')) return null;
     let name = raw.replace(/^(?:run|start|execute|do|use|inicia|ejecuta|haz|usa)\s+/, '')
@@ -268,25 +268,25 @@ class RoutineSession {
     if (!EFFECTS.includes(name)) return;
     const step = this.step(); if (!step) throw Error('Start the next routine step before performing an action.');
     if (step.action === 'task') {
-      if (name === 'capri_settings_change' && Object.keys(JSON.parse(args.patch)).some(key => !SETTINGS.includes(key))) throw Error('Routines cannot change access, memory, startup or routine controls.');
+      if (name === 'stella_settings_change' && Object.keys(JSON.parse(args.patch)).some(key => !SETTINGS.includes(key))) throw Error('Routines cannot change access, memory, startup or routine controls.');
       return;
     }
-    if (step.action === 'app' && name === 'capri_desktop_step' && args.tool === 'open_app' && key(args.query) === key(step.target)) return;
-    if (step.action === 'url' && name === 'capri_desktop_step' && args.tool === 'open_url' && publicUrl(args.query) === step.target && key(args.browser || 'default') === key(step.value || 'default')) return;
-    if (step.action === 'setting' && name === 'capri_settings_change') {
+    if (step.action === 'app' && name === 'stella_desktop_step' && args.tool === 'open_app' && key(args.query) === key(step.target)) return;
+    if (step.action === 'url' && name === 'stella_desktop_step' && args.tool === 'open_url' && publicUrl(args.query) === step.target && key(args.browser || 'default') === key(step.value || 'default')) return;
+    if (step.action === 'setting' && name === 'stella_settings_change') {
       const patch = JSON.parse(args.patch);
       if (Object.keys(patch).length === 1 && JSON.stringify(patch[step.target]) === step.value) return;
     }
     throw Error('That action does not match the active saved routine step.');
   }
   observeTool(name, result) {
-    if (!this.active || ![...EFFECTS, 'capri_screen', 'capri_context'].includes(name)) return;
+    if (!this.active || ![...EFFECTS, 'stella_screen', 'stella_context'].includes(name)) return;
     const failed = result?.completed === false || result?.changed === false || result?.ok === false ||
-      (name === 'capri_control' && result?.dispatched !== true);
+      (name === 'stella_control' && result?.dispatched !== true);
     if (failed) {
       this.failStep(result.text || result.reason); return;
     }
-    const success = name === 'capri_desktop_step' ? result?.completed === true : name === 'capri_settings_change' ? result?.changed === true : Boolean(result);
+    const success = name === 'stella_desktop_step' ? result?.completed === true : name === 'stella_settings_change' ? result?.changed === true : Boolean(result);
     if (success) this.proofs.push({ kind: 'local-tool', tool: name, success: true });
   }
   failStep(reason) {
@@ -327,7 +327,7 @@ class RoutineSession {
       if (this.active || this.index >= this.row.steps.length) throw Error('Finish the current routine step first.');
       const step = this.row.steps[this.index];
       // Concrete consequential commands get the existing native review surface;
-      // other consequential effects still use capri_approval and normal policies.
+      // other consequential effects still use stella_approval and normal policies.
       if (step.action === 'command' && /(?:^|[;&|]\s*)(?:remove-item|rm|rmdir|del|erase|format(?:\.com)?|shutdown|stop-process|taskkill)(?:\s|$)|(?:^|[;&|]\s*)git\s+(?:push|reset|clean)\b|\bcurl\b.*(?:--data|-d\b|-X\s*POST)/i.test(step.target)) {
         if (!await confirm('Run this routine command?', `Routine: ${this.row.name}\nCommand: ${step.target}\nWorkspace: ${this.workspace || 'current Codex workspace'}`)) { this.stop('stopped'); return this.receipt(); }
         check(); this.validate();
@@ -339,7 +339,7 @@ class RoutineSession {
     }
     if (action !== 'complete' || !this.active) throw Error('No active routine step to complete.');
     const step = this.step();
-    const needed = { app: 'capri_desktop_step', url: 'capri_desktop_step', setting: 'capri_settings_change', command: 'native-command' }[step.action];
+    const needed = { app: 'stella_desktop_step', url: 'stella_desktop_step', setting: 'stella_settings_change', command: 'native-command' }[step.action];
     if (!this.proofs.some(proof => needed ? proof.tool === needed || proof.kind === needed : proof.success)) throw Error('No matching successful execution receipt for this step. Perform and check it first.');
     this.results.push({ step: this.index + 1, action: step.action, result: stepResult[step.action] });
     this.index++; this.active = false;

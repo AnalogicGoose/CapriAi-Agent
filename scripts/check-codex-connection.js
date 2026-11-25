@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const { connectionFile } = require('../hooks/caprigpt-codex-hook');
+const { connectionFile } = require('../hooks/stella-codex-hook');
 async function check() {
   const file = connectionFile();
   const config = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -10,10 +10,10 @@ async function check() {
   let delivery = null;
   try { delivery = JSON.parse(fs.readFileSync(path.join(path.dirname(file), 'codex-hook-status.json'), 'utf8')); } catch {}
   if (response.status === 404) {
-    console.log(JSON.stringify({ capri: 'Running build predates the detailed status endpoint; restart Capri when convenient.', lastHookDelivery: delivery }, null, 2));
+    console.log(JSON.stringify({ stella: 'Running build predates the detailed status endpoint; restart Stella when convenient.', lastHookDelivery: delivery }, null, 2));
     return;
   }
-  if (!response.ok) throw Error(`Capri connection returned HTTP ${response.status}`);
-  console.log(JSON.stringify({ capri: await response.json(), lastHookDelivery: delivery }, null, 2));
+  if (!response.ok) throw Error(`Stella connection returned HTTP ${response.status}`);
+  console.log(JSON.stringify({ stella: await response.json(), lastHookDelivery: delivery }, null, 2));
 }
 check().catch((error) => { console.error(error.message); process.exitCode = 1; });

@@ -1,12 +1,12 @@
 'use strict';
-// Brief isolated fixture window; no live Capri profile or chat submission.
+// Brief isolated fixture window; no live Stella profile or chat submission.
 const { app, BrowserWindow, Menu } = require('electron');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { installChatSpelling } = require('../src/main/chat-spelling');
-app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'capri-spelling-')));
+app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'stella-spelling-')));
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 500, height: 160,
     webPreferences: { backgroundThrottling: false, spellcheck: true, sandbox: true } });

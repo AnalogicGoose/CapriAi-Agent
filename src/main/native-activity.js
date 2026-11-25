@@ -1,7 +1,7 @@
 'use strict';
 // The AI's own built-in tools (web search, shell commands, file edits, image views) don't go through
-// Capri's tool list, so Stella would never see them. This turns one of those items into the same short
-// activity Capri's tools report: a fixed tool name and op, never the query, command or any argument.
+// Stella's tool list, so Stella would never see them. This turns one of those items into the same short
+// activity Stella's tools report: a fixed tool name and op, never the query, command or any argument.
 
 const LAUNCH = /(?:^|[\s"'(;&|])(?:start(?:-process)?|explorer(?:\.exe)?|invoke-item|ii)(?=[\s"']|$)/i;
 

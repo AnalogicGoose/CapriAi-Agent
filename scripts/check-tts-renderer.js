@@ -8,14 +8,14 @@ app.whenReady().then(async () => {
   try {
     const {SpeechOutput} = require('../src/main/tts');
     const engine = new SpeechOutput({root:path.join(__dirname,'..'),config:()=>({ttsEnabled:true,ttsEngine:'windows'}),allowed:()=>true});
-    const generated = await engine.speak({text:'Hey, I am Capri. The local voice pipeline is ready.'});
+    const generated = await engine.speak({text:'Hey, I am Stella. The local voice pipeline is ready.'});
     if (!generated.ok) throw Error(generated.error);
-    const output = path.join(__dirname,'../.caprigpt-local/tts-check');
+    const output = path.join(__dirname,'../.stella-local/tts-check');
     fs.mkdirSync(output,{recursive:true});
     fs.writeFileSync(path.join(output,'windows.wav'),Buffer.from(generated.audio,'base64'));
     await win.loadFile(path.join(__dirname,'../src/renderer/index.html'));
     const source = fs.readFileSync(path.join(__dirname,'../src/renderer/js/speech-output.js'),'utf8').replace('export class SpeechPlayer','class SpeechPlayer');
-    const audio = fs.readFileSync(path.join(__dirname,'../.caprigpt-local/tts-check/windows.wav')).toString('base64');
+    const audio = fs.readFileSync(path.join(__dirname,'../.stella-local/tts-check/windows.wav')).toString('base64');
     const result = await win.webContents.executeJavaScript(`(async()=>{
       ${source}
       let started=0,levels=0,stopped=0;

@@ -32,7 +32,7 @@ jobs:
         with:
           name: verified-windows-x64
           path: |
-            dist/Capri-Setup-*.exe
+            dist/Stella-Setup-*.exe
             dist/SHA256SUMS.txt
             dist/release-manifest.json
           if-no-files-found: error
@@ -61,6 +61,6 @@ jobs:
           # List must succeed; API/auth failure is not treated as an absent release.
           existing=$(gh api --paginate "repos/$GH_REPO/releases" --jq ".[] | select(.tag_name == \"$TAG\") | .id")
           test -z "$existing" || { echo 'Release already exists; inspect it manually.'; exit 1; }
-          args=(--draft --verify-tag --title "Capri $TAG · Windows x64" --notes-file "releases/$TAG.md")
+          args=(--draft --verify-tag --title "Stella $TAG · Windows x64" --notes-file "releases/$TAG.md")
           if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi
           gh release create "$TAG" release-assets/* "${args[@]}"

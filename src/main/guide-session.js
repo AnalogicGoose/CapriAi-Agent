@@ -24,7 +24,7 @@ function layoutTarget(laid, displays) {
   return null;
 }
 
-// capri_draw's schema requires every field, so the tool uses empty values for "none":
+// stella_draw's schema requires every field, so the tool uses empty values for "none":
 // to [] (or one target for an arrow), nth 0. Empty id/text/title are already treated as absent by validateDraw.
 function fromTool(args) {
   if (!args || typeof args !== 'object' || !Array.isArray(args.marks)) return args;
@@ -51,7 +51,7 @@ class GuideSession {
     // foreground is the raw foreground window; windows of ownPid (her overlay, chat panel, guide layer) never own a drawing.
     // allowed(): a new drawing may start. keep(): a drawing already shown may stay. They differ in Gaming mode: a drawing
     // the user asked for by voice outlives that voice session (Gaming mode turning on clears it explicitly in main).
-    // onDrawn(laid): after each capri_draw that shows something, with the laid-out scene (see layoutTarget).
+    // onDrawn(laid): after each stella_draw that shows something, with the laid-out scene (see layoutTarget).
     Object.assign(this, { targets, layer, layout, foreground, now, every, stopEvery, allowed, keep, ownPid, yieldFocus, gate, onDrawn });
     this.marks = new Map(); // id -> { id, kind, target, to?, text?, bounds, toBounds? }
     this.cards = [];
@@ -68,7 +68,7 @@ class GuideSession {
 
   get active() { return Boolean(this.window && (this.marks.size || this.cards.length)); }
 
-  // Codex calls capri_draw one at a time per turn, but serialize anyway so drawings never interleave.
+  // Codex calls stella_draw one at a time per turn, but serialize anyway so drawings never interleave.
   draw(args, ctx = {}) {
     const run = this.queue.then(() => this.drawNow(args, ctx));
     this.queue = run.catch(() => {});
@@ -157,7 +157,7 @@ class GuideSession {
 
   // Layer calls can reject (a guide window replaced mid-load). Log, never throw into timers.
   settle(fn) {
-    const log = () => console.error('[capri] Could not update the on-screen guide.');
+    const log = () => console.error('[stella] Could not update the on-screen guide.');
     try {
       const result = fn();
       if (result && typeof result.then === 'function') result.then(undefined, log);
@@ -177,7 +177,7 @@ class GuideSession {
   // Runs inside setInterval: never throws; a failure (e.g. a native call) clears the drawing.
   check() {
     try { this.checkNow(); } catch {
-      console.error('[capri] The on-screen guide check failed; clearing it.');
+      console.error('[stella] The on-screen guide check failed; clearing it.');
       this.clear('error');
     }
   }

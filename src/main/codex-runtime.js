@@ -9,7 +9,7 @@ function executable(explicit = '', env = process.env) {
     try { return typeof file === 'string' && path.isAbsolute(file)
       && path.basename(file).toLowerCase() === name && fs.statSync(file).isFile(); } catch { return false; }
   };
-  const candidates = [explicit, env.CAPRIGPT_CODEX_EXE,
+  const candidates = [explicit, env.STELLA_CODEX_EXE,
     env.CODEX_ELECTRON_RESOURCES_PATH && path.join(env.CODEX_ELECTRON_RESOURCES_PATH, name),
     ...(env.PATH || '').split(path.delimiter).filter(Boolean).map(dir => path.join(dir, name))];
   const found = candidates.find(valid);

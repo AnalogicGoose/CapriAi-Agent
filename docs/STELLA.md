@@ -1,7 +1,7 @@
 # Stella
 
 Stella is the on-screen character of the assistant. She replaced the old sprite character
-(the retired Capri renderer, see [ANIMATIONS.md](../ANIMATIONS.md)). Her code lives in
+(the retired Stella renderer, see [ANIMATIONS.md](../ANIMATIONS.md)). Her code lives in
 `src/renderer/js/stella/`; `src/renderer/js/app.js` creates her on `#stella` / `#stella-canvas`.
 Voice, personality, memory and abilities are unchanged. The design is in
 [the spec](superpowers/specs/2026-11-24-stella-character-design.md); the visual reference is
@@ -58,7 +58,7 @@ Put away (Ctrl+Alt+C), a game, or a fullscreen app on her display: her points re
 | Web / news search, Steam deals, YouTube lookup | One stick lights up and sweeps around like a radar |
 | Read screen, files, context | A scan line passes down through the globe |
 | Type / click / desktop steps | Quick ticks of light run along the sticks |
-| Point / highlight (`capri_point`) | She glides beside the outlined control and aims her nearest blade at it until the outline goes (8 s, or the window moves), then heads back. A screenshot highlight (`capri_point_on_snapshot`) only scans |
+| Point / highlight (`stella_point`) | She glides beside the outlined control and aims her nearest blade at it until the outline goes (8 s, or the window moves), then heads back. A screenshot highlight (`stella_point_on_snapshot`) only scans |
 | Walkthrough / visual guide | Point, held for each step; she sits beside the target, never over it or its highlight, then returns to her band |
 | Draw on screen | A short stream of LED dots runs from her toward what was drawn (toward the middle of her display until the drawing is placed, or toward the edge of another display); she stays where she is |
 | Reminder due | Ring pulses brightly three times; she drifts a little toward the center (outside the forbidden zone) |
@@ -69,7 +69,7 @@ Put away (Ctrl+Alt+C), a game, or a fullscreen app on her display: her points re
 | Music playing | Blades pulse gently for 45 s after she starts music or a video (a fixed time; it doesn't follow the actual playback) |
 | Wake word heard | Quick brighten and turn toward listening |
 
-`capri_body` actions (the reply comes as soon as she starts; nothing waits for her to arrive): `come` glides toward the cursor (stops at the center zone's edge), `nap` rests (dimmed, no wandering) until `wake`, `mood` and `wave` give soft pulses, `dance` a spin burst, `stretch` a breath pulse, `sit`/`stand` a short reply that she no longer sits. Put away, in a game or folded, she does nothing and says she's tucked away. With no working renderer (none, or its context lost for more than a second) she can't be clicked or dragged, so there's no invisible target on screen.
+`stella_body` actions (the reply comes as soon as she starts; nothing waits for her to arrive): `come` glides toward the cursor (stops at the center zone's edge), `nap` rests (dimmed, no wandering) until `wake`, `mood` and `wave` give soft pulses, `dance` a spin burst, `stretch` a breath pulse, `sit`/`stand` a short reply that she no longer sits. Put away, in a game or folded, she does nothing and says she's tucked away. With no working renderer (none, or its context lost for more than a second) she can't be clicked or dragged, so there's no invisible target on screen.
 
 Removed pet behaviors (teleporting, sitting, window perching and possession, gestures, falling, cut-ins) are not coming back; the settings that controlled them have no effect.
 
@@ -80,7 +80,7 @@ Look constants (counts, widths, colors, speeds, LED size, sheen) are in `src/ren
 ## Checks
 
 - `npm test` runs the unit tests (including `tests/stella-*.test.js`).
-- `npm run test:stella` runs `scripts/check-stella.js`: an isolated hidden-window check of the painter, renderer, performance, context loss and the real overlay page with a stub host. Output and a pose gallery go to `.caprigpt-local/stella-check`.
+- `npm run test:stella` runs `scripts/check-stella.js`: an isolated hidden-window check of the painter, renderer, performance, context loss and the real overlay page with a stub host. Output and a pose gallery go to `.stella-local/stella-check`.
 - `npm run test:settings`, `npm run test:layout` and `node_modules/electron/dist/electron.exe scripts/smoke-electron.js --fullscreen-only` are isolated end-to-end checks (own test profile) that exercise her in the real overlay.
 
 ## UI (project 2: Orbit)
@@ -94,5 +94,5 @@ hairline, round icon buttons (30 / 34 / 46 px, icons centered by grid) and a war
 - **Links:** `host.openLink` → `link:open` (main, `link-open.js`) → `publicUrl()` check → preferred browser.
   The overlay window itself never navigates.
 - **Control room:** see `CONTROL-ROOM.md`.
-- **Name:** `DISPLAY_NAME` is Stella; "Hey Stella" wakes her. "Capri" still works quietly as an alias
+- **Name:** `DISPLAY_NAME` is Stella; "Hey Stella" wakes her. "Stella" still works quietly as an alias
   (`NAME_ALIASES`, wake phrase) until the rename project.

@@ -6,7 +6,7 @@ const http = require('node:http');
 const { fromHook } = require('../src/main/codex-events');
 
 function connectionFile() {
-  return process.env.CAPRIGPT_CONNECTION_FILE || path.resolve(__dirname, '..', '.caprigpt-local', 'integration.json');
+  return process.env.STELLA_CONNECTION_FILE || path.resolve(__dirname, '..', '.stella-local', 'integration.json');
 }
 function record(status) {
   try {

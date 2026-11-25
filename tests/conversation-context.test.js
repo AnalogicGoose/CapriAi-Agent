@@ -13,7 +13,7 @@ async function renderer() {
 function controller(Chat, host = {}) {
   return new Chat({
     panel: { setChatBusy() {}, setActions() {}, chatTurn() {}, stream() {}, setFace() {} },
-    capri: { pulse() {} }, voice: {},
+    stella: { pulse() {} }, voice: {},
     brain: { lang: 'en', t: { chat: {} }, context: () => 'No observations supplied.' },
     host: { onChatDelta() {}, personalRoute: async () => ({ handled: false }), focusOverlay() {}, chatStop() {}, ...host },
   });
@@ -58,7 +58,7 @@ test('crowded prompts quote relevant earlier user constraints and corrections, k
 });
 
 test('Unicode and oversized current messages cannot silently truncate the latest request', () => {
-  const messages = [{ role: 'system', content: 'Capri' }, { role: 'user', content: '你'.repeat(700) }];
+  const messages = [{ role: 'system', content: 'Stella' }, { role: 'user', content: '你'.repeat(700) }];
   assert.throws(() => packConversation(messages, { context: 3000, reply: 500 }), /too long/);
   assert.deepEqual(packConversation(messages, { context: 5000, reply: 500 }).at(-1), messages.at(-1));
   assert.throws(() => validateMessages(Array(258).fill({ role: 'user', content: 'x' })), /Invalid/);

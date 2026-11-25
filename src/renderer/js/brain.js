@@ -1,4 +1,4 @@
-// Turns Claude Code hook events into things Capri says and does.
+// Turns Claude Code hook events into things Stella says and does.
 
 import { LINES } from './lines.js';
 import { pick, fmt, duration, basename, rand } from './util.js';
@@ -15,8 +15,8 @@ const THINK_SAY = 40000;
 const THINK_LONG = 120000;
 
 export class Brain {
-  constructor({ capri, panel, voice, host, mission, lang = 'fr', generatedDialogue = false }) {
-    this.capri = capri;
+  constructor({ stella, panel, voice, host, mission, lang = 'fr', generatedDialogue = false }) {
+    this.stella = stella;
     this.panel = panel;
     this.voice = voice;
     this.host = host;
@@ -69,7 +69,7 @@ export class Brain {
 
   handle(evt) {
     // the demo's second half (scripts/demo-sequence.js), not a Claude event
-    if (evt.hook_event_name === 'CapriShowcase') return this.onShowcase?.();
+    if (evt.hook_event_name === 'StellaShowcase') return this.onShowcase?.();
     // the first real Claude Code event that ever reaches her (the demo's don't count)
     if (!this.linked && !evt.demo) {
       this.linked = true;
@@ -78,16 +78,16 @@ export class Brain {
     const s = this.session(evt);
     const name = evt.hook_event_name;
     // these three put her somewhere themselves; anything else just brings her out of hiding
-    if (name === 'UserPromptSubmit' || name === 'Stop' || name === 'Notification') this.capri.wake();
-    else this.capri.attend();
+    if (name === 'UserPromptSubmit' || name === 'Stop' || name === 'Notification') this.stella.wake();
+    else this.stella.attend();
 
     // anything happening after a permission prompt means it was answered
     if (s.waiting && name !== 'Notification') {
       s.waiting = false;
       this.panel.clearKind('alert');
-      if (s.pointedAt) this.capri.stopPointing(); // she was showing you Claude's window
+      if (s.pointedAt) this.stella.stopPointing(); // she was showing you Claude's window
       s.pointedAt = false;
-      if (this.capri.mode === 'alert') this.capri.setMode(s.working ? 'work' : 'idle');
+      if (this.stella.mode === 'alert') this.stella.setMode(s.working ? 'work' : 'idle');
     }
 
     switch (name) {
@@ -110,16 +110,16 @@ export class Brain {
     if (evt.source === 'clear' || evt.source === 'compact') return;
     const lines = evt.source === 'resume' ? this.t.resume : this.t.hello;
     this.voice.play('hello');
-    this.capri.perform('curious', this.capri.towardCenter());
+    this.stella.perform('curious', this.stella.towardCenter());
     this.say('info', fmt(pick(lines), { project: s.project }), s, { face: pick(['grin', 'look']), hold: 5000 });
   }
 
   onPrompt(evt, s) {
     // the window in front when you send a prompt is the one you typed it in: Claude's
-    const window = this.capri.windows.fg || null;
+    const window = this.stella.windows.fg || null;
     Object.assign(s, { taskStart: Date.now(), count: 0, files: new Set(), log: [], working: true, window });
     this.tally(evt)?.prompt(s.project);
-    this.capri.goToWork(); // perched on the window in front if she can, else her corner
+    this.stella.goToWork(); // perched on the window in front if she can, else her corner
     const prompt = String(evt.prompt || '').replace(/\s+/g, ' ').trim();
     this.say('work', pick(this.t.prompt), s, { quote: prompt ? clip(prompt, 110) : '', hold: 4500 });
     this.watchThinking();
@@ -153,12 +153,12 @@ export class Brain {
     this.panel.setTicker({ verb: t.verb, target: duration(quiet, this.lang), thinking: true });
 
     const now = performance.now();
-    if (now > th.fidget && !this.capri.stowed) {
+    if (now > th.fidget && !this.stella.stowed) {
       th.fidget = now + rand(9000, 16000);
       // once in a long think she looks up at the satellite; otherwise a little something
-      const gazed = !th.gazed && quiet > 25000 && this.capri.gaze({ big: false });
+      const gazed = !th.gazed && quiet > 25000 && this.stella.gaze({ big: false });
       if (gazed) th.gazed = true;
-      else this.capri.reactToAction('think');
+      else this.stella.reactToAction('think');
     }
     if (th.said < 1 && quiet >= THINK_SAY) {
       th.said = 1;
@@ -182,10 +182,10 @@ export class Brain {
       const file = evt.tool_input?.file_path || evt.tool_input?.notebook_path;
       if (file) s.files.add(file);
     }
-    if (this.capri.mode !== 'alert') this.capri.setMode('work');
-    this.capri.pulse();
-    this.capri.reactToTool?.(evt.tool_name);
-    if (HACKING_TOOLS.has(evt.tool_name)) this.capri.spark(); // red sparks: she's in the system
+    if (this.stella.mode !== 'alert') this.stella.setMode('work');
+    this.stella.pulse();
+    this.stella.reactToTool?.(evt.tool_name);
+    if (HACKING_TOOLS.has(evt.tool_name)) this.stella.spark(); // red sparks: she's in the system
     this.panel.setTicker(action);
     if (this.panel.current?.kind === 'work') this.panel.updateLog(s.log);
     if (s.count % WORKING_EVERY === 0) {
@@ -204,7 +204,7 @@ export class Brain {
     const lines = String(evt.error || '').split('\n').map((l) => l.trim()).filter(Boolean);
     const firstLine = lines.find((l) => !/^exit code \d+$/i.test(l)) || lines[0] || '';
     this.tally(evt)?.error();
-    this.capri.hurt();
+    this.stella.hurt();
     this.voice.play('error');
     this.say('error', fmt(pick(this.t.error), { tool: evt.tool_name || 'outil' }), s, {
       face: pick(['laugh', 'wide']), // a failure: she laughs at the chaos, or it caught her off guard
@@ -218,22 +218,22 @@ export class Brain {
     if (type === 'permission_prompt' || type === 'elicitation_dialog' || type === 'agent_needs_input') {
       s.waiting = true;
       this.tally(evt)?.approval();
-      this.capri.setMode('alert');
+      this.stella.setMode('alert');
       this.voice.play('alert');
       // you're on another window: she goes and points at Claude's, where the question is
-      const win = this.away(s) && this.capri.windows.wins.find((w) => w.id === s.window);
-      if (win && this.capri.canPoint(win)) {
+      const win = this.away(s) && this.stella.windows.wins.find((w) => w.id === s.window);
+      if (win && this.stella.canPoint(win)) {
         const quote = [this.t.guide.permissionThere, evt.message].filter(Boolean).join('\n');
         this.say('alert', pick(this.t.permission), s, { quote, hold: null });
-        s.pointedAt = await this.capri.pointAt(win, { label: this.t.guide.labels.claude });
-        if (!s.waiting && s.pointedAt) this.capri.stopPointing(); // answered while she was on her way
+        s.pointedAt = await this.stella.pointAt(win, { label: this.t.guide.labels.claude });
+        if (!s.waiting && s.pointedAt) this.stella.stopPointing(); // answered while she was on her way
         return;
       }
       this.say('alert', pick(this.t.permission), s, { quote: evt.message || '', hold: null });
       const cursor = await this.host.cursor().catch(() => null);
-      if (cursor?.inside) await this.capri.summon(cursor);
-      const toward = cursor?.inside ? Math.sign(cursor.x - this.capri.pos.x) || 1 : this.capri.towardCenter();
-      this.capri.perform('alarm', toward);
+      if (cursor?.inside) await this.stella.summon(cursor);
+      const toward = cursor?.inside ? Math.sign(cursor.x - this.stella.pos.x) || 1 : this.stella.towardCenter();
+      this.stella.perform('alarm', toward);
       return;
     }
     if (type === 'idle_prompt') {
@@ -260,7 +260,7 @@ export class Brain {
 
     if (!this.busySessions.length) {
       this.panel.setTicker(null);
-      this.capri.setMode('idle');
+      this.stella.setMode('idle');
     }
     // Not on Claude's window any more: you can't see the answer, so she brings it to you, whole,
     // and holds it up until you're back on Claude's window or click it away.
@@ -279,17 +279,17 @@ export class Brain {
     this.panel.hide();
     // quick back-and-forth answers don't deserve the whole show
     const bigJob = s.count >= 3 || (s.taskStart && Date.now() - s.taskStart > 20000);
-    if (bigJob) await this.capri.teleport(this.capri.spot('stage'));
+    if (bigJob) await this.stella.teleport(this.stella.spot('stage'));
     // the panel comes in once she's back down from her victory pose
-    this.capri.celebrate({ onSpeak: () => done({ summary, hold: 14000 }) });
+    this.stella.celebrate({ onSpeak: () => done({ summary, hold: 14000 }) });
     // a long one: she'll send the red light up to the satellite once it's all quiet
-    if ((s.taskStart && Date.now() - s.taskStart >= LONG_JOB_MS) || s.count >= LONG_JOB_ACTIONS) this.capri.earnUplink();
+    if ((s.taskStart && Date.now() - s.taskStart >= LONG_JOB_MS) || s.count >= LONG_JOB_ACTIONS) this.stella.earnUplink();
   }
 
   // Is the window you typed your prompt in (Claude's) no longer the one in front?
   // Unknown (no window tracking, macOS / Linux) counts as no.
   away(s) {
-    const { fg } = this.capri.windows;
+    const { fg } = this.stella.windows;
     return Boolean(s.window && fg && fg !== s.window);
   }
 
@@ -305,9 +305,9 @@ export class Brain {
     s.working = false;
     if (!this.busySessions.length) {
       this.panel.setTicker(null);
-      this.capri.setMode('idle');
+      this.stella.setMode('idle');
     }
-    this.capri.hurt();
+    this.stella.hurt();
     this.voice.play('error');
     const detail = evt.error || evt.message || '';
     this.say('error', pick(this.t.crashed), s, { face: 'wide', quote: clip(String(detail), 120), hold: 9000 });
@@ -325,7 +325,7 @@ export class Brain {
     this.sessions.delete(s.id);
     if (!this.busySessions.length) {
       this.panel.setTicker(null);
-      this.capri.setMode('idle');
+      this.stella.setMode('idle');
     }
     this.say('info', fmt(pick(this.t.bye), { project: s.project }), s, { face: 'aside', hold: 4000 });
   }

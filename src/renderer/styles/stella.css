@@ -1,6 +1,6 @@
 /* ------------------------------------------------------------------
-   Capri overlay
-   Flat, hard-edged, no gradients, no soft shadows: Trigger cel style.
+   Stella overlay
+   Flat, hard-edged, no gradients, no soft shadows: cel style.
    Every panel casts a violet misregistered copy, like her outline.
 ------------------------------------------------------------------- */
 
@@ -97,9 +97,9 @@ body {
   display: none !important;
 }
 
-/* ---------- Capri ---------- */
+/* ---------- Stella ---------- */
 
-.capri {
+.stella {
   position: absolute;
   left: 0;
   top: 0;
@@ -107,14 +107,14 @@ body {
   will-change: transform;
 }
 
-.capri__sprite {
+.stella__sprite {
   display: block;
 }
 
 /* Voice energy hugs the current drawing, including her mane and moving limbs.
    Keep it on the canvas so facing, scale and posture carry the aura with her.
    JS eases its envelope at display cadence, independently of her cel timing. */
-.capri__sprite.has-speech-aura {
+.stella__sprite.has-speech-aura {
   filter:
     drop-shadow(-2px 1px 1px rgb(178 111 255 / calc(var(--speech-aura) * .85)))
     drop-shadow(2px -1px 3px rgb(126 166 255 / calc(var(--speech-aura) * .65)))

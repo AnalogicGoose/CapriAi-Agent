@@ -38,20 +38,20 @@ test('pointing re-resolves a visible control and sends no input', async () => {
 test('Windows actions require current request evidence and a fresh match after confirmation', async () => {
   const { bridge, ctx, window, events } = fixture();
   const tools = new CodexTools({ accessibility: bridge });
-  const { controls: [control] } = await tools.run('capri_window_controls', { query: 'Scale' }, ctx);
+  const { controls: [control] } = await tools.run('stella_window_controls', { query: 'Scale' }, ctx);
   const args = { id: control.id, operation: 'set-value', value: '200%' };
-  await assert.rejects(tools.run('capri_control', args, ctx), /requested action/);
-  await assert.rejects(tools.run('capri_control', { ...args, requestEvidence: ctx.text }, { ...ctx, signal: new AbortController().signal }), /Inspect/);
+  await assert.rejects(tools.run('stella_control', args, ctx), /requested action/);
+  await assert.rejects(tools.run('stella_control', { ...args, requestEvidence: ctx.text }, { ...ctx, signal: new AbortController().signal }), /Inspect/);
   bridge.confirm = async () => false;
-  assert.equal((await tools.run('capri_control', { ...args, requestEvidence: ctx.text }, ctx)).dispatched, false);
+  assert.equal((await tools.run('stella_control', { ...args, requestEvidence: ctx.text }, ctx)).dispatched, false);
   bridge.confirm = async () => { window.id++; return true; };
-  await assert.rejects(tools.run('capri_control', { ...args, requestEvidence: ctx.text }, ctx), /Inspect/);
+  await assert.rejects(tools.run('stella_control', { ...args, requestEvidence: ctx.text }, ctx), /Inspect/);
   assert.deepEqual(events, ['inspect']);
   bridge.confirm = async (_message, detail) => { assert.match(detail, /Scale.*200%/); return true; };
   const { controls: [fresh] } = await bridge.inspect('Scale', ctx);
   const allowed = { ...args, id: fresh.id, requestEvidence: ctx.text };
-  assert.equal((await tools.run('capri_control', allowed, ctx)).verified, true);
-  await assert.rejects(tools.run('capri_control', allowed, ctx), /Inspect/);
+  assert.equal((await tools.run('stella_control', allowed, ctx)).verified, true);
+  await assert.rejects(tools.run('stella_control', allowed, ctx), /Inspect/);
   assert.deepEqual(events, ['inspect', 'inspect', 'set-value']);
 });
 
@@ -112,9 +112,9 @@ test('the marker and caption fit secondary-monitor edges and the caption stays o
   assert.throws(() => markerLayout({ x: 1, y: 20, width: 40, height: 20 }, display, 'Outside'), /outside/);
 });
 
-// Real Windows OCR: renders text with GDI+. Opt-in (CAPRI_REAL_OCR=1) because it depends on the machine's fonts, DPI and installed OCR language.
-test('Windows OCR finds words next to punctuation and small text, with scaled bounds', { skip: process.platform !== 'win32' || process.env.CAPRI_REAL_OCR !== '1' }, async t => {
-  const file = path.join(os.tmpdir(), `capri-ocr-${process.pid}.png`);
+// Real Windows OCR: renders text with GDI+. Opt-in (STELLA_REAL_OCR=1) because it depends on the machine's fonts, DPI and installed OCR language.
+test('Windows OCR finds words next to punctuation and small text, with scaled bounds', { skip: process.platform !== 'win32' || process.env.STELLA_REAL_OCR !== '1' }, async t => {
+  const file = path.join(os.tmpdir(), `stella-ocr-${process.pid}.png`);
   const script = `Add-Type -AssemblyName System.Drawing; $b=New-Object Drawing.Bitmap 600,120; $g=[Drawing.Graphics]::FromImage($b); $g.Clear([Drawing.Color]::White); ` +
     `$f=New-Object Drawing.Font 'Segoe UI',8; $g.DrawString('Save changes   Cancel: Scale',$f,[Drawing.Brushes]::Black,20,30); $b.Save('${file}',[Drawing.Imaging.ImageFormat]::Png)`;
   try {
@@ -132,7 +132,7 @@ test('Windows OCR finds words next to punctuation and small text, with scaled bo
   } finally { fs.rmSync(file, { force: true }); }
 });
 
-test('a capri_point highlight reports its rect for Stella to point at, and null once it expires', async () => {
+test('a stella_point highlight reports its rect for Stella to point at, and null once it expires', async () => {
   const original = { id: 1, pid: 2, x: 0, y: 0, width: 300, height: 200 };
   let foreground = original;
   class Window {
@@ -146,7 +146,7 @@ test('a capri_point highlight reports its rect for Stella to point at, and null 
       getDisplayMatching: () => ({ id: 42, bounds: original }) } });
   try {
     await highlight.show({ x: 20, y: 40, width: 60, height: 30 }, original, () => {}, 'Save');
-    assert.deepEqual(focus, [], 'a plain highlight (capri_point_on_snapshot) does not move her');
+    assert.deepEqual(focus, [], 'a plain highlight (stella_point_on_snapshot) does not move her');
     await highlight.show({ x: 20, y: 40, width: 60, height: 30 }, original, () => {}, 'Save', { focus: true });
     assert.deepEqual(focus, [{ displayId: 42, rect: { x: 10, y: 20, width: 30, height: 15 } }], 'DIP rect on its display');
     await highlight.show({ x: 100, y: 40, width: 60, height: 30 }, original, () => {}, 'Open', { focus: true });

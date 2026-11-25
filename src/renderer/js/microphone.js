@@ -10,7 +10,7 @@ export class MicrophoneCapture {
       if(context.sampleRate!==16000)throw Error('microphone-unavailable');
       await context.audioWorklet.addModule(new URL('./microphone-worklet.js',import.meta.url));
       if(this.epoch!==epoch){stream.getTracks().forEach(track=>track.stop());await context.close();return;}
-      const node=new AudioWorkletNode(context,'capri-microphone');this.node=node;
+      const node=new AudioWorkletNode(context,'stella-microphone');this.node=node;
       node.port.onmessage=event=>{if(this.epoch!==epoch)return;
         if(event.data.type==='audio')onSamples(event.data.samples);if(event.data.type==='flushed')this.flushed?.();};
       this.source=context.createMediaStreamSource(stream);this.source.connect(node);node.connect(context.destination);

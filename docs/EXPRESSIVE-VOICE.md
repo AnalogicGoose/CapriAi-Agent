@@ -33,7 +33,7 @@ The worker exits when its parent pipe closes; no network service is exposed.
 
 ## Delivery styles
 
-In spoken chat, Capri can choose neutral, playful, comforting, pleased, or
+In spoken chat, Stella can choose neutral, playful, comforting, pleased, or
 curious delivery based on the exchange. Wording and the pauses between phrases
 carry the style. Every phrase plays at its original speed, pitch, and tone using
 the selected voice reference. Open **Control room → Sound → Try her voice** to preview the same
@@ -44,15 +44,15 @@ line in each style. The selector only chooses the preview style.
 Install a dedicated Python environment, CUDA 12.8 PyTorch wheels for RTX 50-series,
 and the pinned requirements. Download `Qwen/Qwen3-TTS-12Hz-1.7B-Base` in advance.
 No model downloads occur in the speech worker. Runtime, model weights, generated
-voice references and previews live under ignored `.caprigpt-local/`; they are
+voice references and previews live under ignored `.stella-local/`; they are
 not committed or bundled into the application package.
 
-An optional `.caprigpt-local/voice-setup.json` contains `id`, `ttsPython`,
+An optional `.stella-local/voice-setup.json` contains `id`, `ttsPython`,
 `ttsModel`, `ttsReference`, and `ttsReferenceText`. Paths must be absolute and
 exist. It applies the prepared Qwen settings once on the next normal launch and
 records `ttsSetupId` in the user profile. Later choices, including disabling
 speech, are preserved. Mute and other preferences are preserved. Preparing this
-file does not change a running process's cached settings or restart Capri.
+file does not change a running process's cached settings or restart Stella.
 
 ## Measurements and validation
 
@@ -73,7 +73,7 @@ cancellation with late-audio suppression, recovery after cancellation and idle
 unloading. `scripts/check-qwen-renderer.js` checks actual Electron IPC, PCM
 playback scheduling, nonzero amplitude, queue clearing and stale-result
 suppression using a silent output gain and an isolated profile. It accepts
-`CAPRI_VOICE_SETUP` for an explicit local setup file and never restarts the live
+`STELLA_VOICE_SETUP` for an explicit local setup file and never restarts the live
 companion. Unit tests cover cancellation during warmup, permission changes,
 worker exit, phrase ordering, Escape, and one-time local setup.
 
@@ -93,4 +93,4 @@ check and Windows x64 directory package build (`--publish never`) pass. The
 archive includes the worker and voice modules, and excludes local model/runtime
 data. No installer installation or published release is claimed. The desktop
 shortcut was checked and already targets this checkout's Electron executable,
-absolute project argument, working directory and Capri icon correctly.
+absolute project argument, working directory and Stella icon correctly.

@@ -7,7 +7,7 @@ const path = require('node:path');
 const { source, inspectArchive } = require('../scripts/release-check.cjs');
 
 function fixture(t, version = '0.4.0-alpha.1', stability = 'alpha') {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-release-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-release-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   // Inject Git receipts; sandboxed sessions cannot write repository metadata.
   const state = { head: 'a'.repeat(40), tag: 'a'.repeat(40), onMain: true, dirty: '' };
@@ -65,7 +65,7 @@ test('release gate rejects a tagged commit outside main and a tag not at HEAD', 
 });
 
 async function archiveFixture(t, extra) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-archive-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-archive-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const payload = path.join(root, 'payload');
   for (const file of ['package.json', 'src/main/main.js', 'src/preload.js', 'src/renderer/index.html', 'LICENSE', ...(extra ? [extra] : [])]) {
@@ -93,7 +93,7 @@ test('archive inspection accepts required payload and rejects mismatched version
 });
 
 test('archive inspection rejects local credentials and model payloads', async t => {
-  for (const file of ['.caprigpt-local/token.json', 'assets/private.gguf']) {
+  for (const file of ['.stella-local/token.json', 'assets/private.gguf']) {
     const archive = await archiveFixture(t, file);
     assert.throws(() => inspectArchive(archive, '0.4.0'), /Private\/development payload/);
   }

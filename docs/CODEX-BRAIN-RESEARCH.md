@@ -5,9 +5,9 @@ This is a personal local desktop integration proposal, not a hosted Codex servic
 
 ## Conclusion
 
-Use a Capri-owned `codex app-server` child process over stdio, with a single
-conversation/task coordinator and explicitly registered Capri tools. Preserve
-Capri's renderer, character rig, voice, local SQLite memory and native execution
+Use a Stella-owned `codex app-server` child process over stdio, with a single
+conversation/task coordinator and explicitly registered Stella tools. Preserve
+Stella's renderer, character rig, voice, local SQLite memory and native execution
 services. Replace the reasoning and routing layer, rather than renaming Qwen or
 forwarding only chat. Expected reasoning improvements need actual comparison
 tests; neither model intelligence nor correct actions can be guaranteed.
@@ -20,7 +20,7 @@ tests; neither model intelligence nor correct actions can be guaranteed.
 | CLI version | `codex-cli 0.167.0-alpha.3.2` |
 | Login status | CLI reports `Logged in using ChatGPT`; no credential files were opened |
 | Protocol tooling | `app-server --help` confirms stdio and schema generation; command is experimental |
-| Schema generation | Stable and experimental JSON schemas generated successfully into ignored `.caprigpt-local/codex-research/schema` |
+| Schema generation | Stable and experimental JSON schemas generated successfully into ignored `.stella-local/codex-research/schema` |
 | Real app-server probe | Child exited with code 1 before handshake completed; sanitized stderr categories were permission and state |
 | Live inference, dynamic tools, approvals | Not verified; no model turn was started |
 | Research diagnostic tests | Four pass: metadata-only handshake, approval rejection, malformed/timeout handling, safe discovery/account summary |
@@ -64,9 +64,9 @@ dependency rather than perform the requested architecture change.
 
 ## Interface choice
 
-| Option | Assessment for Capri |
+| Option | Assessment for Stella |
 | --- | --- |
-| Drive the interactive terminal UI | Fragile output/approval handling; does not fit Capri's UI |
+| Drive the interactive terminal UI | Fragile output/approval handling; does not fit Stella's UI |
 | `codex exec` JSON events | Useful for bounded jobs, but less suited to the full interactive client lifecycle |
 | TypeScript SDK | Viable for automation; compare its control surface against required UI/tool behavior |
 | App-server | Selected for threads, streaming and client-mediated tools/requests; version-sensitive experimental surface |
@@ -87,7 +87,7 @@ concept.
    normal setup; the app-bundled alpha path is research evidence, not a durable
    install location. Record and check the actual CLI version/capabilities.
 2. The coordinator receives one real user request, fresh permitted context and
-   Capri's persona/capability description from the trusted main process. The
+   Stella's persona/capability description from the trusted main process. The
    model reasons and chooses tools, observes their results and continues. The
    client displays user-facing assistant text and progress, not raw reasoning.
    Preserve no-inference controls for cancel, game mode and character gestures.
@@ -104,7 +104,7 @@ concept.
    invalidate the local execution epoch, interrupt the owned turn, cancel local
    fetches/tools and reject late calls/deltas. Recheck the epoch immediately
    before effects. Closing a process cannot undo an action already completed.
-6. Turn start/completion/tool notifications drive Capri's existing animations
+6. Turn start/completion/tool notifications drive Stella's existing animations
    directly. Separate these events from hooks observing other Codex sessions;
    do not infer permissions or tool availability from notification hooks.
 
@@ -141,7 +141,7 @@ the existing settings, with no new app allowlist. It does not authorize arbitrar
 shell/file actions or persistent cloud transmission of every event. Prompt text
 and a read-only sandbox are not a tool allowlist: read-only commands can still
 read sensitive files. Before live user prompts, verify inherited tools, plugins,
-MCP servers, hooks and effective permissions in a dedicated Capri session. Only
+MCP servers, hooks and effective permissions in a dedicated Stella session. Only
 claim a restricted execution surface after testing it. Keep coding/file-edit
 capabilities separate until deliberately implemented and authorized per task.
 
@@ -183,7 +183,7 @@ latency and usage instead of assuming the new backend is faster or unlimited.
 Do not delete the local implementation until equivalent behavior passes; retain
 a clear rollback during development, with no silent runtime fallback.
 
-Research additions do not change Capri's launch, settings, selected model,
+Research additions do not change Stella's launch, settings, selected model,
 shortcut or running process. The existing dirty application work and Git refs
 were preserved. New work cannot be placed on the intended feature branch in
 this session while .git remains read-only. No push or release is part of this

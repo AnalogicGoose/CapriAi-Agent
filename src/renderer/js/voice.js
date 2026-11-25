@@ -1,4 +1,4 @@
-// Capri's sounds, synthesized with Web Audio so nothing has to ship with the repo.
+// Stella's sounds, synthesized with Web Audio so nothing has to ship with the repo.
 // Any file dropped in the custom sounds folder (tray > Son) named after a cue
 // (teleport-out.mp3, done.wav, alert.ogg...) replaces the synth for that cue.
 
@@ -56,7 +56,7 @@ export class Voice {
         const data = await (await fetch(url)).arrayBuffer();
         this.custom.set(name, await ctx.decodeAudioData(data));
       } catch (err) {
-        console.warn('[capri] could not load sound', name, err);
+        console.warn('[stella] could not load sound', name, err);
       }
     }
   }

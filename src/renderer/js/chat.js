@@ -10,7 +10,7 @@ import { welcomePicker } from './welcome.js';
 export function companionRequest(text) {
   if (typeof text !== 'string') return null;
   const command = text.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/^(?:hey\s+)?capri[,!:.]?\s*/, '')
+    .replace(/^(?:hey\s+)?stella[,!:.]?\s*/, '')
     .replace(/^(?:please\s+)?(?:can you|could you|would you|i want you to)\s+/, '')
     .replace(/^please\s+/, '').replace(/[,\s]+(?:please|por favor)[.!?]*$/, '').replace(/[.!?]+$/, '');
   const actions = {
@@ -30,7 +30,7 @@ export function companionRequest(text) {
 export function postureRequest(text) {
   if (typeof text !== 'string') return null;
   const command = text.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .replace(/^(?:hey\s+)?capri[,!:.]?\s*/, '')
+    .replace(/^(?:hey\s+)?stella[,!:.]?\s*/, '')
     .replace(/^(?:please\s+)?(?:can you|could you|would you|i want you to)\s+/, '')
     .replace(/^please\s+/, '').replace(/[,\s]+(?:please|por favor)[.!?]*$/, '').replace(/[.!?]+$/, '');
   if (/^(?:sit(?: down)?|take a seat|have a seat|sit for a (?:bit|while)|sentate|sientate|sentate un rato)$/.test(command)) return true;
@@ -47,8 +47,8 @@ const CLOSE_TAG = /\[\[\s*close\s*:?\s*([^\]]*)\]\]/i; // [[close: AM Music]] at
 const CLOSE_ASK = /\b(close|shut|quit|kill|exit)|ferm|quitt|coupe|arr[êe]t|cierr|cerra|fech|закр|выключ/i;
 
 export class Chat {
-  constructor({ capri, panel, voice, host, brain }) {
-    this.capri = capri;
+  constructor({ stella, panel, voice, host, brain }) {
+    this.stella = stella;
     this.panel = panel;
     this.voice = voice;
     this.host = host;
@@ -80,7 +80,7 @@ export class Chat {
 
   async start(commandsOnly = false, greeting = null, { voiceWake = false, mode = voiceWake ? 'voice' : 'text', replyTo } = {}) {
     this.onStart?.();
-    const { capri, host, t } = this;
+    const { stella, host, t } = this;
     // Dismiss the panel too: close() alone leaves a chat panel that rejects
     // the replacement memory panel. onLeave performs turn cancellation.
     if (this.open && commandsOnly !== this.commandsOnly) this.panel.hide();
@@ -89,11 +89,11 @@ export class Chat {
       if (mode !== 'voice') this.panel.chatInput.focus();
       return;
     }
-    if (capri.stowed && !voiceWake) {
+    if (stella.stowed && !voiceWake) {
       host.setConfig({ visible: true });
-      await capri.unstow();
+      await stella.unstow();
     }
-    if (!voiceWake) capri.wake();
+    if (!voiceWake) stella.wake();
     if (!voiceWake) host.focusOverlay(true); // the keyboard, for typing to her
     const shown = this.panel.say({
       kind: 'chat',
@@ -122,10 +122,10 @@ export class Chat {
     this.commandsOnly = commandsOnly;
     this.replyTo = replyTo;
     this.conversationId = crypto.randomUUID();
-    this.host.companionState?.({ mood: this.capri.companion?.mood, chatOpen: true });
+    this.host.companionState?.({ mood: this.stella.companion?.mood, chatOpen: true });
     if (!voiceWake && mode !== 'voice') setTimeout(() => { if (this.open) this.panel.chatInput.focus(); }, 0); // once the overlay has the keyboard
-    if (!voiceWake) capri.perform('listen', capri.towardCenter());
-    capri.nextMove = capri.nextGaze = performance.now() + STAY_MS;
+    if (!voiceWake) stella.perform('listen', stella.towardCenter());
+    stella.nextMove = stella.nextGaze = performance.now() + STAY_MS;
   }
 
   close() {
@@ -135,14 +135,14 @@ export class Chat {
     this.open = false;
     this.replyTo = undefined;
     this.conversationId = undefined;
-    this.host.companionState?.({ mood: this.capri.companion?.mood, chatOpen: false });
-    this.capri.setChatThinking?.(false);
+    this.host.companionState?.({ mood: this.stella.companion?.mood, chatOpen: false });
+    this.stella.setChatThinking?.(false);
     if (this.turn) this.host.chatStop(this.turn);
     this.removePending();
     this.turn = 0;
     this.host.focusOverlay(false);
-    this.capri.nextMove = performance.now() + 30000;
-    this.capri.nextGaze = performance.now() + 60000;
+    this.stella.nextMove = performance.now() + 30000;
+    this.stella.nextGaze = performance.now() + 60000;
     this.onClose?.();
   }
 
@@ -155,11 +155,11 @@ export class Chat {
     const id = this.lastTurn = Math.max(Date.now(), this.lastTurn + 1);
     this.turn = id;
     const gesture = companionRequest(text);
-    if (gesture && this.capri.companion && (!this.brain.generatedDialogue || this.commandsOnly)) {
+    if (gesture && this.stella.companion && (!this.brain.generatedDialogue || this.commandsOnly)) {
       this.panel.setChatBusy(true);
       this.panel.chatTurn({quote:text, face:'aside'});
       try {
-        const reply = await this.capri.companion.request(gesture);
+        const reply = await this.stella.companion.request(gesture);
         if (this.turn === id && this.open) this.panel.stream(reply, {done:true});
       } catch {
         if (this.turn === id && this.open) this.panel.stream('That move didn’t finish. Try again.', {done:true});
@@ -173,7 +173,7 @@ export class Chat {
       this.panel.setChatBusy(true);
       this.panel.chatTurn({quote:text, face:'aside'});
       try {
-        const reply = await this.capri.requestPosture(posture);
+        const reply = await this.stella.requestPosture(posture);
         if (this.turn === id && this.open) this.panel.stream(reply,{done:true});
       } catch {
         if (this.turn === id && this.open) this.panel.stream('That move didn’t finish. Try asking me again.',{done:true});
@@ -182,8 +182,8 @@ export class Chat {
       }
       return;
     }
-    this.capri.setChatThinking?.(true);
-    this.capri.companion?.interact();
+    this.stella.setChatThinking?.(true);
+    this.stella.companion?.interact();
     // Personal-memory turns stay out of the ordinary chat transcript. Natural
     // requests use the separate local interpreter; simple commands work offline.
     this.panel.setChatBusy(true);
@@ -194,7 +194,7 @@ export class Chat {
     catch { local = { handled: true, text: 'The local task service is unavailable; please try again.' }; }
     if (this.turn !== id) return;
     if (local.handled || this.commandsOnly) {
-      this.capri.setChatThinking?.(false);
+      this.stella.setChatThinking?.(false);
       this.turn = 0;
       this.panel.chatTurn({ quote: text, face: local.mood === 'pleased' ? 'calm' : local.mood === 'curious' ? 'grin' : 'aside' });
       this.panel.stream(local.handled ? local.text : 'Use /memory for local commands or /do for a task. Click Stella for normal AI chat.', { done: true });
@@ -222,7 +222,7 @@ export class Chat {
     this.panel.setChatBusy(true);
     this.panel.setActions([]); // a close button she offered before goes with a new message
     this.panel.chatTurn({ quote: text, face: 'aside' });
-    this.capri.pulse();
+    this.stella.pulse();
     // App closing is a separate permission and only needs discovery when asked.
     if (CLOSE_ASK.test(text)) await this.listApps();
     else this.apps = [];
@@ -246,7 +246,7 @@ export class Chat {
     this.turn = 0;
     if (!res.ok) {
       this.voice.spoken?.stop();
-      this.capri.setChatThinking?.(false);
+      this.stella.setChatThinking?.(false);
       this.removePending(userMessage);
       this.panel.setFace('wide');
       this.panel.stream(`${this.t.failed} ${res.error}`, { done: true });
@@ -255,7 +255,7 @@ export class Chat {
     }
     const answer = clean(res.text) || '…';
     this.pendingMessage = null;
-    this.capri.setChatThinking?.(false);
+    this.stella.setChatThinking?.(false);
     this.history.push({ role: 'assistant', content: answer });
     this.trimHistory();
     this.panel.stream(answer, { done: true });
@@ -323,11 +323,11 @@ export class Chat {
   }
 
   async closeApp(app, force = false) {
-    const { t, capri } = this;
+    const { t, stella } = this;
     this.panel.setActions([]);
     // a bolt of red lightning off her fingers, at it
-    const h = capri.head();
-    capri.zap(h.x + capri.towardCenter() * 280, h.y - 170);
+    const h = stella.head();
+    stella.zap(h.x + stella.towardCenter() * 280, h.y - 170);
     const res = await this.host.closeApp(app.name, force);
     if (!this.open) return;
     let line;
@@ -362,7 +362,7 @@ export class Chat {
     if (id !== this.turn) return;
     if (delivery) this.voice.spoken?.setResponseMood?.(delivery);
     if (!piece) return;
-    this.capri.setChatThinking?.(false);
+    this.stella.setChatThinking?.(false);
     this.answer += piece;
     const answer = clean(this.answer);
     this.panel.stream(answer);
@@ -387,7 +387,7 @@ export class Chat {
       ...this.powers(),
       'Use only the supplied context for task activity. No events received does not mean ChatGPT or Codex is idle. Old conversation claims about Claude or connected tools may be outdated or wrong; correct them instead of repeating them.',
       `Right now: ${this.brain.context()}`,
-      this.capri.companion?.context() || '',
+      this.stella.companion?.context() || '',
       ...(/satellite|sat[eé]lite/i.test(this.history.at(-1)?.content || '') ? ['The fictional satellite in the desktop animation is a decorative character motif, not a live orbit tracker. You can be curious about it when discussing it, without turning it into a recurring agenda.'] : []),
     ].join('\n');
   }

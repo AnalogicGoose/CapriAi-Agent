@@ -12,7 +12,7 @@ they reach the menu, invokes the real replacement and verifies native undo.
 All pass, including the false-flag regression and earlier right-click handling.
 Only popup display is intercepted. The synchronous webFrame probe used earlier
 did not reflect these asynchronous Windows results; no missing dictionary is
-inferred from that old probe. Running Capri needs a normal restart for the fix.
+inferred from that old probe. Running Stella needs a normal restart for the fix.
 
 Follow-up: the renderer's global contextmenu handler cancelled the composer's
 native menu. It now allows events from .panel__input while retaining background
@@ -36,12 +36,12 @@ synthetic context event cannot establish Chromium's native spelling range.
 Its fresh profile could not initialize the English dictionary, so this check
 uses fixture suggestions; live underlines, dictionary download and native
 right-click replacement/undo remain unverified. Electron may download a language
-dictionary before local checking is available. No running Capri was restarted;
+dictionary before local checking is available. No running Stella was restarted;
 a normal restart is needed to load the feature. Existing unrelated edits remain.
 
 ## Firefox and personal media defaults (2026-11-09)
 
-This supersedes the earlier Windows-default choice below. Capri now prefers
+This supersedes the earlier Windows-default choice below. Stella now prefers
 Firefox independently of Windows' default browser; all normal page/video/source
 dispatch uses its regular profile and `-new-tab`. An explicit browser overrides
 the preference; `system` explicitly invokes the Windows default. Missing Firefox
@@ -68,7 +68,7 @@ selection remain unverified; this is implementation and dispatch evidence.
 An initial old test fixture opened two Firefox test tabs before it was updated
 to intercept launches. Subsequent checks intercept browser dispatch. The desktop
 shortcut still targets this checkout's Electron executable with the absolute
-project argument, working directory and Capri icon. No running Capri instance
+project argument, working directory and Stella icon. No running Stella instance
 was restarted; restart normally to load these preferences.
 
 ## External default browser (2026-11-09)
@@ -95,9 +95,9 @@ this change's chat UI. Computer Use blocked Firefox inspection because browser
 URL policy enforcement is unsupported for that Windows browser; live tab reuse,
 autoplay and the user's Premium session remain unverified. The existing desktop
 shortcut target, absolute project argument, working directory and icon already
-match this checkout. No running Capri instance was restarted.
+match this checkout. No running Stella instance was restarted.
 
-Validated on this Windows laptop during the CapriGPT build session:
+Validated on this Windows laptop during the Stella build session:
 
 - Upstream `79a016c` (0.3.1) cloned, dependencies installed, original Electron app launched and its local health endpoint responded.
 - `npm.cmd ci`: installed successfully; npm audit reported zero known vulnerabilities at installation time.
@@ -111,7 +111,7 @@ Validated on this Windows laptop during the CapriGPT build session:
 
 One cold-start inference took roughly 27 seconds in Ollama's server log; subsequent runs were faster. This is a functional prototype, not a performance benchmark. Small model answers can be inaccurate or stay too much in character; a failed arithmetic answer in an earlier run prompted clearer helpful-assistant instructions. No gaming FPS test was performed.
 
-Real applications were not closed or force-quit as part of validation. Approval behavior was tested with fake app backends; production requests use the native confirmation gate. No Windows installer was built and no cloud inference request was sent. After browser access connected, the GitHub fork was created at https://github.com/Chocoyito1/capri-desktop and the prototype branch was pushed (the project now lives at https://github.com/AnalogicGoose/CapriAi-Agent). No PR or release was created. Inherited asset rights limitations still apply.
+Real applications were not closed or force-quit as part of validation. Approval behavior was tested with fake app backends; production requests use the native confirmation gate. No Windows installer was built and no cloud inference request was sent. After browser access connected, the GitHub fork was created at https://github.com/Chocoyito1/capri-desktop and the prototype branch was pushed (the project now lives at https://github.com/AnalogicGoose/Stella). No PR or release was created.
 
 ## Companion identity update
 
@@ -123,11 +123,11 @@ Safety tests and the desktop smoke test pass after this change. The updated live
 
 Nine tests pass, including bounded metadata stripping, late-event deduplication, safe installer merging/removal, and a real forwarding child process against the authenticated HTTP receiver. The Electron smoke test passes for hook-to-renderer approval notifications, clearing on resume, cancellation/unload, gaming suppression, alerts after gaming resume, and local handoff preview/copy with mocked clipboard writes. Captured `captures/codex-notifications.png` is labelled CODEX · TEST and was inspected visually.
 
-The installed Codex CLI reports version 0.164.0-alpha.11.1 and ChatGPT sign-in. A read-only app-server hooks/list call recognizes all eight installed CapriGPT definitions. They are enabled but untrusted: no genuine lifecycle dispatch is claimed yet. Review via /hooks is the remaining activation step. No trust bypass, account token extraction, cloud inference request, or background agent was used. Ordinary ChatGPT chats have manual handoff only.
+The installed Codex CLI reports version 0.164.0-alpha.11.1 and ChatGPT sign-in. A read-only app-server hooks/list call recognizes all eight installed Stella definitions. They are enabled but untrusted: no genuine lifecycle dispatch is claimed yet. Review via /hooks is the remaining activation step. No trust bypass, account token extraction, cloud inference request, or background agent was used. Ordinary ChatGPT chats have manual handoff only.
 
 ## Real CLI activation verified
 
-All eight hook definitions were confirmed trusted and enabled. The user’s app-bundled 0.164.0-alpha.11.1 terminal completed test prompts but did not launch the forwarder in this environment. Installing the complete official @openai/codex 0.164.0 package separately and launching it in a terminal with TERM cleared produced a genuine, non-test completion delivery (HTTP 200). The user confirmed that Capri visibly reacted. No account credentials or trust state were replaced. Desktop-app-originated events remain unverified.
+All eight hook definitions were confirmed trusted and enabled. The user’s app-bundled 0.164.0-alpha.11.1 terminal completed test prompts but did not launch the forwarder in this environment. Installing the complete official @openai/codex 0.164.0 package separately and launching it in a terminal with TERM cleared produced a genuine, non-test completion delivery (HTTP 200). The user confirmed that Stella visibly reacted. No account credentials or trust state were replaced. Desktop-app-originated events remain unverified.
 
 Added an authenticated read-only receiver status endpoint and a bounded last-delivery diagnostic file without conversation content. Smoke tests use their own profile and connection file so they can run without stopping the live companion.
 
@@ -141,17 +141,17 @@ A delayed ticker callback could reveal the small working label after a full mess
 
 ## Shared desktop/CLI connection settings
 
-Observed HTTP 403 from the previously saved connection details after a desktop-shortcut launch. Moved notification connection material to a shared, Git-ignored per-checkout runtime directory, preserved its token across restarts, and delayed publishing until the port is bound. After the user restarted Capri, the authenticated status check succeeded with gamingMode false, visible true and rendererReady true. No genuine desktop-app-originated lifecycle event has arrived yet. The app-server process predates the installed hooks; a desktop app restart is the next activation check. Ten tests and the isolated Electron layout test pass.
+Observed HTTP 403 from the previously saved connection details after a desktop-shortcut launch. Moved notification connection material to a shared, Git-ignored per-checkout runtime directory, preserved its token across restarts, and delayed publishing until the port is bound. After the user restarted Stella, the authenticated status check succeeded with gamingMode false, visible true and rendererReady true. No genuine desktop-app-originated lifecycle event has arrived yet. The app-server process predates the installed hooks; a desktop app restart is the next activation check. Ten tests and the isolated Electron layout test pass.
 
 ## Desktop activation and quiet reactions verified
 
-After restarting the desktop app, “test capri” produced non-test ready/working events for native chat 01a1769f-6db1-75c1-8066-23571142e87a, accepted with HTTP 200. The user confirmed the visible reaction. This supersedes the pending desktop activation status above.
+After restarting the desktop app, “test stella” produced non-test ready/working events for native chat 01a1769f-6db1-75c1-8066-23571142e87a, accepted with HTTP 200. The user confirmed the visible reaction. This supersedes the pending desktop activation status above.
 
-Quiet mode keeps routine work silent, throttles burst pulses, and uses a new held-pose focus cycle with the original cut-out and renderer. Existing seated, completion-hop and error animations are reused. Twelve tests pass, covering routine silence, burst throttling, sticky approval, competing turns, errors, completion and loop timing. The isolated Electron integration smoke test passes through actual hook delivery and the real renderer without requiring Ollama. The full model/chat smoke test was not run for this animation change; Ollama was offline. Restart Capri normally to load the changes.
+Quiet mode keeps routine work silent, throttles burst pulses, and uses a new held-pose focus cycle with the original cut-out and renderer. Existing seated, completion-hop and error animations are reused. Twelve tests pass, covering routine silence, burst throttling, sticky approval, competing turns, errors, completion and loop timing. The isolated Electron integration smoke test passes through actual hook delivery and the real renderer without requiring Ollama. The full model/chat smoke test was not run for this animation change; Ollama was offline. Restart Stella normally to load the changes.
 
 ## Opening greeting restored
 
-Removed the first-launch-only condition from the existing full “hi” entrance. Visible fresh launches now play the original intro, while the onboarding message remains first-launch-only. Starting stowed still respects the saved visibility setting, missing intro assets still fall back to materialization, and reduced motion is handled by the existing intro implementation. Clicking the shortcut while Capri is already running displays status instead of restarting her. The isolated Electron integration smoke test passes with this startup path.
+Removed the first-launch-only condition from the existing full “hi” entrance. Visible fresh launches now play the original intro, while the onboarding message remains first-launch-only. Starting stowed still respects the saved visibility setting, missing intro assets still fall back to materialization, and reduced motion is handled by the existing intro implementation. Clicking the shortcut while Stella is already running displays status instead of restarting her. The isolated Electron integration smoke test passes with this startup path.
 
 ## Click status follows Codex activity
 
@@ -163,9 +163,9 @@ Working/error status panels now include the existing Talk action. Chat displays 
 
 On this laptop, Ollama was installed but stopped. Started the local server, verified llama3.2:3b remained installed, and observed no loaded model before chat. Thirteen tests pass, including explicit-start recovery and Talk availability. The full Electron smoke test passes: Talk button opens the real chat, activity updates without closing it, a real local response streams, gaming cancellation/unload/resume works, and starting Ollama is denied while gaming. The chat capture was visually checked; its activity line fits above the conversation. After testing, Ollama reports no loaded models.
 
-## Ollama starts with Capri
+## Ollama starts with Stella
 
-At the user's request, visible or stowed Capri launches now prepare the installed local Ollama server in the background. Gaming mode skips startup. The existing server is reused, missing installations retain the setup flow, and no model is preloaded. Chat status waits for startup readiness so an early click does not incorrectly report an offline server. The manual Start Ollama button remains available for retries. This supersedes the manual-only startup behavior described above.
+At the user's request, visible or stowed Stella launches now prepare the installed local Ollama server in the background. Gaming mode skips startup. The existing server is reused, missing installations retain the setup flow, and no model is preloaded. Chat status waits for startup readiness so an early click does not incorrectly report an offline server. The manual Start Ollama button remains available for retries. This supersedes the manual-only startup behavior described above.
 
 The isolated Electron startup/integration check passes with the running server reused, and `/api/ps` still reports no loaded models afterward. Cold server startup was verified through the shared runtime helper in the preceding change.
 
@@ -173,7 +173,7 @@ The isolated Electron startup/integration check passes with the running server r
 
 Body clicks now show the conversation launcher idempotently: a rapid second
 click does not toggle it closed and release overlay focus. The fullscreen
-watcher preserves the last external-app state while Capri owns foreground
+watcher preserves the last external-app state while Stella owns foreground
 focus, and requires 150 ms of sustained fullscreen evidence before hiding her.
 Brief activation rectangles during chat close cannot trigger a collapse and
 return in place. Returning from genuine fullscreen remains immediate.
@@ -188,7 +188,7 @@ teleport; a simulated 75 ms fullscreen signal after closing produces no state
 revision or animation. Sustained fullscreen detection was observed at 217 ms.
 Existing drag, fullscreen reversal, gaming and manual-stow checks also passed.
 Fullscreen geometry and chat inference were simulated; the user's exact live
-desktop occurrence was not independently reproduced. No active Capri instance
+desktop occurrence was not independently reproduced. No active Stella instance
 was restarted. Restart normally to load these changes.
 
 ## Sound-reactive speech aura (2026-11-09)
@@ -196,16 +196,16 @@ was restarted. Restart normally to load these changes.
 Added a violet/mint silhouette aura driven by spoken playback amplitude, with
 smooth attack/release and a gentle pulse. The analyser accounts for master
 volume, mute and suspended audio. Reduced motion keeps the envelope without
-the periodic pulse; hiding Capri clears the effect immediately.
+the periodic pulse; hiding Stella clears the effect immediately.
 
 On Windows, all 343 tests pass. `electron scripts/check-speech-aura.js` passed
 using real Web Audio scheduling and analysis in isolated offscreen Electron:
 idle, audible playback, CSS rendering, natural completion, zero volume and
 interruption. Output was silenced downstream of analysis. The speaking capture
-under `.caprigpt-local/speech-aura-check/` was visually inspected. This verifies
+under `.stella-local/speech-aura-check/` was visually inspected. This verifies
 the playback path using a synthetic tone; a live spoken conversation remains
 for user validation. Windows x64 directory packaging with publishing disabled
-also passed. No running Capri instance was restarted.
+also passed. No running Stella instance was restarted.
 
 ## Repository checkpoint and text-chat blips (2026-11-09)
 

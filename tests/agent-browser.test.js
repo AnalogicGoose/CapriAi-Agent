@@ -42,7 +42,7 @@ test('Firefox dispatch requests a tab in the normal profile without a shell or p
   assert.deepEqual(calls[1][1],['https://example.com/']);
 });
 
-test('Capri prefers Firefox over the Windows default, honors explicit choices and never silently falls back',async()=>{
+test('Stella prefers Firefox over the Windows default, honors explicit choices and never silently falls back',async()=>{
   const calls=[];
   const desktop=new DesktopTools({openExternal:async url=>calls.push(['system',url]),
     executables:()=>[{label:'Firefox',file:'C:\\Apps\\firefox.exe'},{label:'Google Chrome',file:'C:\\Apps\\chrome.exe'}],

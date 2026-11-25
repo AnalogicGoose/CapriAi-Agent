@@ -13,7 +13,7 @@ from scipy.signal import butter, sosfiltfilt
 
 p = argparse.ArgumentParser()
 p.add_argument('source', type=Path)
-p.add_argument('--out', type=Path, default=Path('.caprigpt-local/voice-reference'))
+p.add_argument('--out', type=Path, default=Path('.stella-local/voice-reference'))
 p.add_argument('--start', type=float)
 p.add_argument('--end', type=float)
 a = p.parse_args()
@@ -50,7 +50,7 @@ for i, value in enumerate(active):
 report = {'source_sha256': digest(a.source), 'original_sha256': digest(original),
           'duration_seconds': len(x)/sr, 'sample_rate': sr, 'peak': float(np.max(np.abs(x))),
           'clipped_fraction': float(np.mean(np.abs(x) >= .999)), 'candidates': regions,
-          'limitations': 'Filtering is not source separation. No candidate is certified voice-only or attributed to Capri.'}
+          'limitations': 'Filtering is not source separation. No candidate is certified voice-only or attributed to Stella.'}
 if a.start is not None or a.end is not None:
     if a.start is None or a.end is None or not 0 <= a.start < a.end <= len(x)/sr or not 3 <= a.end-a.start <= 12:
         raise SystemExit('Select a reviewed region of 3–12 seconds inside the recording.')

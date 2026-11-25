@@ -10,7 +10,7 @@ const { PassThrough, Writable } = require('node:stream');
 const { QwenVoice } = require('../src/main/qwen-voice');
 
 async function fixture(t, { slowReady = false, idleMs = 60000 } = {}) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'capri-qwen-test-'));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'stella-qwen-test-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   await Promise.all(['python.exe', 'config.json', 'ref.wav'].map(name => fs.writeFile(path.join(dir, name), 'fixture')));
   const config = { ttsPython: path.join(dir, 'python.exe'), ttsModel: dir,

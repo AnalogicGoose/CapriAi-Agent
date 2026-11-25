@@ -1,6 +1,6 @@
 # Restart continuity and natural project updates
 
-Capri can retrieve the selected project's saved goals, next steps, decisions and
+Stella can retrieve the selected project's saved goals, next steps, decisions and
 check receipts after restarting. The active Codex tool loop now supports ordinary
 language for explicit updates; personal facts remain in the separate memory store.
 This is saved-record continuity, not an automatic archive of conversation.
@@ -22,8 +22,8 @@ Examples in normal chat or an addressed voice request:
 - `Save where we left off: Review paused; next inspect seated motion.`
 - After restarting: `Where did we leave off?` or `Let's continue.`
 
-Capri uses `capri_project_lookup` to retrieve current saved evidence and
-`capri_project_change` to apply requested updates. Existing records must have been
+Stella uses `stella_project_lookup` to retrieve current saved evidence and
+`stella_project_change` to apply requested updates. Existing records must have been
 looked up in that turn; ambiguous references require clarification. A successful
 save clears old model conversation context so a correction is not contradicted by
 the previous session's messages. Natural interpretation depends on Codex being
@@ -32,16 +32,16 @@ available; local slash commands remain available offline.
 There is one explicitly saved resume point per project and one global point.
 Saving a replacement requires looking up the previous point. A fingerprint of the
 scoped goals/notes marks a point `needs_review` after those records change, even if
-the updates share a timestamp. Capri must use current goal/decision records rather
+the updates share a timestamp. Stella must use current goal/decision records rather
 than presenting an outdated handoff as current progress. Resume points are saved
 only on request; ordinary chat and task output are not automatically persisted.
 
 Say **“Resume my saved task”** or **“Let’s pick up where we left off”** to
 continue from the current handoff. A clear next action helps, for example
 **“Save where we left off: Layout review is paused. Next: Open my workspace.”**
-Without a handoff, Capri looks for an active goal with a saved next step.
+Without a handoff, Stella looks for an active goal with a saved next step.
 You can target one directly with **“Resume task #3”** or **“Resume task Review
-the layout.”** If multiple tasks match or the handoff is stale, Capri asks you
+the layout.”** If multiple tasks match or the handoff is stale, Stella asks you
 which current step to use. Normal desktop and command permissions apply when
 carrying it out.
 

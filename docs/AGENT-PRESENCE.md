@@ -1,4 +1,4 @@
-# Capri as a Codex desktop agent
+# Stella as a Codex desktop agent
 
 This unreleased checkout now separates requested work from autonomous presence.
 Neither path uses Qwen or Ollama for inference.
@@ -11,13 +11,13 @@ forcing those capabilities off. The default working directory is the user's home
 folder unless a project is selected, with Codex's workspace-write sandbox and
 on-request human approval. [Project companion](PROJECT-COMPANION.md) explains
 folder selection, scoped goals, decisions and command-exit receipts.
-Additional filesystem/network permission requests are reviewed in Capri and
+Additional filesystem/network permission requests are reviewed in Stella and
 granted only for that turn. The app does not grant administrator rights or bypass
 Windows protection. Installed Codex connections are distinct from this ChatGPT
 session's plugins: subscriptions, credentials and tools are not automatically
 copied from ChatGPT.
 
-Capri's own tools expose:
+Stella's own tools expose:
 
 - Screen snapshots as actual model image inputs, with display ID, dimensions and
   a short-lived coordinate reference. The default is the foreground app's display;
@@ -33,25 +33,25 @@ Capri's own tools expose:
 Native approval requests show the actual command, requested permissions or known
 file-change item. Stop sends turn/interrupt before closing the owned process,
 allowing Codex to cancel its work. Closing a turn cannot undo completed actions.
-Foreground requests have a ten-minute deadline and up to forty Capri tool calls.
+Foreground requests have a ten-minute deadline and up to forty Stella tool calls.
 
 ### Direct Windows actions
 
-Clear launch requests for known apps bypass the model. Capri checks for a
-visible app window through Windows. For **Open my workspace**, Capri opens the
+Clear launch requests for known apps bypass the model. Stella checks for a
+visible app window through Windows. For **Open my workspace**, Stella opens the
 selected project folder and verifies the exact path in File Explorer.
 
-For a named song, try **Play One More Time by Daft Punk**. Capri resolves the
+For a named song, try **Play One More Time by Daft Punk**. Stella resolves the
 requested title and artist from public YouTube results, opens the track in
 YouTube Music in your usual browser and checks Windows media playback. She
 confirms playback only when Windows reports a matching title and artist
 playing. An ambiguous result asks for the artist. If a lookup cannot find a
-matching official track, Capri opens the search results to help you choose.
+matching official track, Stella opens the search results to help you choose.
 
 ## Presence and conversation
 
 Normal greetings, idle remarks, satellite commentary and completion chatter no
-longer come from the old dialogue banks. Clicking Capri opens AI conversation;
+longer come from the old dialogue banks. Clicking Stella opens AI conversation;
 gestures and posture in normal chat use an AI-selected body tool and an AI-written
 reply. Operational labels, actual error/approval text and the offline maintenance
 panel remain deterministic. Legacy translation/dialogue resources remain for
@@ -97,7 +97,7 @@ been idle for five minutes. Gaming mode pauses both. No missed conversations are
 queued for a later burst.
 
 Generated remarks use the existing local speech pipeline when **Sound → Speak chat
-replies** is enabled. The separate opt-in controls for the existing Hey Capri
+replies** is enabled. The separate opt-in controls for the existing Hey Stella
 listener are described in [WAKE-WORD.md](WAKE-WORD.md).
 
 ## Data and controls
@@ -108,10 +108,10 @@ screen/observation-interval preferences remain compatible in saved configuration
 but are no longer offered as working controls. All apps remain eligible by
 default, including newly installed apps; there is no allowlist to maintain.
 
-Screen capture is not a video stream or recording. Capri stores no screen images
+Screen capture is not a video stream or recording. Stella stores no screen images
 on disk for this feature, and it adds no keyboard hooks or keylogging. Selected
 snapshots and context are sent to OpenAI for reasoning. The provider's handling is
-separate from Capri's ephemeral local state. Personal memories remain in SQLite
+separate from Stella's ephemeral local state. Personal memories remain in SQLite
 under their existing recall, save, edit, retention and confirmation controls.
 
 ## Reusable routines
@@ -123,7 +123,7 @@ match binds that current request to one immutable definition/version for the tur
 stored recipes, pages and ordinary context cannot create an invocation themselves.
 Teaching-only turns disable native execution and block local workflow effects.
 
-Execution reuses the foreground Codex/Capri tools with sequential receipt-backed
+Execution reuses the foreground Codex/Stella tools with sequential receipt-backed
 step tracking. Failed commands/actions, cancellation, permission revocation or
 changed definitions/projects stop progress; no background task or separate shell
 runner is introduced. Ordinary sandbox, consequential approvals and fresh-screen
@@ -133,7 +133,7 @@ statuses/counts/result categories rather than transcripts or command output.
 
 ## Saved goals
 
-Enable Memory, then use `/goals add Finish the Capri roadmap` in chat. Use
+Enable Memory, then use `/goals add Finish the Stella roadmap` in chat. Use
 `/goals next 1 Review test results` to save a next step, `/goals pause 1` to stop
 including a goal in context, `/goals resume 1` to restore it, and `/goals done 1`
 when you consider it complete. `/goals list`, `/goals export`, `/goals delete 1`
@@ -153,7 +153,7 @@ when **Remember recent chats** is enabled in the Control room.
 ## Quiet check-in trial
 
 Start a one-day trial in **Control room → PC awareness → Quiet trial**.
-Capri evaluates her usual opportunities using the enabled context sources.
+Stella evaluates her usual opportunities using the enabled context sources.
 She keeps proposed text, a reason for the check-in, and counts for quiet,
 blocked, or repeated opportunities. The log stays local and expires after
 seven days. Existing drafts can be considered during the trial. Private
@@ -165,7 +165,7 @@ latency. Use `/companion trial rate <number> welcome`, `bad-timing`, or
 opportunities by five minutes. A topic rated repetitive is set aside for
 a day. Check-ins stay quiet after the trial ends until you explicitly
 resume them. During live check-ins, **Why did you bring that up?** explains
-the reason Capri used for a recently delivered check-in.
+the reason Stella used for a recently delivered check-in.
 
 ## Validation
 
@@ -186,13 +186,13 @@ speech quality and realistic autonomous behavior need normal-Windows validation.
 Some older Electron smoke fixtures still assume Ollama and are not acceptance
 evidence for this new architecture.
 
-The current desktop shortcut still targets this checkout directly. Restart Capri
+The current desktop shortcut still targets this checkout directly. Restart Stella
 to load the new code. No running companion was restarted, and nothing was pushed,
 tagged or published as part of this upgrade.
 
 ## Instant talk launcher
 
-Left-click Capri to show two circular choices above her: text chat and voice.
+Left-click Stella to show two circular choices above her: text chat and voice.
 The launcher and composer open locally, without a Codex status request or an
 inference round trip. Twelve local greetings per English/Spanish language cycle
 through shuffled bags; each greeting appears once before refilling, with no
@@ -212,17 +212,17 @@ The Node suite now has 193 passing tests, including greeting rotation, launch
 without Codex status, mode selection, focus handoff, bounds and click-through.
 An isolated Electron visual attempt exited with 0x80000003 before loading the
 preview, so desktop layout and live microphone acceptance remain unverified in
-this restricted session. Restart the normal Capri instance to load these edits.
+this restricted session. Restart the normal Stella instance to load these edits.
 
 ## Hands-free activation
 
-[Hey Capri wake listening](WAKE-WORD.md) now keeps the local speech pipeline
+[Hey Stella wake listening](WAKE-WORD.md) now keeps the local speech pipeline
 available across apps, games and fullscreen while enabled. It opens a requested
 voice conversation, keeps the same microphone stream for following words, and
 submits that addressed request after a speech pause when the draft was empty.
 Ambient speech stays local and is discarded. The microphone indicator and Sound
 settings disable this feature. Wake listening yields during manual dictation and
-Capri playback; it requires Capri running, an awake PC and microphone access.
+Stella playback; it requires Stella running, an awake PC and microphone access.
 The Node suite now passes 200 tests. Real microphone recognition and fullscreen
 acceptance remain pending in a normal Windows session.
 
@@ -236,7 +236,7 @@ retain their existing styling and priorities.
 
 Voice opens a compact dedicated layout with one central microphone, transcript,
 brief listening status and a keyboard switch. The send control appears for a
-draft and stays hidden while recording. Both the voice circle and Hey Capri use
+draft and stays hidden while recording. Both the voice circle and Hey Stella use
 this layout. Switching to typing flushes and preserves the transcript for review
 and disables wake auto-send for that request. Manual microphone input still
 requires Send; ordinary wake requests still auto-submit after their pause.
@@ -274,4 +274,4 @@ Tests exercise all seven page renders, rapid saves, failure recovery, focus/draf
 and scroll preservation, and queued startup-switch order. Existing settings
 validation and action restrictions remain in force. Native visual verification
 remains pending because the isolated Electron/browser runtime cannot launch in
-this restricted session. No running Capri instance was restarted.
+this restricted session. No running Stella instance was restarted.

@@ -1,6 +1,6 @@
 > Current behavior: [compact, interruptible voice conversations](docs/COMPACT-VOICE.md). Text chat is silent. The setup notes below describe earlier iterations.
 > Expressive voice setup: [Qwen voice](docs/EXPRESSIVE-VOICE.md).
-> Previous hands-free behavior: [Hey Capri wake listening](docs/WAKE-WORD.md).
+> Previous hands-free behavior: [Hey Stella wake listening](docs/WAKE-WORD.md).
 > Wake-addressed requests can auto-send; manual mic dictation remains reviewable.
 > Earlier setup notes below may describe the previous click-only behavior.
 
@@ -11,11 +11,11 @@
 Settings → Sound now offers spoken chat replies, engine selection, CPU/GPU,
 Python executable, reference WAV and reference transcript. Speech is off by
 default. Choose **Windows offline voice** and enable **Speak chat replies** to
-use the working baseline after restarting Capri. Volume and mute apply to speech
+use the working baseline after restarting Stella. Volume and mute apply to speech
 and character effects. No model installation is needed for the Windows voice.
 
 Replies are synthesized after the full AI answer completes, up to 1,500 spoken
-characters. A new message, closing chat, Escape, dictation, hiding Capri, gaming,
+characters. A new message, closing chat, Escape, dictation, hiding Stella, gaming,
 fullscreen, renderer reload or app exit cancels generation/playback. Generation
 has a two minute deadline and a 16 MB output limit. Temporary request/audio files
 are deleted after each job. An amplitude callback drives the existing talk
@@ -31,7 +31,7 @@ not change the written answer or send a message by itself.
 ## Supplied recording
 
 The attachment was recovered through the referenced chat, rather than the Linux
-`/mnt/data` path. Local assets live under ignored `.caprigpt-local/voice-reference/`:
+`/mnt/data` path. Local assets live under ignored `.stella-local/voice-reference/`:
 
 - `original.mp3`: unchanged copy, SHA-256
   `c75c210dfec34428af7a1af50def991b7a6054fe9245530efdd1946fe90ad7d8`.
@@ -43,7 +43,7 @@ The attachment was recovered through the referenced chat, rather than the Linux
   transcript or speaker attribution.
 
 The decoded recording had no detected full-scale clipping. Energy detection does
-not distinguish dialogue from music/effects, identify Capri, or detect another
+not distinguish dialogue from music/effects, identify Stella, or detect another
 speaker. Filtering is not dialogue source separation. The provisional reference
 is deliberately not configured as a production voice. Listen to the original
 and preview, select a single-speaker line, and verify every word before cloning.
@@ -53,9 +53,9 @@ output with the source for damaged consonants, reverb and lost voice character.
 Reproduce preparation from this checkout:
 
 ```powershell
-uv venv --python 3.11 .caprigpt-local/voice-venv
-uv pip install --python .caprigpt-local/voice-venv/Scripts/python.exe -r scripts/voice-analysis-requirements.txt
-.caprigpt-local/voice-venv/Scripts/python.exe scripts/prepare-voice.py 'PATH_TO_SAMPLE.mp3'
+uv venv --python 3.11 .stella-local/voice-venv
+uv pip install --python .stella-local/voice-venv/Scripts/python.exe -r scripts/voice-analysis-requirements.txt
+.stella-local/voice-venv/Scripts/python.exe scripts/prepare-voice.py 'PATH_TO_SAMPLE.mp3'
 # After listening, pass --start SECONDS --end SECONDS to export a 3–12 second excerpt.
 ```
 
@@ -84,7 +84,7 @@ voice or using it commercially. Preserve Chatterbox's built-in watermark.
 Use **separate Python environments** for the two engines to avoid conflicting
 PyTorch/NumPy requirements. Install the chosen package and its compatible
 dependencies following its official setup, then pre-cache its model and vocoder
-weights explicitly. Capri sets `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`
+weights explicitly. Stella sets `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`
 before imports; normal speech requests do not initiate model downloads. A missing
 cache fails visibly. Set the absolute Python path and a reviewed WAV in Sound.
 F5 also needs its exact transcript and FFmpeg available in that environment.
@@ -112,4 +112,4 @@ in-flight cancellation), and the existing settings smoke check. Clone inference
 and speaker similarity remain unverified.
 The running companion was not restarted. Its desktop shortcut was inspected and
 already points directly at this checkout's Electron executable, absolute project
-argument, working folder and Capri icon.
+argument, working folder and Stella icon.

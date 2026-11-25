@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 'use strict';
 
-// Claude Code hook -> Capri.
-// Reads the hook event on stdin and forwards a trimmed copy to the Capri app.
+// Claude Code hook -> Stella.
+// Reads the hook event on stdin and forwards a trimmed copy to the Stella app.
 // Rule #1: never get in Claude's way. No output, always exit 0, give up fast.
 
 const http = require('node:http');
 
-const PORT = Number(process.env.CAPRI_PORT) || 47823;
+const PORT = Number(process.env.STELLA_PORT) || 47823;
 
-// Fields Capri actually uses. Everything else (file contents, tool output...) stays on your machine.
+// Fields Stella actually uses. Everything else (file contents, tool output...) stays on your machine.
 const KEEP = [
   'hook_event_name', 'session_id', 'cwd', 'session_title', 'permission_mode',
   'tool_name', 'tool_input', 'tool_use_id', 'duration_ms', 'error', 'is_interrupt',
@@ -24,7 +24,7 @@ function trim(value, depth = 0) {
     if (depth > 2) return undefined;
     const out = {};
     for (const [k, v] of Object.entries(value)) {
-      // big edit payloads are useless to Capri, keep only their size
+      // big edit payloads are useless to Stella, keep only their size
       if (['content', 'old_string', 'new_string', 'new_source', 'edits'].includes(k)) {
         out[k + '_len'] = typeof v === 'string' ? v.length : Array.isArray(v) ? v.length : 0;
         continue;
@@ -36,7 +36,7 @@ function trim(value, depth = 0) {
   return value;
 }
 
-// Claude's answer, long enough for Capri to show it to you when you're not on Claude's window
+// Claude's answer, long enough for Stella to show it to you when you're not on Claude's window
 const REPLY_MAX = 6000;
 
 function slim(evt) {

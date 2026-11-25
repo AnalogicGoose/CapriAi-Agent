@@ -12,7 +12,7 @@ const ollama=require('../src/main/ollama');
     let reviews=0,details='';
     const noReview=process.argv.includes('--no-review');
     const agent=new MemoryAgent({settings:()=>({privacy:{memoryEnabled:true,memoryConfirmChanges:!noReview}}),store:()=>store,models:ollama.models,
-      infer:async(request,signal)=>{const raw=await ollama.chat(request,()=>{},signal);if(process.env.CAPRI_DEBUG_MEMORY_PLAN==='1')console.log('TEMPORARY TEST PLAN:',raw);return raw;},confirm:async(title,text)=>{reviews++;details=text;return true;}});
+      infer:async(request,signal)=>{const raw=await ollama.chat(request,()=>{},signal);if(process.env.STELLA_DEBUG_MEMORY_PLAN==='1')console.log('TEMPORARY TEST PLAN:',raw);return raw;},confirm:async(title,text)=>{reviews++;details=text;return true;}});
     let result=await agent.route('forget about wow. remember i like games and cool coding stuff');
     console.log('COMPOUND:',result.text);console.log('REVIEW:',details);
     assert.equal(reviews,noReview?0:1);assert.doesNotMatch(store.get(original.id).text,/\bWoW\b/i);assert.match(store.get(original.id).text,/English/);assert.match(store.get(original.id).text,/Cyberpunk/);assert.equal(store.get(original.id).profile,1);

@@ -8,7 +8,7 @@
 // the show) and all that shows of her is her mask in the bottom-left corner, eyes shut. They
 // open, blinking, while Claude is waiting on you. Click it and she comes back out (app.js).
 
-import { COLORS, drawMask } from './fx.js';
+import { COLORS, drawMask } from './away-mask.js';
 import { rand, reducedMotion } from './util.js';
 
 const STEP = 1000 / 12;

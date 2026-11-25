@@ -10,7 +10,7 @@ const store = () => new ReminderStore(':memory:', { now: () => NOW });
 const tools = (reminders, lang = 'en') => new CodexTools({ settings: () => ({ lang }), reminders });
 const ctx = text => ({ text, check: () => {}, signal: new AbortController().signal });
 const ONCE = JSON.stringify({ kind: 'once', date: '2026-11-24', at: '15:30' });
-const call = (t, args, text) => t.run('capri_reminder', { operation: 'list', id: 0, text: '', schedule: '', requestEvidence: text, ...args }, ctx(text));
+const call = (t, args, text) => t.run('stella_reminder', { operation: 'list', id: 0, text: '', schedule: '', requestEvidence: text, ...args }, ctx(text));
 
 test('add through the tool returns the exact next local time and repeat label', async () => {
   const s = store();
@@ -45,9 +45,9 @@ test('hypothetical or negated requests cannot create or cancel reminders', async
   assert.deepEqual((await call(t, { operation: 'list' }, 'what are my reminders?')).reminders, []);
 });
 
-test('capri_reminder is offered only with a store', () => {
-  assert.ok(!tools(undefined).specs().some(row => row.name === 'capri_reminder'));
-  assert.ok(tools(store()).specs().some(row => row.name === 'capri_reminder'));
+test('stella_reminder is offered only with a store', () => {
+  assert.ok(!tools(undefined).specs().some(row => row.name === 'stella_reminder'));
+  assert.ok(tools(store()).specs().some(row => row.name === 'stella_reminder'));
   assert.ok(tools(store()).instructions().includes(REMINDER_INSTRUCTIONS));
   assert.ok(!tools(undefined).instructions().includes(REMINDER_INSTRUCTIONS));
 });
@@ -67,7 +67,7 @@ test('offline list, cancel and done work without Codex in five languages', () =>
     const cancelled = routeReminderCommand('/remind cancel 2', s, lang);
     assert.match(cancelled.text, /walk/); assert.equal(s.get(2).status, 'cancelled');
     assert.match(routeReminderCommand('/remind cancel 2', s, lang).text, /2/);
-    assert.ok(!/capri/i.test(listed.text + done.text + cancelled.text));
+    assert.ok(!/stella/i.test(listed.text + done.text + cancelled.text));
   }
   const s = store();
   assert.equal(routeReminderCommand('open spotify', s, 'en'), null);
@@ -76,8 +76,8 @@ test('offline list, cancel and done work without Codex in five languages', () =>
   assert.match(routeReminderCommand('/remind cancel', s, 'en').text, /\/remind/);
 });
 
-test('capri_reminder description and instruction stay within budget', () => {
-  const spec = tools(store()).specs().find(row => row.name === 'capri_reminder');
+test('stella_reminder description and instruction stay within budget', () => {
+  const spec = tools(store()).specs().find(row => row.name === 'stella_reminder');
   assert.ok(Buffer.byteLength(spec.description) <= 500, `${Buffer.byteLength(spec.description)} bytes`);
   assert.ok(Buffer.byteLength(REMINDER_INSTRUCTIONS) <= 200, `${Buffer.byteLength(REMINDER_INSTRUCTIONS)} bytes`);
 });

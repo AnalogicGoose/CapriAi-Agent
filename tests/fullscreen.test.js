@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path');
 const {coversDisplay,startFullscreenWatch}=require('../src/main/fullscreen');
 
-test('fullscreen matches full monitor bounds, not maximized work area, other monitors or Capri itself',()=>{
+test('fullscreen matches full monitor bounds, not maximized work area, other monitors or Stella itself',()=>{
   const display={x:-1920,y:0,width:1920,height:1080};
   const window={...display,pid:123,caption:false};
   assert.equal(coversDisplay(window,display,456),true);
@@ -39,7 +39,7 @@ test('closing an overlay ignores brief fullscreen-shaped activation windows',()=
     assert.deepEqual(events,[false],'Closing chat must not flash a fullscreen teleport');
     row={...display,pid:123,caption:false};clock=200;watch.tick();
     clock=349;watch.tick();assert.deepEqual(events,[false]);
-    clock=350;watch.tick();assert.deepEqual(events,[false,true],'Sustained real fullscreen still hides Capri');
+    clock=350;watch.tick();assert.deepEqual(events,[false,true],'Sustained real fullscreen still hides Stella');
     row=null;watch.tick();assert.deepEqual(events,[false,true,false],'Return remains immediate');
   } finally {watch.stop();}
 });
@@ -67,37 +67,37 @@ async function fixture(reduce=false){
   global.document={body:{classList:{toggle(){}}}};
   const frames=new Map(),acks=[],poses=[];
   let clock=0,id=0,listener,resolveSnapshot;
-  const capri={p:{alpha:1},root:{dataset:{}},hidden:false,scale:0.6,pos:{x:500,y:600},
+  const stella={p:{alpha:1},root:{dataset:{}},hidden:false,scale:0.6,pos:{x:500,y:600},
     fx:{beam(){},burst(){}},voice:{play(){}},head:()=>({x:500,y:300}),endAct(){},cancelDrag(){},
     drawFrame(){poses.push(this.fullscreenProgress);}};
-  const controller=new FullscreenPresence({capri,host:{onFullscreenState:fn=>{listener=fn;},
+  const controller=new FullscreenPresence({stella,host:{onFullscreenState:fn=>{listener=fn;},
     fullscreenState:()=>new Promise(resolve=>{resolveSnapshot=resolve;}),fullscreenRendered:state=>acks.push(state)},
     now:()=>clock,schedule:fn=>{frames.set(++id,fn);return id;},cancel:id=>frames.delete(id)});
-  return {controller,capri,acks,frames,poses,send:state=>listener(state),snapshot:resolveSnapshot,
+  return {controller,stella,acks,frames,poses,send:state=>listener(state),snapshot:resolveSnapshot,
     step(time){clock=time;const pending=[...frames.values()];frames.clear();pending.forEach(fn=>fn(time));}};
 }
 
 test('rapid fullscreen changes reverse the current teleport without jumps, stale acknowledgments or stuck state',async()=>{
   const f=await fixture();
   f.send({active:true,revision:1});
-  assert.equal(f.capri.fullscreen,true,'Input suppression starts synchronously');
+  assert.equal(f.stella.fullscreen,true,'Input suppression starts synchronously');
   f.step(40);const halfway=f.controller.progress;
   assert.ok(halfway>0&&halfway<1);
   f.send({active:false,revision:2});
   assert.equal(f.controller.progress,halfway,'Reversal preserves the exact visible pose');
   f.send({active:true,revision:3});f.step(55);
   f.send({active:false,revision:4});f.step(250);
-  assert.equal(f.capri.fullscreen,false);
-  assert.equal(f.capri.fullscreenProgress,0);
+  assert.equal(f.stella.fullscreen,false);
+  assert.equal(f.stella.fullscreenProgress,0);
   assert.deepEqual(f.acks,[{revision:4,hidden:false}]);
   f.send({active:true,revision:3});f.snapshot({active:true,revision:0});await Promise.resolve();
-  assert.equal(f.capri.fullscreenProgress,0,'Old events and late initial snapshots cannot resurrect an old state');
+  assert.equal(f.stella.fullscreenProgress,0,'Old events and late initial snapshots cannot resurrect an old state');
   for(let revision=5;revision<105;revision++){
     f.send({active:revision%2===1,revision});f.step(250+(revision-4)*3);
   }
   f.step(1000);
-  assert.equal(f.frames.size,0);assert.equal(f.capri.fullscreen,false);
-  assert.equal(f.capri.p.alpha,1,'Presence never overwrites underlying pet alpha');
+  assert.equal(f.frames.size,0);assert.equal(f.stella.fullscreen,false);
+  assert.equal(f.stella.p.alpha,1,'Presence never overwrites underlying pet alpha');
   assert.ok(f.poses.every(value=>value>=0&&value<=1));
 });
 
@@ -105,41 +105,41 @@ test('completed fullscreen disappearance and reduced-motion reversal both settle
   for(const reduce of [false,true]){
     const f=await fixture(reduce);
     f.send({active:true,revision:1});f.step(200);
-    assert.equal(f.capri.fullscreenProgress,1);assert.equal(f.capri.root.dataset.fullscreen,'away');
+    assert.equal(f.stella.fullscreenProgress,1);assert.equal(f.stella.root.dataset.fullscreen,'away');
     assert.deepEqual(f.acks,[{revision:1,hidden:true}]);
     f.send({active:false,revision:2});f.step(400);
-    assert.equal(f.capri.fullscreenProgress,0);assert.equal(f.capri.root.dataset.fullscreen,'visible');
+    assert.equal(f.stella.fullscreenProgress,0);assert.equal(f.stella.root.dataset.fullscreen,'visible');
     assert.equal(f.frames.size,0);
   }
 });
 
 test('fullscreen changes while gaming stay silent, then restore effects after resuming',async()=>{
   const f=await fixture(),sounds=[],effects=[];
-  f.capri.voice.play=name=>sounds.push(name);
-  f.capri.fx.beam=()=>effects.push('beam');
-  f.capri.fx.burst=()=>effects.push('burst');
-  f.capri.gaming=true;
+  f.stella.voice.play=name=>sounds.push(name);
+  f.stella.fx.beam=()=>effects.push('beam');
+  f.stella.fx.burst=()=>effects.push('burst');
+  f.stella.gaming=true;
   for(let revision=1;revision<=6;revision++) {
     f.send({active:revision%2===1,revision});f.step(revision*200);
   }
   assert.deepEqual(sounds,[]);assert.deepEqual(effects,[]);
-  assert.equal(f.capri.fullscreen,false);
-  f.capri.gaming=false;
+  assert.equal(f.stella.fullscreen,false);
+  f.stella.gaming=false;
   f.send({active:true,revision:7});f.step(1500);
   f.send({active:false,revision:8});f.step(1700);
   assert.deepEqual(sounds,['teleport-out','teleport-in']);
-  assert.equal(f.capri.fullscreen,false);
+  assert.equal(f.stella.fullscreen,false);
 });
 
 test('a character with presenceEffect gets it instead of the beam and burst, with no fx',async()=>{
   const f=await fixture(),calls=[];
-  f.capri.fx=null;
-  f.capri.presenceEffect=active=>calls.push(active);
+  f.stella.fx=null;
+  f.stella.presenceEffect=active=>calls.push(active);
   f.send({active:true,revision:1});f.step(200);
   f.send({active:false,revision:2});f.step(500);
   assert.deepEqual(calls,[true,false]);
-  assert.equal(f.capri.fullscreenProgress,0);
-  f.capri.gaming=true;
+  assert.equal(f.stella.fullscreenProgress,0);
+  f.stella.gaming=true;
   f.send({active:true,revision:3});f.step(800);
   assert.deepEqual(calls,[true,false],'still silent while gaming');
 });

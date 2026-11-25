@@ -37,7 +37,7 @@ test('lines exist in five languages for normal and missed', () => {
     assert.ok(normal.includes('call mom'), lang);
     assert.ok(missed.includes('call mom') && missed.includes('09:05'), lang);
     assert.notEqual(normal, missed);
-    assert.ok(!/capri/i.test(normal + missed));
+    assert.ok(!/stella/i.test(normal + missed));
   }
   assert.equal(reminderLine({ text: 'x' }, { lang: 'xx' }), reminderLine({ text: 'x' }, { lang: 'en' }));
   assert.ok(reminderLine({ text: 'x', fired_due: firedDue }, { missed: true, lang: 'en', firedDue: new Date(2026, 10, 23, 18, 30).getTime() }).includes('18:30'));

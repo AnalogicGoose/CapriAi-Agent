@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// Adds (or removes) the Capri hooks in ~/.claude/settings.json.
+// Adds (or removes) the Stella hooks in ~/.claude/settings.json.
 // Existing settings and hooks are kept; a timestamped backup is written first.
 //
 //   node scripts/install-hooks.js            install
@@ -28,7 +28,7 @@ const EVENTS = [
   'SessionEnd',
 ];
 
-const MARK = 'capri-hook.js';
+const MARK = 'stella-hook.js';
 
 function settingsPath() {
   const base = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
@@ -44,9 +44,9 @@ function hasNode() {
 }
 
 // In the installed app (the .exe) the hook sits next to the app archive (asarUnpack), where
-// node can read it. With no node on the machine, Capri's own executable runs it as node.
+// node can read it. With no node on the machine, Stella's own executable runs it as node.
 function hookCommand() {
-  const script = path.resolve(__dirname, '..', 'hooks', 'capri-hook.js')
+  const script = path.resolve(__dirname, '..', 'hooks', 'stella-hook.js')
     .replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
     .replace(/\\/g, '/');
   if (process.versions.electron && !hasNode()) {
@@ -67,7 +67,7 @@ function readSettings(file) {
   }
 }
 
-function isCapriGroup(group) {
+function isStellaGroup(group) {
   return Array.isArray(group?.hooks) && group.hooks.some((h) => String(h.command || '').includes(MARK));
 }
 
@@ -76,7 +76,7 @@ function strip(settings) {
   for (const event of Object.keys(settings.hooks)) {
     const groups = settings.hooks[event];
     if (!Array.isArray(groups)) continue;
-    settings.hooks[event] = groups.filter((g) => !isCapriGroup(g));
+    settings.hooks[event] = groups.filter((g) => !isStellaGroup(g));
     if (settings.hooks[event].length === 0) delete settings.hooks[event];
   }
   if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
@@ -87,7 +87,7 @@ function write(file, settings) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   if (fs.existsSync(file)) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    fs.copyFileSync(file, `${file}.capri-backup-${stamp}`);
+    fs.copyFileSync(file, `${file}.stella-backup-${stamp}`);
   }
   fs.writeFileSync(file, JSON.stringify(settings, null, 2) + '\n');
 }
@@ -125,7 +125,7 @@ function status() {
   try {
     const settings = readSettings(file);
     const events = Object.entries(settings.hooks || {})
-      .filter(([, groups]) => Array.isArray(groups) && groups.some(isCapriGroup))
+      .filter(([, groups]) => Array.isArray(groups) && groups.some(isStellaGroup))
       .map(([event]) => event);
     return { file, installed: events.length > 0, events };
   } catch (err) {
@@ -140,13 +140,13 @@ if (require.main === module) {
   try {
     if (arg === '--uninstall') {
       const r = uninstall();
-      console.log(r.removed ? `Capri hooks removed from ${r.file}` : `No Capri hooks found in ${r.file}`);
+      console.log(r.removed ? `Stella hooks removed from ${r.file}` : `No Stella hooks found in ${r.file}`);
     } else if (arg === '--status') {
       const r = status();
       console.log(r.installed ? `Installed (${r.events.join(', ')}) in ${r.file}` : `Not installed (${r.file})`);
     } else {
       const r = install();
-      console.log(`Capri hooks installed for ${r.events} events in ${r.file}`);
+      console.log(`Stella hooks installed for ${r.events} events in ${r.file}`);
       console.log(`Command: ${r.command}`);
       console.log('Start a new Claude Code session for them to take effect.');
     }

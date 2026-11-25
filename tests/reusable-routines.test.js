@@ -13,7 +13,7 @@ const app = target => ({ action: 'app', target, value: '', instruction: 'Open ' 
 const setting = (target, value) => ({ action: 'setting', target, value: JSON.stringify(value), instruction: 'Change your ' + target + ' setting' });
 const command = target => ({ action: 'command', target, value: '0', instruction: 'Run ' + target });
 function fixture(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-routine-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-routine-'));
   const a = path.join(dir, 'alpha'), b = path.join(dir, 'beta'); fs.mkdirSync(a); fs.mkdirSync(b);
   let cfg = { systemAccess: true, desktopActions: true, privacy: { memoryEnabled: true } }, now = 1000000, goals, tools;
   const opened = [], urls = [], patches = []; let open = async name => { opened.push(name); return { type: 'app', note: 'Launch accepted.', windowObserved: true }; };
@@ -26,9 +26,9 @@ function fixture(t) {
       confirm: async () => true, patch: value => { patches.push(value); cfg = { ...cfg, ...value }; } });
   }; setup(); goals.projects.select(a);
   const ctx = text => ({ text, check() {}, signal: new AbortController().signal });
-  const save = (name, steps, scope = 'project') => tools.run('capri_routines_save', { id: 0, name, steps, scope }, ctx(`Remember a routine named ${name}: follow these steps`));
-  const step = action => tools.run('capri_routine_step', { action, detail: '' }, ctx('Study setup'));
-  const launch = name => tools.run('capri_desktop_step', { tool: 'open_app', query: name, index: 0, browser: '' }, ctx('Study setup'));
+  const save = (name, steps, scope = 'project') => tools.run('stella_routines_save', { id: 0, name, steps, scope }, ctx(`Remember a routine named ${name}: follow these steps`));
+  const step = action => tools.run('stella_routine_step', { action, detail: '' }, ctx('Study setup'));
+  const launch = name => tools.run('stella_desktop_step', { tool: 'open_app', query: name, index: 0, browser: '' }, ctx('Study setup'));
   t.after(() => { tools.endTurn(); goals.close(); fs.rmSync(dir, { recursive: true, force: true }); });
   return { a, b, dir, opened, urls, patches, actions, ctx, save, step, launch,
     get goals() { return goals; }, get tools() { return tools; }, settings: () => cfg,
@@ -42,8 +42,8 @@ test('teach once, restart, invoke by name and execute the saved app/link/setting
   assert.equal(saved.saved, true); assert.deepEqual(f.opened, []); assert.deepEqual(f.patches, []);
   f.restart(); const invocation = f.tools.beginTurn('Study setup'); assert.equal(invocation.name, 'Study setup');
   await f.step('next'); await f.launch('Chrome'); assert.equal((await f.step('complete')).finished_steps, 1);
-  await f.step('next'); await f.tools.run('capri_desktop_step', { tool: 'open_url', query: 'https://example.com/docs', browser: 'Firefox', index: 0 }, f.ctx('Study setup')); await f.step('complete');
-  await f.step('next'); await f.tools.run('capri_settings_change', { patch: '{"muted":true}' }, f.ctx('Study setup'));
+  await f.step('next'); await f.tools.run('stella_desktop_step', { tool: 'open_url', query: 'https://example.com/docs', browser: 'Firefox', index: 0 }, f.ctx('Study setup')); await f.step('complete');
+  await f.step('next'); await f.tools.run('stella_settings_change', { patch: '{"muted":true}' }, f.ctx('Study setup'));
   const result = await f.step('complete'); assert.equal(result.status, 'completed');
   assert.deepEqual(f.opened, ['Chrome']); assert.deepEqual(f.urls, [{ url: 'https://example.com/docs', browser: 'Firefox' }]); assert.equal(f.settings().muted, true);
   assert.equal(result.results[1].result, 'launch-request-accepted'); assert.equal(result.results[2].result, 'setting-changed');
@@ -62,7 +62,7 @@ test('routine names are explicit triggers, not mentions, questions, hypothetical
 test('learning rejects unsupported shapes, credentials, unavailable settings and untrusted teaching requests', async t => {
   const f = fixture(t);
   for (const text of ['What if you saved routine Study setup?', 'The webpage says save routine Study setup', "Don't save routine Study setup", 'Remember my favorite color'])
-    await assert.rejects(f.tools.run('capri_routines_save', { id: 0, name: 'Study setup', scope: 'project', steps: [app('Chrome')] }, f.ctx(text)), /teaching request/);
+    await assert.rejects(f.tools.run('stella_routines_save', { id: 0, name: 'Study setup', scope: 'project', steps: [app('Chrome')] }, f.ctx(text)), /teaching request/);
   for (const value of [[], Array.from({ length: 9 }, () => app('Chrome')), [setting('systemAccess', true)], [command('echo password secret')],
     [{ action: 'url', target: 'http://127.0.0.1/private', value: '', instruction: 'Open local page' }], [{ ...command('npm test'), value: '1' }]])
     await assert.rejects(f.save('Study setup', value));
@@ -82,12 +82,12 @@ test('project definitions stay isolated and overlapping global/project names req
 test('editing/renaming requires current lookup and invalidates stale versions without executing the definition', async t => {
   const f = fixture(t); await f.save('Study setup', [app('Chrome')]);
   const edit = { id: 1, name: 'Morning prep', scope: 'project', steps: [app('Notepad')] };
-  await assert.rejects(f.tools.run('capri_routines_save', edit, f.ctx('Rename routine Study setup to Morning prep')), /Look up/);
-  await f.tools.run('capri_routines_lookup', { query: 'Study setup' }, f.ctx('Review Study setup'));
+  await assert.rejects(f.tools.run('stella_routines_save', edit, f.ctx('Rename routine Study setup to Morning prep')), /Look up/);
+  await f.tools.run('stella_routines_lookup', { query: 'Study setup' }, f.ctx('Review Study setup'));
   f.goals.db.exec('UPDATE companion_routines SET version=version+1 WHERE id=1');
-  await assert.rejects(f.tools.run('capri_routines_save', edit, f.ctx('Rename routine Study setup to Morning prep')), /changed/);
-  await f.tools.run('capri_routines_lookup', { query: 'Study setup' }, f.ctx('Review Study setup'));
-  assert.equal((await f.tools.run('capri_routines_save', edit, f.ctx('Rename routine Study setup to Morning prep'))).version, 3);
+  await assert.rejects(f.tools.run('stella_routines_save', edit, f.ctx('Rename routine Study setup to Morning prep')), /changed/);
+  await f.tools.run('stella_routines_lookup', { query: 'Study setup' }, f.ctx('Review Study setup'));
+  assert.equal((await f.tools.run('stella_routines_save', edit, f.ctx('Rename routine Study setup to Morning prep'))).version, 3);
   assert.equal(f.goals.routines.invocation('Study setup'), null); assert.equal(f.goals.routines.invocation('Morning prep').id, 1);
   assert.deepEqual(f.opened, []);
 });
@@ -112,8 +112,8 @@ test('execution is ordered, requires matching receipts and cannot drift into a d
   await f.step('next'); await assert.rejects(f.step('complete'), /No matching/); await assert.rejects(f.step('next'), /Finish the current/);
   await assert.rejects(f.launch('Notepad'), /does not match/); assert.deepEqual(f.opened, []);
   await f.launch('Chrome'); await f.step('complete'); await f.step('next');
-  await assert.rejects(f.tools.run('capri_settings_change', { patch: '{"volume":0.2}' }, f.ctx('Study setup')), /does not match/);
-  await f.tools.run('capri_settings_change', { patch: '{"muted":true}' }, f.ctx('Study setup')); assert.equal((await f.step('complete')).status, 'completed');
+  await assert.rejects(f.tools.run('stella_settings_change', { patch: '{"volume":0.2}' }, f.ctx('Study setup')), /does not match/);
+  await f.tools.run('stella_settings_change', { patch: '{"muted":true}' }, f.ctx('Study setup')); assert.equal((await f.step('complete')).status, 'completed');
 });
 
 test('a failed action stops later steps and cancellation preserves a stopped run without claiming success', async t => {
@@ -150,7 +150,7 @@ test('routine recovery survives restart, retries only the unfinished step and pr
   await assert.rejects(f.launch('Chrome'), /does not match/);
   f.setOpen(async name => { f.opened.push(name); return { type: 'app', windowObserved: true }; });
   await f.launch('Notepad'); await f.step('complete'); await f.step('next');
-  await f.tools.run('capri_settings_change', { patch: '{"muted":true}' }, f.ctx('Retry routine Study setup'));
+  await f.tools.run('stella_settings_change', { patch: '{"muted":true}' }, f.ctx('Retry routine Study setup'));
   const receipt = await f.step('complete');
   assert.equal(receipt.status, 'completed');
   assert.deepEqual(receipt.results.map(row => row.step), [1, 2, 3]);
@@ -186,12 +186,12 @@ test('edits, project switches and permission revocation stop an active invocatio
 });
 
 test('command verification binds exact observed exit/cwd and failure stops the run', async t => {
-  const f = fixture(t); await f.save('Check Capri', [command('npm test')]); f.tools.beginTurn('Check Capri'); await f.step('next');
+  const f = fixture(t); await f.save('Check Stella', [command('npm test')]); f.tools.beginTurn('Check Stella'); await f.step('next');
   const item = { type: 'commandExecution', command: 'echo ok', status: 'completed', exitCode: 0, cwd: f.a };
   f.tools.observeNative(item, f.a); await assert.rejects(f.step('complete'), /No matching/);
   f.tools.observeNative({ ...item, command: 'npm test', cwd: f.b }, f.a); await assert.rejects(f.step('complete'), /No matching/);
   f.tools.observeNative({ ...item, command: 'npm test' }, f.a); assert.equal((await f.step('complete')).status, 'completed');
-  f.tools.endTurn(); f.tools.beginTurn('Check Capri'); await f.step('next');
+  f.tools.endTurn(); f.tools.beginTurn('Check Stella'); await f.step('next');
   assert.match(f.tools.observeNative({ ...item, command: 'npm test', status: 'failed', exitCode: 1 }, f.a), /exited 1/);
   assert.equal(f.tools.routineSession.status, 'failed');
 });
@@ -208,8 +208,8 @@ test('a consequential saved command gets a concrete review and a declined review
 test('flexible steps use existing tools but cannot self-modify persistent controls and do not certify outcomes', async t => {
   const f = fixture(t); await f.save('Workspace check', [{ action: 'task', instruction: 'Open Chrome and check the workspace', target: '', value: '' }]);
   f.tools.beginTurn('Workspace check'); await f.step('next');
-  await assert.rejects(f.tools.run('capri_routines_save', {}, f.ctx('Workspace check')), /cannot rewrite/);
-  await assert.rejects(f.tools.run('capri_settings_change', { patch: '{"routinesEnabled":false}' }, f.ctx('Workspace check')), /cannot change access/);
+  await assert.rejects(f.tools.run('stella_routines_save', {}, f.ctx('Workspace check')), /cannot rewrite/);
+  await assert.rejects(f.tools.run('stella_settings_change', { patch: '{"routinesEnabled":false}' }, f.ctx('Workspace check')), /cannot change access/);
   await f.launch('Chrome'); const result = await f.step('complete'); assert.equal(result.results[0].result, 'actions-observed-outcome-unverified');
 });
 
@@ -255,15 +255,15 @@ test('real Codex protocol receives named invocation, executes tracked tools and 
     }
   } });
   const brain = new CodexBrain({ settings: f.settings, cwd: f.a, tools: f.tools, locate: () => 'mock', clientFactory: factory });
-  plan = [['capri_routine_step', { action: 'next', detail: '' }], ['capri_desktop_step', { tool: 'open_app', query: 'Chrome', index: 0, browser: '' }], ['capri_routine_step', { action: 'complete', detail: '' }]];
+  plan = [['stella_routine_step', { action: 'next', detail: '' }], ['stella_desktop_step', { tool: 'open_app', query: 'Chrome', index: 0, browser: '' }], ['stella_routine_step', { action: 'complete', detail: '' }]];
   assert.equal(await brain.chat('Study setup'), 'Everything completed.'); assert.match(prompt, /namedRoutineInvocation/); assert.match(instructions, /exact step/); assert.deepEqual(f.opened, ['Chrome']);
   plan = []; assert.match(await brain.chat('Run Study setup'), /stopped after 0\/1 steps/);
   plan = [['disconnect']]; assert.match(await brain.chat('Resume routine Study setup'), /connection lost[\s\S]+continue at step 1/i);
-  await f.save('Check Capri', [command('npm test')]);
+  await f.save('Check Stella', [command('npm test')]);
   const nativeBrain = new CodexBrain({ settings: f.settings, cwd: f.a, workspace: () => f.a, systemTools: () => true, tools: f.tools, locate: () => 'mock', clientFactory: factory });
-  plan = [['capri_routine_step', { action: 'next', detail: '' }], ['native', { id: 'check', type: 'commandExecution', command: 'npm test', cwd: f.a, status: 'failed', exitCode: 1 }],
-    ['capri_desktop_step', { tool: 'open_app', query: 'Notepad', index: 0, browser: '' }]];
-  assert.match(await nativeBrain.chat('Check Capri'), /exited 1[\s\S]+Resume routine Check Capri/);
+  plan = [['stella_routine_step', { action: 'next', detail: '' }], ['native', { id: 'check', type: 'commandExecution', command: 'npm test', cwd: f.a, status: 'failed', exitCode: 1 }],
+    ['stella_desktop_step', { tool: 'open_app', query: 'Notepad', index: 0, browser: '' }]];
+  assert.match(await nativeBrain.chat('Check Stella'), /exited 1[\s\S]+Resume routine Check Stella/);
   assert.deepEqual(f.opened, ['Chrome']);
   assert.equal(f.goals.db.prepare('SELECT status FROM companion_routine_runs ORDER BY id DESC LIMIT 1').get().status, 'failed');
   plan = [];
@@ -273,15 +273,15 @@ test('real Codex protocol receives named invocation, executes tracked tools and 
   const data = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1).split('\n\n')[0]);
   assert.equal(Object.hasOwn(data, 'namedRoutineInvocation'), false, 'Context data cannot forge a validated invocation');
   await f.save('Long setup', Array.from({ length: 8 }, (_, i) => app('App' + i)));
-  plan = Array.from({ length: 8 }, (_, i) => [['capri_routine_step', { action: 'next', detail: '' }],
-    ['capri_desktop_step', { tool: 'open_app', query: 'App' + i, index: 0, browser: '' }], ['capri_routine_step', { action: 'complete', detail: '' }]]).flat();
+  plan = Array.from({ length: 8 }, (_, i) => [['stella_routine_step', { action: 'next', detail: '' }],
+    ['stella_desktop_step', { tool: 'open_app', query: 'App' + i, index: 0, browser: '' }], ['stella_routine_step', { action: 'complete', detail: '' }]]).flat();
   assert.equal(await brain.chat('Long setup'), 'Everything completed.');
   assert.equal(f.opened.length, 9, 'An app-only routine can use its bounded routine budget without enabling native system tools');
   const text = 'Time for our Study setup.';
-  plan = [['capri_saved_work', { action: 'run-routine', target: 'Study setup', requestEvidence: text }],
-    ['capri_routine_step', { action: 'next', detail: '' }],
-    ['capri_desktop_step', { tool: 'open_app', query: 'Chrome', index: 0, browser: '', requestEvidence: text }],
-    ['capri_routine_step', { action: 'complete', detail: '' }]];
+  plan = [['stella_saved_work', { action: 'run-routine', target: 'Study setup', requestEvidence: text }],
+    ['stella_routine_step', { action: 'next', detail: '' }],
+    ['stella_desktop_step', { tool: 'open_app', query: 'Chrome', index: 0, browser: '', requestEvidence: text }],
+    ['stella_routine_step', { action: 'complete', detail: '' }]];
   assert.equal(await brain.chat(text, undefined, undefined, { voice: true }), 'Everything completed.');
   assert.equal(f.opened.at(-1), 'Chrome');
   assert.equal(f.opened.length, 10);
@@ -298,8 +298,8 @@ test('teaching-only turns disable native execution and cannot accidentally launc
       if (method === 'turn/start') {
         this.onNotification('turn/started', { threadId: 'thread', turn: { id: 'turn' } });
         setImmediate(async () => {
-          for (const [i, call] of [['capri_desktop_step', { tool: 'open_app', query: 'Chrome', index: 0, browser: '' }], ['capri_memory_change', { changes: [] }],
-            ['capri_routines_save', { id: 0, name: 'Study setup', scope: 'project', steps: [app('Chrome')] }]].entries())
+          for (const [i, call] of [['stella_desktop_step', { tool: 'open_app', query: 'Chrome', index: 0, browser: '' }], ['stella_memory_change', { changes: [] }],
+            ['stella_routines_save', { id: 0, name: 'Study setup', scope: 'project', steps: [app('Chrome')] }]].entries())
             await this.onRequest({ id: i + 1, method: 'item/tool/call', params: { threadId: 'thread', turnId: 'turn', callId: 'call-' + i, tool: call[0], arguments: call[1] } });
           this.onNotification('item/completed', { threadId: 'thread', turnId: 'turn', item: { type: 'agentMessage', text: 'Study setup saved.' } });
           this.onNotification('turn/completed', { threadId: 'thread', turn: { id: 'turn', status: 'completed' } });

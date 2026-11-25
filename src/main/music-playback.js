@@ -17,7 +17,7 @@ function trackQuery(query, by) {
 
 function musicRequest(value, allowBare = false) {
   if (typeof value !== 'string' || value.length > 300 || /[\r\n;]|https?:\/\/|\b(?:and then|instead of|and (?:open|launch|play|pause|close|don't))\b/i.test(value.replace(/’/g, "'"))) return null;
-  const command = /^(?:(?:hey\s+)?(?:stella|stela|capri)[,\s]+)?(?:please\s+)?(?:(?:can|could|would) you\s+)?(?:please\s+)?(play|pon|reproduce)\s+(.+?)\s*[.!?]*$/i.exec(value.trim());
+  const command = /^(?:(?:hey\s+)?(?:stella|stela)[,\s]+)?(?:please\s+)?(?:(?:can|could|would) you\s+)?(?:please\s+)?(play|pon|reproduce)\s+(.+?)\s*[.!?]*$/i.exec(value.trim());
   if (!command) return null;
   const song = command[2].replace(/,?\s+(?:please|por favor)$/i, '');
   const browser = /\s+(?:in|en|using)\s+(Firefox|(?:Google )?Chrome|(?:Microsoft )?Edge|Brave|(?:the )?Windows default browser)$/i.exec(song);

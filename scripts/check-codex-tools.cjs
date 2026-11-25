@@ -18,22 +18,22 @@ app.whenReady().then(async () => {
     confirm: () => { throw Error('This diagnostic does not accept confirmations.'); } });
   const launch = process.argv.includes('--launch-firefox');
   const tools = { instructions: () => bridge.instructions(),
-    specs: () => bridge.specs().filter(row => row.name === 'capri_apps' || (launch && row.name === 'capri_desktop_step')),
+    specs: () => bridge.specs().filter(row => row.name === 'stella_apps' || (launch && row.name === 'stella_desktop_step')),
     run: async (name, args, context) => {
-      if (name !== 'capri_apps' && !(launch && name === 'capri_desktop_step' && args.tool === 'open_app' && args.query.toLowerCase() === 'firefox')) throw Error('Outside the diagnostic tool boundary.');
+      if (name !== 'stella_apps' && !(launch && name === 'stella_desktop_step' && args.tool === 'open_app' && args.query.toLowerCase() === 'firefox')) throw Error('Outside the diagnostic tool boundary.');
       const receipt = await bridge.run(name, args, context);
       console.log(JSON.stringify({ tool: name, completed: receipt.completed ?? true }));
       return receipt;
     }, cancel: () => actions.cancel(), endTurn: () => bridge.endTurn() };
   if (process.argv.includes('--live')) {
-    const brain = new CodexBrain({ settings, cwd: path.join(app.getPath('temp'), 'capri-tool-check'), tools });
+    const brain = new CodexBrain({ settings, cwd: path.join(app.getPath('temp'), 'stella-tool-check'), tools });
     try {
-      const answer = await brain.chat(launch ? 'Open Firefox.' : 'Use capri_apps and tell me whether Firefox has a launch entry. Do not open any app.');
+      const answer = await brain.chat(launch ? 'Open Firefox.' : 'Use stella_apps and tell me whether Firefox has a launch entry. Do not open any app.');
       console.log(JSON.stringify({ answer, diagnostics: brain.lastDiagnostics }));
       if (!brain.lastDiagnostics.completed) throw Error('Codex did not complete a local tool call.');
     } finally { brain.cancel(); }
   } else if (launch) {
-    const result = await tools.run('capri_desktop_step', { tool: 'open_app', query: 'Firefox', index: 0, browser: 'default' },
+    const result = await tools.run('stella_desktop_step', { tool: 'open_app', query: 'Firefox', index: 0, browser: 'default' },
       { text: 'open firefox', signal: new AbortController().signal, check() {} });
     if (!result.completed) throw Error(result.text);
     console.log(JSON.stringify({ completed: result.completed, result: result.text }));

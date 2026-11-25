@@ -1,4 +1,4 @@
-# Capri next milestones
+# Stella next milestones
 
 ## 1. Local companion (current)
 
@@ -33,11 +33,11 @@ Resolve character asset permissions or replace them with licensed assets before 
 - `src/main/action-confirmation.js`: main-process app-close approval gate.
 - `src/main/apps.js`: restricted Windows close operations.
 - `src/renderer/js/chat.js`: upstream persona, history and chat panel.
-- `src/renderer/js/acting.js`, `capri.js`, `sprite.js`, `fx.js`: existing animations and rendering.
+- `src/renderer/js/acting.js`, `stella.js`, `sprite.js`, `fx.js`: existing animations and rendering.
 - `hooks/`, `scripts/install-hooks.js`: legacy optional Claude integration.
 
-Repository: [AnalogicGoose/CapriAi-Agent](https://github.com/AnalogicGoose/CapriAi-Agent), integrated on `development`. The earlier prototype was hosted on the fork [Chocoyito1/capri-desktop](https://github.com/Chocoyito1/capri-desktop) (branch `codex/caprigpt-local`, based on upstream `79a016c`).
+Repository: [AnalogicGoose/Stella](https://github.com/AnalogicGoose/Stella), integrated on `development`. The earlier prototype was hosted on the fork [Chocoyito1/capri-desktop](https://github.com/Chocoyito1/capri-desktop) (branch `codex/stella-local`, based on upstream `79a016c`).
 
-Connection modules: `hooks/caprigpt-codex-hook.js` strips and forwards events; `src/main/codex-events.js` validates and reduces state; `src/renderer/js/integration.js` handles notification visuals; `scripts/install-codex-hooks.js` installs/removes definitions without granting trust.
+Connection modules: `hooks/stella-codex-hook.js` strips and forwards events; `src/main/codex-events.js` validates and reduces state; `src/renderer/js/integration.js` handles notification visuals; `scripts/install-codex-hooks.js` installs/removes definitions without granting trust.
 
 The three accepted follow-ups (quiet mode, optional local memory, and packaged launch/update flow) are tracked in [TODO.md](TODO.md). Desktop Codex lifecycle events are verified by authenticated delivery and user-visible reaction. Quiet mode now uses the original artwork with a focused work cycle and messages for completion, approval and errors. Local memory and packaging remain pending.

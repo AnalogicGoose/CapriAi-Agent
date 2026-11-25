@@ -1,13 +1,13 @@
 'use strict';
-// Isolated, silent native playback check. Does not modify or restart live Capri.
+// Isolated, silent native playback check. Does not modify or restart live Stella.
 const { app, BrowserWindow, ipcMain } = require('electron');
 const fs = require('node:fs'), path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { SpeechOutput } = require('../src/main/tts');
 const root = path.resolve(__dirname, '..');
-const setupFile = process.env.CAPRI_VOICE_SETUP || path.join(root, '.caprigpt-local/voice-setup.json');
+const setupFile = process.env.STELLA_VOICE_SETUP || path.join(root, '.stella-local/voice-setup.json');
 const cfg = { ...JSON.parse(fs.readFileSync(setupFile, 'utf8')), ttsEnabled: true, ttsEngine: 'qwen' };
-const scratch = path.join(root, '.caprigpt-local/qwen-renderer-check'); fs.mkdirSync(scratch, { recursive: true });
+const scratch = path.join(root, '.stella-local/qwen-renderer-check'); fs.mkdirSync(scratch, { recursive: true });
 app.setPath('userData', path.join(scratch, 'profile'));
 app.whenReady().then(async () => {
   const window = new BrowserWindow({ show: false, webPreferences: { preload: path.join(root, 'src/preload.js'),
@@ -19,7 +19,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('tts:speak', (event, request) => event.sender === window.webContents ? output.speak(request) : { ok: false });
   ipcMain.on('tts:cancel', event => { if (event.sender === window.webContents) output.cancel(false); });
   try {
-    fs.writeFileSync(path.join(scratch, 'check.html'), '<!doctype html><title>Capri voice check</title>');
+    fs.writeFileSync(path.join(scratch, 'check.html'), '<!doctype html><title>Stella voice check</title>');
     await window.loadFile(path.join(scratch, 'check.html'));
     await output.qwen.ensure(cfg);
     const moduleUrl = pathToFileURL(path.join(root, 'src/renderer/js/speech-output.js')).href;

@@ -31,7 +31,7 @@ async function controlRoom(config = {}) {
   const notice = node(), statusbar = node(), status = node(), close = node();
   const remote = { value: { config: { volume: .7, scale: .6, visible: true, langSetting: 'auto', gamingMode: false, privacy: { retentionDays: 90, memoryEnabled: true },
     ttsEngine: 'qwen', ttsDevice: 'cpu', ttsPython: '', ttsModel: '', ttsReference: '', ttsReferenceText: '', codexExecutable: '', codexModel: '', codexEffort: 'medium',
-    wakeWordEnabled: true, ...config }, runtime: { version: '0.4.0', currentSource: true, build: 'test', root: 'C:\\Capri' },
+    wakeWordEnabled: true, ...config }, runtime: { version: '0.4.0', currentSource: true, build: 'test', root: 'C:\\Stella' },
     displays: [{ id: 1, width: 1920, height: 1080 }], integration: { lastSeen: null }, reminders: [{ id: 3, text: 'Stretch', next: '2026-11-25 18:30', repeat: 'daily', movable: true }],
     initiative: { phase: 'live' }, project: null, startup: false } };
   const content = { dataset: {}, scrollTop: 0, offsetWidth: 380, classList: node().classList,
@@ -129,7 +129,7 @@ test('size and mute save from their controls', async () => {
 });
 
 test('control room markup never reuses an overlay class that disables the pointer', async () => {
-  const css = fs.readFileSync(path.join(__dirname, '../src/renderer/styles/capri.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = fs.readFileSync(path.join(__dirname, '../src/renderer/styles/stella.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const blocked = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, , body]) => /pointer-events:\s*none/.test(body))
     .flatMap(([, selector]) => selector.split(',').map(s => s.trim()).filter(s => /^\.[\w-]+$/.test(s)).map(s => s.slice(1)));
   const room = await controlRoom();

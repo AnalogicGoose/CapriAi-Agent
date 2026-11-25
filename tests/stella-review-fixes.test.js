@@ -104,7 +104,7 @@ test("a finished task doesn't move her: spot('stage') is where she is", async ()
 });
 
 
-// ---------- 3. capri_draw trail, aimed ----------
+// ---------- 3. stella_draw trail, aimed ----------
 
 test('the trail is a stream of dots leaving her toward trailAngle, inside her canvas', async () => {
   const { SceneClock, buildScene } = await loadRenderer('stella/scene.js');
@@ -135,7 +135,7 @@ test('the trail is a stream of dots leaving her toward trailAngle, inside her ca
 test('a drawing aims the trail at its rect; without one, toward the middle', async () => {
   const t = await make({ anchor: { x: 1700, y: 900 } });
   const s = t.stella;
-  s.agentActivity({ tool: 'capri_draw', phase: 'start' });
+  s.agentActivity({ tool: 'stella_draw', phase: 'start' });
   t.step(F, 3);
   assert.ok(heldTrail(s) > 0, 'trail plays');
   const toward = p => Math.atan2(p.y - s.pos.y, p.x - s.pos.x);
@@ -144,7 +144,7 @@ test('a drawing aims the trail at its rect; without one, toward the middle', asy
   t.step(F, 60);
   assert.ok(Math.abs(wrapA(s.drawn.trailAngle - toward({ x: 200, y: 150 }))) < 0.02, 'toward the drawing');
   assert.ok(dist(s.pos, { x: 1700, y: 900 }) < 1e-6 && !s.travel, "she doesn't move for a drawing");
-  s.agentActivity({ tool: 'capri_draw', phase: 'end', ok: true });
+  s.agentActivity({ tool: 'stella_draw', phase: 'end', ok: true });
   t.step(F, 120);
   assert.equal(heldTrail(s), 0, 'trail over');
   assert.equal(s.drawn.trailAngle, null);
@@ -163,7 +163,7 @@ const heldTrail = s => s.motions.update(s.now()).trail || 0;
 test('a local "come here" brings Stella over instead of being refused', async () => {
   const { Companion } = await loadRenderer('companion.js');
   const t = await make({ anchor: { x: 1700, y: 900 } });
-  const companion = new Companion({ capri: t.stella, host: { cursor: async () => ({ inside: true, x: 300, y: 200 }) },
+  const companion = new Companion({ stella: t.stella, host: { cursor: async () => ({ inside: true, x: 300, y: 200 }) },
     storage: null, reduced: () => false });
   t.stella.companion = companion;
   t.step(F, 2);

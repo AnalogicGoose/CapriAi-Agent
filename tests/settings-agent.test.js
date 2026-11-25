@@ -12,7 +12,7 @@ function fixture(plan) {
 }
 test('direct gaming commands use real pause control without inference, including when models are offline',async()=>{
   const f=fixture();f.agent.infer=()=>{throw Error('offline');};
-  for(const text of ['activate game mode','Capri, enable gaming mode','can you turn on game mode?']) {
+  for(const text of ['activate game mode','Stella, enable gaming mode','can you turn on game mode?']) {
     assert.equal((await f.agent.route(text)).handled,true);
     assert.deepEqual(f.effects.pop(),['gaming',true]);
   }

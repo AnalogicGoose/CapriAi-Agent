@@ -12,7 +12,7 @@ function api() {
   const library = name => ffi.load(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', name));
   const kernel = library('kernel32.dll'), user = library('user32.dll'), dwm = library('dwmapi.dll');
   const bind = (lib, name, result, args) => lib.func('__stdcall', name, result, args);
-  const callback = ffi.proto('__stdcall', 'CapriEnumWindow', 'int32', ['uintptr_t', 'intptr_t']);
+  const callback = ffi.proto('__stdcall', 'StellaEnumWindow', 'int32', ['uintptr_t', 'intptr_t']);
   cached = {
     ptrSize: ffi.sizeof('void *'),
     snapshot: bind(kernel, 'CreateToolhelp32Snapshot', 'intptr_t', ['uint32', 'uint32']),

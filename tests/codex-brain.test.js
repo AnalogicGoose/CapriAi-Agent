@@ -109,11 +109,11 @@ function fixture(mode = 'reply', brainOptions = {}) {
             }
             this.onNotification('item/completed', { ...context, item: { id: 'never-started', type: 'webSearch' } });
           }
-          if (mode === 'screen') await this.onRequest({ id: 33, method: 'item/tool/call', params: { threadId: 'thread', turnId: 'turn', callId: 'screen', tool: 'capri_screen', arguments: { displayId: '' } } });
+          if (mode === 'screen') await this.onRequest({ id: 33, method: 'item/tool/call', params: { threadId: 'thread', turnId: 'turn', callId: 'screen', tool: 'stella_screen', arguments: { displayId: '' } } });
           if (mode === 'tool' || mode === 'launch' || mode === 'music') {
-            const request = { id: 30, method: 'item/tool/call', params: { threadId: 'thread', turnId: 'turn', callId: 'one', tool: 'capri_context', arguments: {} } };
-            if (mode === 'launch') Object.assign(request.params, { tool: 'capri_desktop_step', arguments: { tool: 'open_app', query: 'Firefox', index: 0, browser: 'default' } });
-            if (mode === 'music') Object.assign(request.params, { tool: 'capri_desktop_step', arguments: { tool: 'play_music', query: 'Last Christmas by Wham!', index: 0, browser: '' } });
+            const request = { id: 30, method: 'item/tool/call', params: { threadId: 'thread', turnId: 'turn', callId: 'one', tool: 'stella_context', arguments: {} } };
+            if (mode === 'launch') Object.assign(request.params, { tool: 'stella_desktop_step', arguments: { tool: 'open_app', query: 'Firefox', index: 0, browser: 'default' } });
+            if (mode === 'music') Object.assign(request.params, { tool: 'stella_desktop_step', arguments: { tool: 'play_music', query: 'Last Christmas by Wham!', index: 0, browser: '' } });
             await this.onRequest(request); await this.onRequest({ ...request, id: 31 });
             if (mode === 'tool') await this.onRequest({ ...request, id: 32, params: { ...request.params, turnId: 'old' } });
           }
@@ -132,7 +132,7 @@ function fixture(mode = 'reply', brainOptions = {}) {
       }
     },
   };
-  const brain = new CodexBrain({ settings: () => ({}), cwd: path.join(os.tmpdir(), 'capri-brain-unit'), tools, clientFactory: factory, locate: () => 'codex', ...brainOptions });
+  const brain = new CodexBrain({ settings: () => ({}), cwd: path.join(os.tmpdir(), 'stella-brain-unit'), tools, clientFactory: factory, locate: () => 'codex', ...brainOptions });
   return { brain, calls, toolRuns, client: () => client };
 }
 test('the AI\'s own built-in tools report activity for Stella (start, end, never the query or command)', async () => {
@@ -227,7 +227,7 @@ test('stable partial answers and their continuation are streamed in order and re
 });
 
 test('opted-in voice chat survives a new brain and can be cleared', async t => {
-  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-recent-chat-'));
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-recent-chat-'));
   const file = path.join(folder, 'chat.sqlite');
   let store;
   t.after(() => { store?.close(); fs.rmSync(folder, { recursive: true, force: true }); });
@@ -338,8 +338,8 @@ test('tool bridge rejects unknown, negated and non-requested mutations', async (
   const t = new CodexTools({ settings: () => ({ privacy: { memoryEnabled: true } }), state: () => ({ displays: [] }) });
   const ctx = text => ({ text, check() {}, signal: new AbortController().signal });
   await assert.rejects(t.run('shell', {}, ctx('hello')), /Unknown/);
-  await assert.rejects(t.run('capri_memory_change', { changes: [{ kind: 'add', id: 0, text: 'fake' }] }, ctx('hello')), /explicit/);
-  await assert.rejects(t.run('capri_settings_change', { patch: '{"muted":true}' }, ctx("don't mute")), /direct/);
+  await assert.rejects(t.run('stella_memory_change', { changes: [{ kind: 'add', id: 0, text: 'fake' }] }, ctx('hello')), /explicit/);
+  await assert.rejects(t.run('stella_settings_change', { patch: '{"muted":true}' }, ctx("don't mute")), /direct/);
 });
 
 test('contextual learning needs the current user’s words and the active learning setting', async t => {
@@ -349,19 +349,19 @@ test('contextual learning needs the current user’s words and the active learni
   const tools = new CodexTools({ settings: () => cfg, store: () => store });
   const action = detail => ({ facts: [{ kind: 'activity', detail }] });
   const context = text => ({ text, check() {} });
-  assert.ok(tools.specs().some(row => row.name === 'capri_memory_learn'));
+  assert.ok(tools.specs().some(row => row.name === 'stella_memory_learn'));
   assert.match(tools.memoryInstructions(), /ON/);
-  assert.deepEqual(await tools.run('capri_memory_learn', action('table tennis'), context('table tennis, mostly.')),
+  assert.deepEqual(await tools.run('stella_memory_learn', action('table tennis'), context('table tennis, mostly.')),
     { saved: 1, confirmedFacts: ['I spend time on table tennis'] });
   const skipped = { saved: 0, confirmedFacts: [] };
-  assert.deepEqual(await tools.run('capri_memory_learn', action('ice skating'), context('table tennis, mostly.')), skipped);
-  assert.deepEqual(await tools.run('capri_memory_learn', action('curling'), context('Don’t save this. Curling.')), skipped);
-  assert.deepEqual(await tools.run('capri_memory_learn', action('curling'), context('I used to play curling.')), skipped);
+  assert.deepEqual(await tools.run('stella_memory_learn', action('ice skating'), context('table tennis, mostly.')), skipped);
+  assert.deepEqual(await tools.run('stella_memory_learn', action('curling'), context('Don’t save this. Curling.')), skipped);
+  assert.deepEqual(await tools.run('stella_memory_learn', action('curling'), context('I used to play curling.')), skipped);
   assert.deepEqual(store.list().map(row => row.text), ['I spend time on table tennis']);
   cfg.privacy.memoryLearn = false;
-  assert.equal(tools.specs().some(row => row.name === 'capri_memory_learn'), false);
+  assert.equal(tools.specs().some(row => row.name === 'stella_memory_learn'), false);
   assert.match(tools.memoryInstructions(), /OFF/);
-  await assert.rejects(tools.run('capri_memory_learn', action('curling'), context('curling, mostly.')), /learning is off/);
+  await assert.rejects(tools.run('stella_memory_learn', action('curling'), context('curling, mostly.')), /learning is off/);
 });
 
 test('clear short answers save through foreground chat even when the model calls no tools', async t => {
@@ -391,13 +391,13 @@ test('automatic saves return a receipt even if the model tries a redundant manua
   tools.learnConversationalAnswer(text, null, store.learn(text).facts);
   const context = { text, check() {} };
   const duplicate = [{ kind: 'add', id: 0, text: 'The user likes Black Clover.' }];
-  const result = await tools.run('capri_memory_change', { changes: duplicate }, context);
+  const result = await tools.run('stella_memory_change', { changes: duplicate }, context);
   assert.equal(result.changed, false);
   assert.deepEqual(result.confirmedFacts, ['I like Black Clover']);
-  assert.deepEqual(await tools.run('capri_memory_learn', { facts: [{ kind: 'interest', detail: 'Black Clover' }] }, context),
+  assert.deepEqual(await tools.run('stella_memory_learn', { facts: [{ kind: 'interest', detail: 'Black Clover' }] }, context),
     { saved: 0, confirmedFacts: ['I like Black Clover'] });
   assert.equal(store.list().length, 1);
-  await assert.rejects(tools.run('capri_memory_change', { changes: [{ kind: 'forget', id: 1, text: '' }] }, context), /explicit/);
+  await assert.rejects(tools.run('stella_memory_change', { changes: [{ kind: 'forget', id: 1, text: '' }] }, context), /explicit/);
 });
 
 test('memory lookup binds edits to this turn; questions cannot mutate records', async () => {
@@ -406,29 +406,29 @@ test('memory lookup binds edits to this turn; questions cannot mutate records', 
   const tools = new CodexTools({ settings: () => ({ privacy: { memoryEnabled: true, memoryRecall: true, memoryConfirmChanges: false } }), store: () => store });
   const context = { text: 'forget memory 3', check() {}, signal: new AbortController().signal };
   const change = { changes: [{ kind: 'forget', id: 3, text: '' }] };
-  await assert.rejects(tools.run('capri_memory_change', change, context), /Invalid memory/);
-  await tools.run('capri_memory_lookup', { query: 'name' }, context);
-  await tools.run('capri_memory_change', change, context);
+  await assert.rejects(tools.run('stella_memory_change', change, context), /Invalid memory/);
+  await tools.run('stella_memory_lookup', { query: 'name' }, context);
+  await tools.run('stella_memory_change', change, context);
   assert.equal(edits, 1);
-  await assert.rejects(tools.run('capri_memory_change', change, { ...context, text: 'what do you remember about me?' }), /explicit/);
+  await assert.rejects(tools.run('stella_memory_change', change, { ...context, text: 'what do you remember about me?' }), /explicit/);
   tools.endTurn();
-  await assert.rejects(tools.run('capri_memory_change', change, context), /Invalid memory/);
+  await assert.rejects(tools.run('stella_memory_change', change, context), /Invalid memory/);
 });
 test('settings tool applies requested values through the existing policy', async () => {
   let patch;
   const tools = new CodexTools({ settings: () => ({}), state: () => ({ displays: [] }), patch: value => patch = value });
   const context = { text: 'mute your sound', check() {}, signal: new AbortController().signal };
-  await tools.run('capri_settings_change', { patch: '{"muted":true}' }, context);
+  await tools.run('stella_settings_change', { patch: '{"muted":true}' }, context);
   assert.deepEqual(patch, { muted: true });
-  await assert.rejects(tools.run('capri_settings_change', { patch: '{"codexExecutable":"anything"}' }, context), /control room/);
+  await assert.rejects(tools.run('stella_settings_change', { patch: '{"codexExecutable":"anything"}' }, context), /control room/);
 });
 
 test('conversational actions use shared evidence and do not require setting command words', async () => {
   const patches = [];
   const tools = new CodexTools({ settings: () => ({}), state: () => ({ displays: [] }), patch: value => patches.push(value) });
   const apply = (text, patch, requestEvidence = text, history = []) =>
-    tools.run('capri_settings_change', { patch: JSON.stringify(patch), requestEvidence }, { text, history, check() {} });
-  assert.ok(tools.specs().find(tool => tool.name === 'capri_settings_change').inputSchema.required.includes('requestEvidence'));
+    tools.run('stella_settings_change', { patch: JSON.stringify(patch), requestEvidence }, { text, history, check() {} });
+  assert.ok(tools.specs().find(tool => tool.name === 'stella_settings_change').inputSchema.required.includes('requestEvidence'));
   await apply('You can talk again.', { muted: false });
   await apply('Could we keep it quiet for a bit?', { muted: true });
   await apply('Ya puedes volver a hablar.', { muted: false });
@@ -467,7 +467,7 @@ test('failed dynamic tool calls show the actual local error and preserve argumen
   const result = await f.brain.chat('open firefox');
   assert.match(result, /Local tool error: App discovery is unavailable/);
   assert.equal(f.brain.lastDiagnostics.completed, 0);
-  assert.equal(f.brain.lastDiagnostics.errors[0].tool, 'capri_desktop_step');
+  assert.equal(f.brain.lastDiagnostics.errors[0].tool, 'stella_desktop_step');
   assert.doesNotMatch(JSON.stringify(f.brain.lastDiagnostics), /arguments|query/);
 });
 
@@ -475,7 +475,7 @@ test('a failed look at the screen does not tack a local tool error onto the answ
   const f = fixture('screen');
   f.brain.tools.run = async () => { throw Error('No other app window is in front to inspect; explain from what you know instead.'); };
   const result = await f.brain.chat('explain how to open settings in the Claude app');
-  assert.equal(f.brain.lastDiagnostics.errors[0].tool, 'capri_screen');
+  assert.equal(f.brain.lastDiagnostics.errors[0].tool, 'stella_screen');
   assert.doesNotMatch(result, /Local tool error/);
 });
 
@@ -510,7 +510,7 @@ test('a music tool call still needs a grounded song and playback intent', async 
   const actions = { run: () => assert.fail('Playback was not authorized') };
   const tools = new CodexTools({ settings: () => ({ agentEnabled: true, desktopActions: true }),
     actions, confirm: async () => false });
-  const call = (text, history = []) => tools.run('capri_desktop_step',
+  const call = (text, history = []) => tools.run('stella_desktop_step',
     { tool: 'play_music', query: 'Last Christmas', index: 0, browser: '' },
     { text, history, signal: new AbortController().signal, check() {} });
   assert.deepEqual(await call('I usually play Last Christmas every year.'), { completed: false, reason: 'User cancelled.' });

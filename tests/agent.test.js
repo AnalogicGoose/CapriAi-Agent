@@ -19,9 +19,9 @@ function fixture(extra = {}) {
   return { agent, cfg, journal, notifications, time: n => { at += n; }, stats: () => ({ calls, closes }) };
 }
 test('fresh registry reflects policy changes and does not alter personality/history', () => {
-  const messages = [{ role: 'system', content: 'Playful Capri' }, { role: 'user', content: 'hello' }];
+  const messages = [{ role: 'system', content: 'Playful Stella' }, { role: 'user', content: 'hello' }];
   assert.match(inject(messages, { desktopActions: true })[0].content, /Current self-capability registry/);
-  assert.equal(messages[0].content, 'Playful Capri');
+  assert.equal(messages[0].content, 'Playful Stella');
   assert.equal(registry({ gamingMode: true }).skills.agent.available, false);
   assert.equal(registry({ privacy: { memoryEnabled: true } }).skills.memory.available, true);
   assert.equal(registry().skills.accessibility.available, false);

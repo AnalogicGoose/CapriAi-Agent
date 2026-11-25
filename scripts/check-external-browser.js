@@ -16,7 +16,7 @@ app.whenReady().then(async()=>{
     const actions=new ActionAgent({settings:()=>({}),desktop,browser,web:{youtube:async()=>({type:'youtube',items:[item]})}});
     const tools=new CodexTools({actions,settings:()=>({})});
     const signal=new AbortController().signal;
-    const run=(tool,query='',text='play and open the observed video')=>tools.run('capri_desktop_step',{tool,query,index:0,browser:''},{text,signal,check(){}});
+    const run=(tool,query='',text='play and open the observed video')=>tools.run('stella_desktop_step',{tool,query,index:0,browser:''},{text,signal,check(){}});
     const lookup=await run('youtube_latest','creator');
     assert.equal(lookup.completed,true,lookup.text);
     const playback=await run('play_video');

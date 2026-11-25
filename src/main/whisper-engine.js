@@ -16,7 +16,7 @@ function wave(pcm){
 class WhisperEngine {
   // language(): the app language ('en', 'es'…) so short phrases are not guessed as another language; 'auto' detects.
   constructor({runtimeDir,launch=spawn,ensure=ensureRuntime,probe=installed,language=()=>'auto'}={}){
-    this.language=language;this.runtimeDir=runtimeDir||path.resolve(__dirname,'../../.caprigpt-local/speech-runtime');this.launch=launch;this.epoch=0;
+    this.language=language;this.runtimeDir=runtimeDir||path.resolve(__dirname,'../../.stella-local/speech-runtime');this.launch=launch;this.epoch=0;
     this.ensure=ensure;this.probe=probe;this.probed=null;
   }
   // Is the runtime already on disk? Checked often (every commands-mode audio chunk), so cached briefly.

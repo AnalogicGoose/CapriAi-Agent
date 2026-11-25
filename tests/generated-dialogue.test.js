@@ -9,7 +9,7 @@ test('normal companion status and social events request generated dialogue witho
   const { Brain } = await import(uri(source('brain.js').replace("from './lines.js'", `from '${uri(source('lines.js'))}'`)
     .replace("from './util.js'", `from '${uri(source('util.js').replace("matchMedia('(prefers-reduced-motion: reduce)')", '({ matches: false })'))}'`)));
   const events = [], panels = [];
-  const brain = new Brain({ generatedDialogue: true, capri: {}, voice: {}, mission: {},
+  const brain = new Brain({ generatedDialogue: true, stella: {}, voice: {}, mission: {},
     panel: { say: message => panels.push(message) }, host: { companionEvent: reason => events.push(reason) } });
   brain.say('idle', 'Old catchphrase'); brain.say('done', 'Same completion line');
   assert.equal(panels.length, 0); assert.deepEqual(events, ['external-task', 'external-task']);
@@ -21,7 +21,7 @@ test('chat greets instantly without inference and routes actual gestures to Code
   const { Chat } = await import(uri(source('chat.js').replace("import { welcomePicker } from './welcome.js';", "const welcomePicker=()=>()=>'Hey. What is on your mind?';").replace("import { pick, fmt } from './util.js';", 'const pick=x=>x[0],fmt=x=>x;')));
   const events = [], lines = [];
   let current;
-  const chat = new Chat({ capri: { wake() {}, perform() {}, towardCenter: () => 1, pulse() {}, setChatThinking() {},
+  const chat = new Chat({ stella: { wake() {}, perform() {}, towardCenter: () => 1, pulse() {}, setChatThinking() {},
     companion: { mood: 'playful', interact() {}, request() { assert.fail('Normal gestures must use AI tool routing'); } } },
     panel: { chatInput: { focus() {} }, say: message => { current = message; return true; }, setChatBusy() {}, setActions() {}, chatTurn() {},
       stream: text => lines.push(text), setFace() {} }, voice: {},

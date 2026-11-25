@@ -7,13 +7,13 @@ const { wakePhrase } = require('../src/main/wake-phrase');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const uri = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
 
-test('wake address requires Hey Capri at the beginning and preserves the addressed request', () => {
-  assert.deepEqual(wakePhrase('Hey, Capri! Open Firefox.'), { text: 'Open Firefox.' });
-  assert.deepEqual(wakePhrase('HEY CAPRI'), { text: '' });
-  assert.deepEqual(wakePhrase('Hey Capri?'), { text: '' });
-  assert.equal(wakePhrase('Hey Capri '+ 'a'.repeat(600)).text.length, 501, 'Keep an overflow character so dictation can reject auto-send of a truncated request');
-  assert.deepEqual(wakePhrase('Ey Capri, hola'), { text: 'hola' });
-  for (const text of ['Capri open Firefox', 'they say hey Capri', 'Hey Capricorn', 'hey capricornio', 'Hey Siri', '', null]) assert.equal(wakePhrase(text), null);
+test('wake address requires Hey Stella at the beginning and preserves the addressed request', () => {
+  assert.deepEqual(wakePhrase('Hey, Stella! Open Firefox.'), { text: 'Open Firefox.' });
+  assert.deepEqual(wakePhrase('HEY STELLA'), { text: '' });
+  assert.deepEqual(wakePhrase('Hey Stella?'), { text: '' });
+  assert.equal(wakePhrase('Hey Stella '+ 'a'.repeat(600)).text.length, 501, 'Keep an overflow character so dictation can reject auto-send of a truncated request');
+  assert.deepEqual(wakePhrase('Ey Stella, hola'), { text: 'hola' });
+  for (const text of ['Stella open Firefox', 'they say hey Stella', 'Hey Siri', '', null]) assert.equal(wakePhrase(text), null);
 });
 
 function speechFixture() {
@@ -35,7 +35,7 @@ test('background listener ignores ambient transcripts, keeps running and hands o
     f.speech.enqueue(slot, Buffer.alloc(4000)); f.jobs[0].resolve('This is ordinary private conversation.'); await tick();
     assert.equal(f.events.some(event => event.type === 'final' || event.type === 'wake'), false);
     assert.equal(slot.mode, 'wake');
-    f.speech.enqueue(slot, Buffer.alloc(4000)); f.jobs[1].resolve('Hey Capri, what time is it?'); await tick();
+    f.speech.enqueue(slot, Buffer.alloc(4000)); f.jobs[1].resolve('Hey Stella, what time is it?'); await tick();
     assert.equal(f.speech.current, slot); assert.equal(slot.wakeActivated, true);
     assert.equal(f.events.find(event => event.type === 'wake').text, 'what time is it?');
     f.speech.enqueue(slot, Buffer.alloc(4000)); f.jobs[2].resolve('And what day is it?'); await tick();
@@ -49,7 +49,7 @@ test('wake permission revocation and cancellation discard in-flight recognition;
   const f = speechFixture();
   await f.speech.start({ id: 'wake-session-02', mode: 'wake' }); await tick();
   f.speech.enqueue(f.speech.current, Buffer.alloc(4000)); f.revoke();
-  f.jobs[0].resolve('Hey Capri delete this'); await tick();
+  f.jobs[0].resolve('Hey Stella delete this'); await tick();
   assert.equal(f.events.some(event => event.type === 'wake'), false); assert.equal(f.speech.current, null);
   assert.ok(f.stops() > 0); f.speech.cancel(true);
 });

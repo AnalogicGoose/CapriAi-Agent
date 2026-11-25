@@ -1,6 +1,6 @@
 // Stella: the overlay controller. Owns her state and drives the renderer once per
 // frame. It exposes the same surface the rest of the renderer used on the old sprite
-// character, so callers keep calling `capri.*` unchanged. Split by concern: acts.js
+// character, so callers keep calling `stella.*` unchanged. Split by concern: acts.js
 // (motions), drag.js (press/drag/drop), focus.js (functions: pointing, walkthrough
 // focus, body actions), fold.js (folding away), travel.js (where she goes). No DOM access at import time.
 import { clamp } from './math.js';
@@ -77,7 +77,7 @@ export class Stella {
     this.focus = null;    // what her blade aims at: { at: {x,y} } | { angle }
     this.pointing = null; // { dir, rect?, label? } while she points (dir feeds the panel's lean)
     this.aimAngle = null;
-    this.drawTarget = null; // where capri_draw's trail runs: { at } | { angle } | null (toward the middle)
+    this.drawTarget = null; // where stella_draw's trail runs: { at } | { angle } | null (toward the middle)
     this.trailAngle = null;
     this.homeToken = 0;   // bumped by anything that should cancel a pending return
     this.lean = 0;

@@ -210,7 +210,7 @@ test('voice ignores echo transcripts until neural speech onset and can end by vo
   const f=await controller();
   try {
     await f.call.start({id:'voice-call-03',capture:f.capture,text:'Hi',complete:true});await tick();await tick();
-    const count=f.history.history.length;f.callbacks.speech({id:f.call.id,type:'final',text:'Echo of Capri',complete:true});await tick();
+    const count=f.history.history.length;f.callbacks.speech({id:f.call.id,type:'final',text:'Echo of Stella',complete:true});await tick();
     assert.equal(f.history.history.length,count);
     f.callbacks.detector.onStart();f.callbacks.speech({id:f.call.id,type:'final',text:'Stop listening.',complete:true});
     assert.equal(f.call.active,false);assert.equal(f.indicator.hidden,true);
@@ -280,7 +280,7 @@ test('typed chat follows its voice preference, including local pursuit feedback'
   const heard = [];
   const spoken={enabled:true,config:{speakTypedReplies:false},stop(){},
     beginResponse(){heard.push('begin');},updateResponse(text, done){heard.push({text, done});},speak(text){heard.push(text);}};
-  const chat=new Chat({voice:{spoken,play(){}},capri:{pulse(){}},brain:{lang:'en',t:{chat:{}}},
+  const chat=new Chat({voice:{spoken,play(){}},stella:{pulse(){}},brain:{lang:'en',t:{chat:{}}},
     panel:{current:{chat:{mode:'text'}},setChatBusy(){},setActions(){},chatTurn(){},stream(){},setFace(){}},
     host:{onChatDelta:fn=>delta=fn,personalRoute:async text=>text === 'Not now.'
       ? {handled:true, pursuitFeedback:true, text:'I’ll set the draft aside.'} : {handled:false},

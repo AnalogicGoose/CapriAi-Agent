@@ -3,7 +3,7 @@ const { createHash } = require('node:crypto');
 const SCHEMA = { type: 'object', additionalProperties: false, required: ['speak', 'message', 'topic'], properties: {
   speak: { type: 'boolean' }, message: { type: 'string', maxLength: 600 }, topic: { type: 'string', maxLength: 100 } } };
 const words = text => new Set(text.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter(w => w.length > 2));
-const OBSERVATION_NAMES = new Set(['capri_context', 'capri_apps', 'capri_screen', 'capri_memory_lookup']);
+const OBSERVATION_NAMES = new Set(['stella_context', 'stella_apps', 'stella_screen', 'stella_memory_lookup']);
 function observationTools(tools) {
   return { specs: () => tools.specs().filter(row => OBSERVATION_NAMES.has(row.name)),
     instructions: () => 'You are Stella in a background observation-only turn. Only inspect permitted context/screens/memories. Never take actions. Speak only when useful or naturally timely. Be quiet instead of repeating yourself.',

@@ -2,9 +2,9 @@ import { reducedMotion } from './util.js';
 
 // One reversible transition. No async vanish/arrive tasks or stale completion callbacks.
 export class FullscreenPresence {
-  constructor({ capri, host, onChange = () => {}, now = () => performance.now(), schedule = callback => requestAnimationFrame(callback),
+  constructor({ stella, host, onChange = () => {}, now = () => performance.now(), schedule = callback => requestAnimationFrame(callback),
     cancel = handle => cancelAnimationFrame(handle) }) {
-    Object.assign(this, { capri, host, onChange, now, schedule, cancel });
+    Object.assign(this, { stella, host, onChange, now, schedule, cancel });
     this.progress = 0;
     this.target = 0;
     this.revision = -1;
@@ -32,22 +32,22 @@ export class FullscreenPresence {
     this.duration = (reducedMotion.matches ? 80 : 160) * Math.abs(this.target - this.from);
     if (this.frame) this.cancel(this.frame);
     this.frame = 0;
-    this.capri.cancelDrag?.();
-    this.capri.fullscreen = Boolean(active) || this.progress > 0;
-    this.capri.fullscreenProgress = this.progress;
-    document.body.classList.toggle('fullscreen-presence', this.capri.fullscreen);
-    if (active) this.capri.endAct(false);
+    this.stella.cancelDrag?.();
+    this.stella.fullscreen = Boolean(active) || this.progress > 0;
+    this.stella.fullscreenProgress = this.progress;
+    document.body.classList.toggle('fullscreen-presence', this.stella.fullscreen);
+    if (active) this.stella.endAct(false);
     // Reuse the original red/violet teleport language, without piling up emitters.
     if (Math.abs(this.target - this.from) > 0.00001 && !reducedMotion.matches
-        && now - (this.lastEffect ?? -Infinity) > 120 && !this.capri.hidden && !this.capri.gaming) {
+        && now - (this.lastEffect ?? -Infinity) > 120 && !this.stella.hidden && !this.stella.gaming) {
       this.lastEffect = now;
-      if (this.capri.presenceEffect) this.capri.presenceEffect(active); // a character with its own (Stella: folding)
+      if (this.stella.presenceEffect) this.stella.presenceEffect(active); // a character with its own (Stella: folding)
       else {
-        const head = this.capri.head();
-        const ground = this.capri.pos.y;
-        this.capri.fx.beam(this.capri.pos.x, ground, { down: !active, width: 40 * this.capri.scale + 8, life: 160 });
-        this.capri.fx.burst(head.x, head.y, { count: 10, power: 0.5, spread: 75 * this.capri.scale, inward: !active });
-        this.capri.voice.play(active ? 'teleport-out' : 'teleport-in', { soft: true });
+        const head = this.stella.head();
+        const ground = this.stella.pos.y;
+        this.stella.fx.beam(this.stella.pos.x, ground, { down: !active, width: 40 * this.stella.scale + 8, life: 160 });
+        this.stella.fx.burst(head.x, head.y, { count: 10, power: 0.5, spread: 75 * this.stella.scale, inward: !active });
+        this.stella.voice.play(active ? 'teleport-out' : 'teleport-in', { soft: true });
       }
     }
     this.onChange(Boolean(active));
@@ -57,17 +57,17 @@ export class FullscreenPresence {
   tick(now = this.now()) {
     this.frame = 0;
     this.advance(now);
-    this.capri.fullscreenProgress = this.progress;
-    this.capri.drawFrame(now);
+    this.stella.fullscreenProgress = this.progress;
+    this.stella.drawFrame(now);
     if (Math.abs(this.progress - this.target) > 0.00001) {
       this.frame = this.schedule(this.tick);
       return;
     }
     this.progress = this.target;
-    this.capri.fullscreenProgress = this.target;
-    this.capri.fullscreen = Boolean(this.target);
+    this.stella.fullscreenProgress = this.target;
+    this.stella.fullscreen = Boolean(this.target);
     document.body.classList.toggle('fullscreen-presence', Boolean(this.target));
-    this.capri.root.dataset.fullscreen = this.target ? 'away' : 'visible';
+    this.stella.root.dataset.fullscreen = this.target ? 'away' : 'visible';
     this.onChange(Boolean(this.target));
     this.host.fullscreenRendered({ revision: this.revision, hidden: Boolean(this.target) });
   }

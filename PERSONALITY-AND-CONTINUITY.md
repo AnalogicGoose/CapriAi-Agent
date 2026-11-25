@@ -1,6 +1,6 @@
-# Capri personality and conversation update
+# Stella personality and conversation update
 
-The old prompt told Capri to love the satellite and dream of reaching it on
+The old prompt told Stella to love the satellite and dream of reaching it on
 every turn. It also required one to three sentences and prohibited lists or
 code formatting. Only twelve conversation messages reached a 4,096-token
 window, with 240 output tokens. Those are concrete sources of repetitive lore,
@@ -9,7 +9,7 @@ has been retrained or that every conversational weakness is solved.
 
 ## Character and practical behavior
 
-Capri remains a fan interpretation of the many-minds digital ghost: curious,
+Stella remains a fan interpretation of the many-minds digital ghost: curious,
 quick-witted, mischievous and warm, with occasional natural plural speech.
 Her personality comes through reactions and phrasing rather than repeated
 biography, slogans or a fictional ambition injected into unrelated answers.
@@ -64,7 +64,7 @@ Reviewed October 29, 2026:
   32K and verify actual allocation rather than blindly requesting the maximum.
 - [Qwen3.5-9B model card](https://huggingface.co/Qwen/Qwen3.5-9B) documents the
   installed model family's capabilities and much larger native context. A
-  supported native maximum does not mean Capri was previously sending it that
+  supported native maximum does not mean Stella was previously sending it that
   much context, or that the maximum is a useful laptop default.
 - [Effective context engineering for AI agents](https://www.anthropic.com/research/effective-context-engineering-for-ai-agents)
   motivates curating instructions, recent turns and relevant earlier details
@@ -77,10 +77,10 @@ Reviewed October 29, 2026:
 Run `npm test` for automated coverage, including conversation retention beyond
 six turns, crowded-window retrieval, corrections, Unicode budgets, exact code,
 bounded history, cancellation/reopen races and the existing tool/privacy gates.
-Run `npm run test:conversation-live` with Capri's local Ollama server available
+Run `npm run test:conversation-live` with Stella's local Ollama server available
 for synthetic end-to-end model checks. It uses no real conversation, profile,
 microphone or PC observations and writes results only to the ignored
-`.caprigpt-local/conversation-check/results.json` test folder.
+`.stella-local/conversation-check/results.json` test folder.
 
 The Electron check `node_modules/electron/dist/electron.exe
 scripts/smoke-electron.js --conversation-only` also passed: 18 turns through the
@@ -99,12 +99,12 @@ intelligence benchmark or a guarantee for every conversation.
 
 Repeat runs exposed a contradictory Spanish paraphrase of "offline" and an
 unstated Windows/free-only requirement. The guidance and live assertions were
-strengthened to catch both. In particular, Capri's own runtime is not evidence
+strengthened to catch both. In particular, Stella's own runtime is not evidence
 of what a user's project requires, and "no subscription" permits a one-time
 purchase. Local Qwen can still make language or reasoning mistakes; these
 checks should be rerun when changing the model or persona.
 
-Quit Capri from the tray and reopen the desktop shortcut to load the changes.
+Quit Stella from the tray and reopen the desktop shortcut to load the changes.
 For a manual check, tell her a project name and constraints, discuss several
 other things, correct one constraint, and ask her to continue the plan. Ask for
 code or a detailed explanation to check the old sentence limit is gone.

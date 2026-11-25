@@ -27,7 +27,7 @@ function startFullscreenWatch({ read, display, onChange, interval = 50,
         if (now() - candidateAt < enterDelay) return;
       }
       if (active !== previous) { previous = active; onChange(active); }
-    } catch { /* A transient native/display failure must not flash Capri back in. */ }
+    } catch { /* A transient native/display failure must not flash Stella back in. */ }
   };
   const timer = setInterval(tick, interval);
   tick();

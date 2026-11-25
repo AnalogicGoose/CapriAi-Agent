@@ -13,7 +13,7 @@ const idea = { domain: 'worldbuilding', focus: 'Map a tiny impossible city', que
 const draft = { decision: 'draft', draft: 'In rain, the alleys lead to the same bakery.',
   nextStep: 'Give the bakery a reason to move at dawn.' };
 function fixture(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-interests-')), file = path.join(dir, 'interests.sqlite');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-interests-')), file = path.join(dir, 'interests.sqlite');
   let now = new Date(2026, 10, 7, 8).getTime(), cfg = {}, db, service;
   const open = () => { db = new DatabaseSync(file); service = new CompanionInterests({ db, settings: () => cfg, now: () => now }); };
   open();
@@ -147,7 +147,7 @@ test('a creative answer or an old refusal does not get mistaken for a request to
   assert.equal(f.service.list()[0].status, 'curious');
 });
 
-test('Capri saves actual work and resumes the same pursuit after restarting', async t => {
+test('Stella saves actual work and resumes the same pursuit after restarting', async t => {
   const f = fixture(t);
   await f.generate();
   const work = infer => f.service.advance({ ...f.deps, infer });

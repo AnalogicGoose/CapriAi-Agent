@@ -43,7 +43,7 @@ const { InterestCollaboration } = require('./interest-collaboration');
 const { CompanionGoals } = require('./companion-goals');
 const { personalityContext } = require('./personality');
 const { CodexEvents } = require('./codex-events');
-const { connectionFile } = require('../../hooks/caprigpt-codex-hook');
+const { connectionFile } = require('../../hooks/stella-codex-hook');
 const codexEvents = new CodexEvents();
 let integrationToken;
 const apps = require('./apps');
@@ -204,7 +204,7 @@ const foreground = new ForegroundPriority(() => ({
 // Legacy structured decision services use the same Codex transport, never Ollama.
 // agentConfig: a voice session lifts Gaming mode, so a voice-started walkthrough can still re-plan (spec §8, decision 2).
 const decisionBrain = new CodexBrain({ settings: agentConfig,
-  cwd: path.join(app.getPath('temp'), 'caprigpt-codex-decisions'),
+  cwd: path.join(app.getPath('temp'), 'stella-codex-decisions'),
   tools: { specs: () => [], instructions: () => 'Return only the JSON decision requested in the supplied schema. No tools or actions.' } });
 const inferDecision = async (request, signal) => {
   const stop = () => decisionBrain.cancel();
@@ -224,7 +224,7 @@ const agent = new Agent({ model: 'codex',
     const p = permissions(config.load().privacy);
     return p.memoryEnabled && p.memoryRecall ? memory().search(query, 2) : [];
   },
-  audit: (kind, status) => { try { memory().audit(kind, status); } catch { console.error('[capri] Agent journal unavailable.'); } },
+  audit: (kind, status) => { try { memory().audit(kind, status); } catch { console.error('[stella] Agent journal unavailable.'); } },
   notify: text => overlay?.webContents.send('agent:suggestion', text),
 });
 const desktop = new DesktopTools({ openPath: file => shell.openPath(file), openExternal: url => shell.openExternal(url),
@@ -256,7 +256,7 @@ const personal = new PersonalAssistant({
   confirm: confirmMemory,
   exportFile: async (text) => {
     const result = await dialog.showSaveDialog({ title: 'Export personal memories (plain text JSON)',
-      defaultPath: 'capri-memories.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+      defaultPath: 'stella-memories.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
     if (result.canceled || !result.filePath) return false;
     fs.writeFileSync(result.filePath, text, { mode: 0o600 }); return true;
   },
@@ -272,7 +272,7 @@ async function captureDisplay(displayId, thumbnailSize = { width: 1600, height: 
 // Gaming mode pauses screen reads, lifted for the user's voice request (agentConfig) and, for guide reads only
 // ({ lifted: true } from GuideTargets / a walkthrough re-plan), for a guide or walkthrough the user started: it keeps
 // working after the voice session ends, until it finishes, is stopped, or Gaming mode is turned on (which stops it).
-// Effects (capri_control, desktop input) are never lifted.
+// Effects (stella_control, desktop input) are never lifted.
 const guideReadLift = () => Boolean(voiceSession || walkthroughs?.active || guide?.active);
 const screenAccess = new ScreenAccess({ settings: agentConfig, readLift: guideReadLift,
   displays: () => {
@@ -300,8 +300,8 @@ const yieldOverlayFocus = async () => {
 };
 const highlight = desktopHighlight({ BrowserWindow, screen, foreground: externalForeground,
   enabled: () => screenAccess.enabled() && config.load().visible !== false,
-  onError: () => console.error('[capri] Could not keep the desktop highlight visible.'),
-  // capri_point: she glides beside the outlined control and points at it until it expires (a walkthrough owns her focus).
+  onError: () => console.error('[stella] Could not keep the desktop highlight visible.'),
+  // stella_point: she glides beside the outlined control and points at it until it expires (a walkthrough owns her focus).
   onFocus: focus => { if (!walkthroughs?.active) sendGuideFocus(focus); } });
 const accessibility = process.platform === 'win32' ? new WindowsAccessibility({
   settings: () => config.load(), foreground: externalForeground,
@@ -333,7 +333,7 @@ const guideSay = text => { if (overlay && !overlay.isDestroyed()) overlay.webCon
 // window mode once per game session (exclusive-fullscreen.js; the shell's D3D exclusive-mode state, probed only in fullscreen).
 const exclusiveGate = new ExclusiveFullscreenGate({ fullscreen: () => fullscreenState.active,
   exclusive: exclusiveFullscreen, speak: guideSay, lang: () => resolveLang(config.load().lang) });
-// Her body (capri_body actions on the overlay), shared by Codex's capri_body tool and walkthrough reactions.
+// Her body (stella_body actions on the overlay), shared by Codex's stella_body tool and walkthrough reactions.
 function bodyAction(action, { check = () => {}, signal = new AbortController().signal } = {}) {
   return new Promise((resolve, reject) => {
     check(); if (!overlay || overlay.isDestroyed() || config.load().gamingMode) return reject(Error('Stella’s body is unavailable.'));
@@ -356,7 +356,7 @@ const guide = new GuideSession({
   allowed: () => screenAccess.enabled(), gate: exclusiveGate,
   // A drawing already shown is not cleared when the voice session that asked for it ends (Gaming mode on clears it).
   keep: () => config.load().screenAwareness !== false,
-  // capri_draw: her trail of dots runs toward what was drawn (she doesn't move for a drawing).
+  // stella_draw: her trail of dots runs toward what was drawn (she doesn't move for a drawing).
   onDrawn: laid => sendStellaDraw(layoutTarget(laid, screen.getAllDisplays())),
 });
 // One walkthrough at a time (walkthrough-controller.js). Re-plans use the decision brain with one fresh screenshot,
@@ -388,7 +388,7 @@ const currentContext = text => {
   let personalMemory;
   if (p.memoryEnabled && p.memoryRecall) {
     try { personalMemory = memory().personalContext(text); }
-    catch { console.error('[capri] Personal memory unavailable.'); }
+    catch { console.error('[stella] Personal memory unavailable.'); }
   }
   return { presentation, capabilities: capabilities.registry(agentConfig()), externalCodexEvents: codexEvents.snapshot(),
   savedContinuity, savedGoals, currentProject: goals().projects.context(Math.max(0, remaining - Buffer.byteLength(JSON.stringify(savedGoals)))),
@@ -400,11 +400,11 @@ const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: reso
   screen: screenAccess, accessibility, guide, walkthroughs, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
   body: bodyAction, activity: event => sendAgentActivity(event),
   actions, store: memory, goals, curiosity: () => curiosity, state: settingsState, patch: updateConfig, confirm: confirmMemory });
-// Stella animates what her agent does: Capri's tools (above) and the AI's own built-in ones (below).
+// Stella animates what her agent does: Stella's tools (above) and the AI's own built-in ones (below).
 function sendAgentActivity(event) { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('agent:activity', event); }
 const brain = new CodexBrain({ settings: agentConfig, recentConversation, activity: sendAgentActivity,
   warmIdleMs: 3 * 60 * 1000, canKeepWarm: () => !config.load().gamingMode && sessionAvailable,
-  cwd: path.join(app.getPath('temp'), 'caprigpt-codex-brain'), tools: brainTools,
+  cwd: path.join(app.getPath('temp'), 'stella-codex-brain'), tools: brainTools,
   systemTools: () => config.load().systemAccess === true, workspace: () => goals().projects.workspace() || app.getPath('home'), context: currentContext,
   onOutcome: receipt => {
     const saved = goals().projects.recordVerification(receipt);
@@ -422,18 +422,20 @@ const brain = new CodexBrain({ settings: agentConfig, recentConversation, activi
   },
 });
 
+const { migrateProfile } = require('./profile-migration');
 const ROOT = path.resolve(__dirname, '..', '..');
 const VERSION = require('../../package.json').version;
 const runtime = require('./runtime-info').runtimeInfo(ROOT, VERSION);
 const DEV = process.argv.includes('--dev');
-app.setName('Capri');
-// Keep the existing profile across the rename and separate from upstream Capri.
+app.setName('Stella');
+// Her saved data lives in %APPDATA%\Stella; the first start after the rename moves it over from
+// her old profile folder (kept as a backup). Smoke tests use their own throwaway profile.
 const smokeTest = process.argv.some((arg) => path.basename(arg) === 'smoke-electron.js');
-app.setPath('userData', smokeTest && process.env.CAPRIGPT_TEST_PROFILE
-  ? process.env.CAPRIGPT_TEST_PROFILE : path.join(app.getPath('appData'), 'CapriGPT'));
+app.setPath('userData', smokeTest && process.env.STELLA_TEST_PROFILE ? process.env.STELLA_TEST_PROFILE
+  : migrateProfile(path.join(app.getPath('appData'), 'CapriGPT'), path.join(app.getPath('appData'), 'Stella')).dir);
 // Installed Codex transport with no background tools, actions or conversation history.
 const cognitiveBrain = new CodexBrain({ settings: () => config.load(),
-  cwd: path.join(app.getPath('temp'), 'caprigpt-codex-cognition'),
+  cwd: path.join(app.getPath('temp'), 'stella-codex-cognition'),
   tools: { specs: () => [], instructions: () => 'Return only the requested JSON. No tools or actions.' } });
 const inferCognitive = async (request, signal) => {
   const stop = () => cognitiveBrain.cancel();
@@ -491,11 +493,11 @@ autonomy = new ProactiveConversation({ settings: rendererConfig, journal: curios
     overlay.webContents.send('companion:conversation', { text, voiceUntil, mood, replyTo, canBuild }); return true;
   },
 });
-const PORT = Number(process.env.CAPRI_PORT) || 47823;
+const PORT = Number(process.env.STELLA_PORT) || 47823;
 const SOUND_EXT = /\.(mp3|wav|ogg|m4a)$/i;
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'capri', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: 'stella', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
 let overlay = null;
@@ -543,7 +545,7 @@ function routeSpeechCommand({ command, minutes }) {
 const speech = new SpeechInput({
   // Listen in her conversation language (control room → App → Language; 'Follow Windows' resolves it).
   language: () => resolveLang(config.load().lang),
-  runtimeDir: app.isPackaged ? path.join(app.getPath('userData'),'speech-runtime') : path.join(ROOT,'.caprigpt-local','speech-runtime'),
+  runtimeDir: app.isPackaged ? path.join(app.getPath('userData'),'speech-runtime') : path.join(ROOT,'.stella-local','speech-runtime'),
   allowed: () => Boolean(overlay && !overlay.isDestroyed() && (voiceSession || (overlay.isVisible()
     && !config.load().gamingMode && !fullscreenState.active))),
   wakeAllowed,
@@ -584,10 +586,10 @@ function endVoiceSession() {
 
 const userSoundsDir = () => path.join(app.getPath('userData'), 'sounds');
 
-// capri://app/...        -> files of this repo
-// capri://usersounds/... -> the user's own sound overrides
+// stella://app/...        -> files of this repo
+// stella://usersounds/... -> the user's own sound overrides
 function serveProtocol() {
-  protocol.handle('capri', (request) => {
+  protocol.handle('stella', (request) => {
     const url = new URL(request.url);
     const base = url.host === 'usersounds' ? userSoundsDir() : ROOT;
     const target = path.resolve(base, '.' + decodeURIComponent(url.pathname));
@@ -616,13 +618,13 @@ function overlayTarget(focus) {
   return { direction: Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down') };
 }
 
-// Tells Stella where the walkthrough or capri_point target is (null: let go and go back).
+// Tells Stella where the walkthrough or stella_point target is (null: let go and go back).
 function sendGuideFocus(focus) {
   if (!overlay || overlay.isDestroyed()) return;
   overlay.webContents.send('guide:focus', overlayTarget(focus));
 }
 
-// Tells Stella where capri_draw drew (null: unknown, her trail runs toward the middle).
+// Tells Stella where stella_draw drew (null: unknown, her trail runs toward the middle).
 function sendStellaDraw(target) {
   if (!overlay || overlay.isDestroyed()) return;
   overlay.webContents.send('stella:draw', overlayTarget(target));
@@ -678,7 +680,7 @@ function createOverlay() {
       && (!details.mediaType || details.mediaType==='audio');
   overlay.webContents.session.setPermissionRequestHandler((contents, permission, callback, details) => callback(microphonePermission(contents,permission,details)));
   overlay.webContents.session.setPermissionCheckHandler((contents, permission, origin, details) => microphonePermission(contents,permission,details));
-  overlay.loadURL('capri://app/src/renderer/index.html');
+  overlay.loadURL('stella://app/src/renderer/index.html');
   // always shown: put away, she's still there as her biochip in the corner
   overlay.once('ready-to-show', () => {
     if (!config.load().gamingMode && !fullscreenState.active) {
@@ -687,7 +689,7 @@ function createOverlay() {
   });
   overlay.webContents.on('render-process-gone', (_e, details) => {
     speech.cancel(true); tts.cancel(); endVoiceSession();
-    console.error('[capri] renderer gone:', details.reason);
+    console.error('[stella] renderer gone:', details.reason);
   });
   overlay.webContents.on('did-start-loading', () => { speech.cancel(true); tts.cancel(); endVoiceSession(); reminders?.setReady(false); });
   if (DEV) {
@@ -695,7 +697,7 @@ function createOverlay() {
       const { level, message, lineNumber, sourceId } = e;
       console.log(`[renderer:${level}] ${message} (${String(sourceId).split('/').pop()}:${lineNumber})`);
     });
-    if (process.env.CAPRI_DEVTOOLS) overlay.webContents.openDevTools({ mode: 'detach' });
+    if (process.env.STELLA_DEVTOOLS) overlay.webContents.openDevTools({ mode: 'detach' });
   }
 }
 
@@ -723,7 +725,7 @@ function startReminders() {
     let roomTimer = null;
     reminderStore.onChange(() => { clearTimeout(roomTimer); roomTimer = setTimeout(() => settingsRoom?.update(), 250); roomTimer.unref?.(); });
   } catch (error) {
-    console.error('[capri] Reminders unavailable:', error.message);
+    console.error('[stella] Reminders unavailable:', error.message);
     reminderScheduler?.stop(); reminderStore?.close();
     reminderStore = reminderScheduler = reminders = null; brainTools.reminders = undefined;
   }
@@ -731,7 +733,7 @@ function startReminders() {
 
 function sendCommand(name, payload = {}) {
   if (config.load().gamingMode) return;
-  overlay?.webContents.send('capri:command', { name, ...payload });
+  overlay?.webContents.send('stella:command', { name, ...payload });
 }
 
 let gamingTransition = false;
@@ -747,7 +749,7 @@ async function gamingAnimation(name) {
     const ready = event => { if (event.sender === contents) finish(); };
     const timer = setTimeout(finish, 1100);
     ipcMain.on('gaming:animation-ready', ready);
-    contents.send('capri:command', { name });
+    contents.send('stella:command', { name });
   });
 }
 async function setGamingMode(on) {
@@ -775,7 +777,7 @@ async function setGamingMode(on) {
     } else {
       await gamingAnimation('gamingPrepareReturn');
       if (!fullscreenState.active) overlay?.showInactive();
-      overlay?.webContents.send('capri:command', { name: 'gamingArrival' });
+      overlay?.webContents.send('stella:command', { name: 'gamingArrival' });
       watchWindows();
       overlay?.webContents.send('integration:state', { ...codexEvents.snapshot(), resumed: true });
     }
@@ -856,7 +858,7 @@ function demoWindow(open) {
   return true;
 }
 
-// 'auto' -> the first system language Capri speaks, English otherwise.
+// 'auto' -> the first system language Stella speaks, English otherwise.
 function resolveLang(setting) {
   if (LANGS.includes(setting)) return setting;
   const preferred = [...app.getPreferredSystemLanguages(), app.getSystemLocale(), app.getLocale()];
@@ -922,7 +924,7 @@ function updateConfig(patch) {
   if (memoryStore) memoryStore.prune();
   goalStore?.prune();
   const cfg = rendererConfig();
-  overlay?.webContents.send('capri:config', cfg);
+  overlay?.webContents.send('stella:config', cfg);
   rebuildTray();
   return cfg;
 }
@@ -1304,7 +1306,7 @@ function registerIpc() {
       let statedMemory;
       if (!cfg.gamingMode && privacy.memoryEnabled && privacy.memoryLearn) {
         try { statedMemory = memory().learn(current.content).facts; }
-        catch { console.error('[capri] Could not save stated personal details.'); }
+        catch { console.error('[stella] Could not save stated personal details.'); }
       }
       const text = await brain.chat(current.content,
         text => overlay?.webContents.send('chat:delta', { id, text }),
@@ -1348,7 +1350,7 @@ function registerIpc() {
     try {
       return fs.readdirSync(userSoundsDir())
         .filter((f) => SOUND_EXT.test(f))
-        .map((f) => ({ name: f.replace(SOUND_EXT, '').toLowerCase(), url: `capri://usersounds/${encodeURIComponent(f)}` }));
+        .map((f) => ({ name: f.replace(SOUND_EXT, '').toLowerCase(), url: `stella://usersounds/${encodeURIComponent(f)}` }));
     } catch {
       return [];
     }
@@ -1383,7 +1385,7 @@ async function debugHandler(route, body) {
       const b = overlay.getBounds();
       const win = new BrowserWindow({
         x: b.x + (body.x ?? 300), y: b.y + (body.y ?? 380), width: body.w ?? 720, height: body.h ?? 380,
-        show: false, alwaysOnTop: true, title: `Capri test window ${id}`, backgroundColor: '#1b1726',
+        show: false, alwaysOnTop: true, title: `Stella test window ${id}`, backgroundColor: '#1b1726',
       });
       win.loadURL('data:text/html,<body style="background:%231b1726"></body>');
       win.showInactive();
@@ -1440,7 +1442,7 @@ function main() {
     if (!runtime().currentSource && !chats.size) { app.relaunch(); app.quit(); }
     else sendCommand('status');
   });
-  if (process.platform === 'win32') app.setAppUserModelId('caprigpt.desktop');
+  if (process.platform === 'win32') app.setAppUserModelId('stella.desktop');
 
   app.whenReady().then(() => {
     serveProtocol();
@@ -1462,15 +1464,15 @@ function main() {
     }
     // Apply expiry on startup even if no memory is recalled this run.
     if (fs.existsSync(path.join(app.getPath('userData'), 'personal-memory.sqlite'))) {
-      try { memory(); } catch { console.error('[capri] Personal memory unavailable; other features remain available.'); }
+      try { memory(); } catch { console.error('[stella] Personal memory unavailable; other features remain available.'); }
     }
     try {
       const history = recentConversation();
       if (config.load().rememberRecentChat === true) history?.prune();
       else history?.clear();
-    } catch { console.error('[capri] Recent conversation storage unavailable.'); }
+    } catch { console.error('[stella] Recent conversation storage unavailable.'); }
     if (fs.existsSync(path.join(app.getPath('userData'), 'companion-goals.sqlite'))) {
-      try { goals(); } catch { console.error('[capri] Saved goals unavailable.'); }
+      try { goals(); } catch { console.error('[stella] Saved goals unavailable.'); }
     }
     let previousConnection;
     try { previousConnection = JSON.parse(fs.readFileSync(connectionFile(), 'utf8')); } catch {}
@@ -1488,7 +1490,7 @@ function main() {
           // through the HTTP status endpoint, and never return app/window names.
           const previousTopic = personal.lastAppQuestion;
           try {
-            const result = await personal.route('whats openned in my pc capri?');
+            const result = await personal.route('whats openned in my pc stella?');
             status.contextCheck = { handledLocally: Boolean(result.handled),
               reportsApps: /^(Open desktop apps|Running app processes|No matching apps)/.test(result.text || '') };
           } finally { personal.lastAppQuestion = previousTopic; }

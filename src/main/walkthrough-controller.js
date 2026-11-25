@@ -6,7 +6,7 @@ const { guideLine, guideButton } = require('./guide-lines');
 const { commandPhrase, WALKTHROUGH_COMMANDS } = require('./command-phrases');
 const { DISPLAY_NAME } = require('./identity');
 
-// Owns the one running walkthrough for main.js: starts it from capri_walkthrough, draws it on the guide layer,
+// Owns the one running walkthrough for main.js: starts it from stella_walkthrough, draws it on the guide layer,
 // re-plans through the decision brain, routes new requests (a local command, or a pause until Codex answers) and makes
 // the guide card clickable only while the cursor is over it. No Electron import: main injects everything.
 const HOVER_MS = 50;
@@ -218,7 +218,7 @@ class WalkthroughController {
     try {
       if (this.interactive !== null) this.layer.setCardInteractive(this.interactive, false);
       if (displayId !== null) this.layer.setCardInteractive(displayId, true);
-    } catch { console.error('[capri] Could not update the guide card.'); }
+    } catch { console.error('[stella] Could not update the guide card.'); }
     this.interactive = displayId;
   }
 

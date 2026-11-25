@@ -60,10 +60,10 @@ async function boot() {
   });
   panel.onOpenLink = url => host.openLink(url);
 
-  // Stella (stella/stella.js), still called `capri` here and by the modules it is handed to. With no renderer
+  // Stella (stella/stella.js), still called `stella` here and by the modules it is handed to. With no renderer
   // given she builds her own StellaRenderer, and without WebGL2 keeps working undrawn instead of failing boot.
   let knownAnchor = isPoint(config.stellaAnchor) ? { x: config.stellaAnchor.x, y: config.stellaAnchor.y } : null;
-  const capri = new Stella({
+  const stella = new Stella({
     root: document.getElementById('stella'),
     canvas: document.getElementById('stella-canvas'),
     voice,
@@ -72,17 +72,17 @@ async function boot() {
     wander: config.wander,
     saveAnchor: p => { knownAnchor = { x: Math.round(p.x), y: Math.round(p.y) }; host.setConfig({ stellaAnchor: knownAnchor }); },
   });
-  if (globalThis.stellaCheck) globalThis.stellaCheck.capri = capri; // scripts/check-stella.js (stub host) only
-  capri.gaming = Boolean(config.gamingMode);
-  capri.setScale(config.scale);
+  if (globalThis.stellaCheck) globalThis.stellaCheck.stella = stella; // scripts/check-stella.js (stub host) only
+  stella.gaming = Boolean(config.gamingMode);
+  stella.setScale(config.scale);
   let companionStorage;
   try { companionStorage = window.localStorage; } catch {}
-  capri.companion = new Companion({ capri, host, storage: companionStorage });
-  capri.companion.configure(companionConfig(config));
+  stella.companion = new Companion({ stella, host, storage: companionStorage });
+  stella.companion.configure(companionConfig(config));
 
   const mission = new Mission();
-  const brain = new Brain({ capri, panel, voice, host, mission, lang: config.lang, generatedDialogue: config.generatedDialogue !== false });
-  new IntegrationCompanion({ capri, panel, voice, host, brain });
+  const brain = new Brain({ stella, panel, voice, host, mission, lang: config.lang, generatedDialogue: config.generatedDialogue !== false });
+  new IntegrationCompanion({ stella, panel, voice, host, brain });
 
   // Click-through everywhere except on her body, the panel and her biochip.
   let talkMenu, wakeListener, voiceCall, commandListener;
@@ -96,8 +96,8 @@ async function boot() {
   };
   const onChip = () => Boolean(chip.visible && mouse && chip.contains(mouse.x, mouse.y, 0));
   const refreshHit = (force = false) => {
-    if (capri.fullscreen && !wakeListener?.session) return setInteractive(false, force);
-    if (capri.pointerHeld || capri.dragging) return setInteractive(true, force);
+    if (stella.fullscreen && !wakeListener?.session) return setInteractive(false, force);
+    if (stella.pointerHeld || stella.dragging) return setInteractive(true, force);
     if (!mouse) return setInteractive(false, force);
     const r = panel.rect();
     const onPanel = r && mouse.x >= r.left && mouse.x <= r.right && mouse.y >= r.top && mouse.y <= r.bottom;
@@ -105,15 +105,15 @@ async function boot() {
     const ir = !indicator.hidden && indicator.getBoundingClientRect();
     const onWakeIndicator = ir && mouse.x >= ir.left && mouse.x <= ir.right && mouse.y >= ir.top && mouse.y <= ir.bottom;
     document.body.style.cursor = onChip() ? 'pointer' : '';
-    return setInteractive(Boolean(onPanel || onWakeIndicator || talkMenu?.contains(mouse.x, mouse.y) || capri.hit(mouse.x, mouse.y) || onChip()), force);
+    return setInteractive(Boolean(onPanel || onWakeIndicator || talkMenu?.contains(mouse.x, mouse.y) || stella.hit(mouse.x, mouse.y) || onChip()), force);
   };
   // Her biochip: her eyes on it follow the pointer over it, and she comes out when you click it
   // (only then, so the pointer passing through that corner doesn't call her back).
   // Her mask, asleep: the pointer coming over it stirs her, and a moment of that wakes her up.
   let wakeTimer = 0;
   const comeOut = () => {
-    if (capri.stowed) host.setConfig({ visible: true }); // the tray and Ctrl+Alt+C follow
-    capri.unstow();
+    if (stella.stowed) host.setConfig({ visible: true }); // the tray and Ctrl+Alt+C follow
+    stella.unstow();
   };
   const hoverChip = () => {
     chip.pointer = chip.visible && mouse && chip.contains(mouse.x, mouse.y) ? mouse : null;
@@ -125,13 +125,13 @@ async function boot() {
     } else if (!wakeTimer) {
       wakeTimer = setTimeout(() => {
         wakeTimer = 0;
-        if (capri.dormant) capri.wake();
+        if (stella.dormant) stella.wake();
       }, 400);
     }
   };
   const pointerRecovery = new PointerRecovery({ host,
-    eligible: () => !document.hidden && !capri.gaming && (!capri.fullscreen || Boolean(wakeListener?.session)),
-    held: () => capri.pointerHeld || capri.dragging, revision: () => pointerRevision,
+    eligible: () => !document.hidden && !stella.gaming && (!stella.fullscreen || Boolean(wakeListener?.session)),
+    held: () => stella.pointerHeld || stella.dragging, revision: () => pointerRevision,
     update: point => { mouse = point; refreshHit(true); hoverChip(); },
   });
   window.addEventListener('beforeunload', () => pointerRecovery.close());
@@ -159,29 +159,29 @@ async function boot() {
   });
 
   // wiring
-  capri.onPointerHold = () => {
+  stella.onPointerHold = () => {
     refreshHit();
-    if (!capri.pointerHeld && !capri.dragging && !talkMenu?.visible && !(panel.visible && panel.current?.chat)) host.focusOverlay(false);
+    if (!stella.pointerHeld && !stella.dragging && !talkMenu?.visible && !(panel.visible && panel.current?.chat)) host.focusOverlay(false);
   };
-  capri.onMove = (head) => {
+  stella.onMove = (head) => {
     // pointing at something: the panel goes on her other side, so it doesn't cover it
-    panel.setAnchor({ ...head, lean: capri.pointing ? -capri.pointing.dir : 0 }, capri.view);
-    talkMenu?.place(head, capri.view);
-    voiceCall?.place(head, capri.view);
+    panel.setAnchor({ ...head, lean: stella.pointing ? -stella.pointing.dir : 0 }, stella.view);
+    talkMenu?.place(head, stella.view);
+    voiceCall?.place(head, stella.view);
     // she may have moved out from under a still pointer: never leave a dead click zone behind
     refreshHit();
   };
-  capri.onTeleport = (phase) => { if (wakeListener?.session) return; if (phase === 'start') talkMenu?.hide(); return phase === 'start' ? panel.suspend() : panel.resume(); };
-  capri.chipAt = () => chip.center();
-  capri.onStow = () => {
+  stella.onTeleport = (phase) => { if (wakeListener?.session) return; if (phase === 'start') talkMenu?.hide(); return phase === 'start' ? panel.suspend() : panel.resume(); };
+  stella.chipAt = () => chip.center();
+  stella.onStow = () => {
     talkMenu?.hide();
-    chip.setMode(capri.mode);
+    chip.setMode(stella.mode);
     chip.show();
   };
-  capri.onUnstow = () => chip.hide();
-  capri.onDoze = (phase, face) => {
+  stella.onUnstow = () => chip.hide();
+  stella.onDoze = (phase, face) => {
     if (phase === 'start') {
-      mask.place(face.x, face.y, capri.scale * 1.1);
+      mask.place(face.x, face.y, stella.scale * 1.1);
       mask.show();
     } else if (phase === 'waking') {
       mask.wake();
@@ -191,14 +191,14 @@ async function boot() {
   };
   // Waiting on a permission (integration.js / brain.js set 'alert'): her approval ring holds and she comes a
   // little closer; leaving alert lets it go. approval() ignores a repeat, so this is safe to call on every change.
-  capri.onMode = (mode, prev) => {
+  stella.onMode = (mode, prev) => {
     chip.setMode(mode, prev);
-    if (mode === 'alert' || prev === 'alert') capri.approval(mode === 'alert');
+    if (mode === 'alert' || prev === 'alert') stella.approval(mode === 'alert');
   };
-  host.onAgentActivity?.(e => capri.agentActivity(e));
-  host.onGuideFocus?.(f => capri.guideFocus(f));
-  host.onStellaDraw?.(d => capri.drawAt?.(d));
-  capri.onClick = () => {
+  host.onAgentActivity?.(e => stella.agentActivity(e));
+  host.onGuideFocus?.(f => stella.guideFocus(f));
+  host.onStellaDraw?.(d => stella.drawAt?.(d));
+  stella.onClick = () => {
     voiceCall?.end();
     if (panel.visible) panel.hide('user'); // the user clicked it away (a reminder card is dismissed, not re-queued)
     talkMenu?.show();
@@ -207,16 +207,16 @@ async function boot() {
     const spoken = voice.spoken?.enabled && (chat.speaksReplies || panel.current?.voiceUntil > Date.now());
     if (!spoken) voice.play('blip', { mood: kind });
   };
-  panel.onTalk = (talking) => talking && capri.mode !== 'sleep'
-    && !capri.act?.player.name.startsWith('idle') && capri.perform('talk');
+  panel.onTalk = (talking) => talking && stella.mode !== 'sleep'
+    && !stella.act?.player.name.startsWith('idle') && stella.perform('talk');
   panel.onFocus = () => host.focusOverlay(true); // Restore typing after a fullscreen exit, only on a user click.
-  capri.onMenu = () => host.openMenu();
+  stella.onMenu = () => host.openMenu();
 
   voice.spoken = new SpeechPlayer({ host, voice,
     onPlayback: active => voiceCall?.playback(active),
     onLevel: level => {
-      capri.speechLevel = level;
-      if (level > 0.015 && !capri.act && capri.mode !== 'sleep') capri.perform('talk');
+      stella.speechLevel = level;
+      if (level > 0.015 && !stella.act && stella.mode !== 'sleep') stella.perform('talk');
     },
     onError: error => {
       if (voiceCall?.active) { voiceCall.end(); return; }
@@ -242,50 +242,50 @@ async function boot() {
     if (voiceCall?.checkIn) voiceCall.end();
     if (!wakeListener?.session) voice.spoken.stop();
   });
-  const chat = new Chat({ capri, panel, voice, host, brain });
-  capri.onIdleWave = () => {}; // A wave is an animation; speech comes from Codex.
+  const chat = new Chat({ stella, panel, voice, host, brain });
+  stella.onIdleWave = () => {}; // A wave is an animation; speech comes from Codex.
   const publishCompanionState = () => {
-    if (voiceCall?.active) capri.nextMove = capri.nextGaze = performance.now() + 60000;
-    return host.companionState?.({ mood: capri.companion.mood,
-    routine: capri.companion.options.dailyRoutine ? (new Date().getHours() < 6 ? 'night' : new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening') : '',
-    chatOpen: chat.open || Boolean(voiceCall?.active && !voiceCall.checkIn), voiceActive: Boolean(voiceCall?.active), canSpeak: !voiceCall?.active && !wakeListener?.session && !talkMenu?.visible && !capri.busy && capri.mode !== 'alert' && !['alert', 'error', 'report'].includes(panel.current?.kind) });
+    if (voiceCall?.active) stella.nextMove = stella.nextGaze = performance.now() + 60000;
+    return host.companionState?.({ mood: stella.companion.mood,
+    routine: stella.companion.options.dailyRoutine ? (new Date().getHours() < 6 ? 'night' : new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening') : '',
+    chatOpen: chat.open || Boolean(voiceCall?.active && !voiceCall.checkIn), voiceActive: Boolean(voiceCall?.active), canSpeak: !voiceCall?.active && !wakeListener?.session && !talkMenu?.visible && !stella.busy && stella.mode !== 'alert' && !['alert', 'error', 'report'].includes(panel.current?.kind) });
   };
   setInterval(publishCompanionState, 15000);
   host.onBodyAction?.(async ({ id, action }) => {
     let result;
     try {
       if (action === 'mood' || action === 'help') { // the companion has the words; she plays the motion (none for help)
-        result = await capri.companion.request(action);
-        void capri.bodyAction(action);
+        result = await stella.companion.request(action);
+        void stella.bodyAction(action);
       } else {
         // come: to the pointer when it's on her display, else toward the middle
         const cursor = action === 'come' ? await host.cursor?.()?.catch(() => null) : null;
-        result = await capri.bodyAction(action, { cursor: cursor && cursor.inside !== false ? cursor : undefined });
+        result = await stella.bodyAction(action, { cursor: cursor && cursor.inside !== false ? cursor : undefined });
       }
     }
     catch (error) { result = `Action failed: ${error.message}`; }
     host.bodyResult({ id, result }); publishCompanionState();
   });
   const dictation = new Dictation({ panel, host, language: () => brain.lang,
-    canListen: () => chat.open && (!capri.gaming && !capri.fullscreen || wakeListener?.session),
+    canListen: () => chat.open && (!stella.gaming && !stella.fullscreen || wakeListener?.session),
     beforeStart: async () => { voiceCall?.end(); voice.spoken.stop(); wakeListener?.pause(); commandListener?.pause(); } });
   let restoreStowed = false;
   voiceCall = new VoiceCall({ host, speaker: voice.spoken, history: chat,
     indicator: document.getElementById('voice-indicator'),
-    onThinking: on => capri.setChatThinking(on),
+    onThinking: on => stella.setChatThinking(on),
     onStart: async checkIn => {
       if (!voice.spoken.enabled) throw Error('Enable spoken replies in Sound settings first.');
       commandListener?.pause();
       if (checkIn) {
         wakeListener.pause();
-        voiceCall.place(capri.head(), capri.view); publishCompanionState(); refreshHit(true);
+        voiceCall.place(stella.head(), stella.view); publishCompanionState(); refreshHit(true);
         return;
       }
       dictation.cancel(); chat.close(); panel.hide(); panel.setTicker(null); talkMenu?.hide();
       wakeListener.session = true; document.body.classList.add('voice-session');
-      restoreStowed = capri.stowed; if (capri.stowed) await capri.unstow();
-      capri.wake(); capri.nextMove = capri.nextGaze = performance.now() + 60000;
-      voiceCall.place(capri.head(), capri.view); publishCompanionState(); refreshHit(true);
+      restoreStowed = stella.stowed; if (stella.stowed) await stella.unstow();
+      stella.wake(); stella.nextMove = stella.nextGaze = performance.now() + 60000;
+      voiceCall.place(stella.head(), stella.view); publishCompanionState(); refreshHit(true);
     },
     onPromote: () => {
       wakeListener.session = true; document.body.classList.add('voice-session');
@@ -293,11 +293,11 @@ async function boot() {
     },
     onEnd: () => {
       wakeListener.session = false; document.body.classList.remove('voice-session');
-      if (restoreStowed) capri.stowNow(); restoreStowed = false;
+      if (restoreStowed) stella.stowNow(); restoreStowed = false;
       publishCompanionState(); refreshHit(true);
     } });
   chat.onStart = () => voiceCall.end();
-  talkMenu = new TalkMenu({ el: document.getElementById('talk-menu'), capri, host,
+  talkMenu = new TalkMenu({ el: document.getElementById('talk-menu'), stella, host,
     language: () => brain.lang, onChange: () => refreshHit(),
     onChoose: async (mode, greeting) => {
       if (mode === 'voice') { wakeListener.pause(); commandListener.pause(); await voiceCall.start(); return; }
@@ -308,13 +308,13 @@ async function boot() {
   // Commands-only listening (walkthrough / reminder window, opened by main): the local commands, no wake word needed.
   commandListener = new CommandListener({ host, indicator: document.getElementById('voice-indicator'), name: () => config.displayName,
     blocked: () => Boolean(voiceCall.active || dictation.id), ownsIndicator: () => !voiceCall.active,
-    place: () => voiceCall.place(capri.head(), capri.view), beforeStart: () => wakeListener?.pause(),
+    place: () => voiceCall.place(stella.head(), stella.view), beforeStart: () => wakeListener?.pause(),
     onWake: (event) => wakeListener.adopt(event, event.capture) }); // "Hey <name>" heard while commands own the microphone
   wakeListener = new WakeListener({ host, indicator: document.getElementById('wake-indicator'),
     blocked: () => Boolean(voiceCall.active || dictation.id || voice.spoken.pending || voice.spoken.source || commandListener.active),
     onSessionEnd: () => { if (voiceCall.fromWake) voiceCall.end(false); document.body.classList.remove('voice-session'); refreshHit(true); },
     onWake: async event => {
-      capri.wakeHeard();
+      stella.wakeHeard();
       await voiceCall.start(event);
     } });
   chat.onClose = () => { if (!voiceCall.active && !panel.leaving && !wakeListener.transferring) wakeListener.endSession(); };
@@ -330,7 +330,7 @@ async function boot() {
   };
   // A card actually shown (main is told through reminderShown): her chime, and a small drift toward the middle.
   const reminderHost = {
-    reminderShown: (...args) => { capri.remind(); return host.reminderShown?.(...args); },
+    reminderShown: (...args) => { stella.remind(); return host.reminderShown?.(...args); },
     reminderAction: (...args) => host.reminderAction(...args),
   };
   const reminderCards = new ReminderCards({ panel, host: reminderHost, speak: (line, grant) => void sayReminder(line, grant),
@@ -345,44 +345,44 @@ async function boot() {
   const until = async (done, max = 15000) => {
     for (const t0 = Date.now(); !done() && Date.now() - t0 < max;) await wait(100);
   };
-  const free = () => !capri.busy && !capri.act;
+  const free = () => !stella.busy && !stella.act;
   brain.onShowcase = async () => {
     const t = brain.t.showcase, s = SHOWCASE[brain.lang] || SHOWCASE.en;
     const caption = (line) => panel.say({ kind: 'info', line, hold: 2200 });
-    capri.nextMove = capri.nextGaze = performance.now() + 120000; // nothing of her own in between
-    if (capri.stowed) await capri.unstow();
-    if (capri.dormant) capri.wake();
+    stella.nextMove = stella.nextGaze = performance.now() + 120000; // nothing of her own in between
+    if (stella.stowed) await stella.unstow();
+    if (stella.dormant) stella.wake();
     await until(free);
     panel.hide();
     // one of her functions after the other, a caption before each
     for (const [line, motion] of [[s.open, 'flare'], [s.search, 'radar']]) {
       caption(line);
       await wait(900);
-      await capri.play(motion);
+      await stella.play(motion);
       await wait(700);
     }
     caption(s.think);
-    capri.reactToAction('think'); // her think state, 2 s
+    stella.reactToAction('think'); // her think state, 2 s
     await wait(2600);
     caption(s.memory);
     await wait(900);
-    await capri.play('swirlIn');
+    await stella.play('swirlIn');
     await wait(900);
 
     caption(t.chip);
     await wait(1600);
     panel.hide();
-    await capri.stow();
+    await stella.stow();
     await wait(3500);
-    await capri.unstow();
+    await stella.unstow();
     await wait(600);
-    void capri.celebrate();
+    void stella.celebrate();
     panel.say({ kind: 'info', line: t.end, hold: 5000 });
   };
 
   host.onAgentSuggestion(text => {
     if (wakeListener.session) return;
-    if (typeof text !== 'string' || capri.gaming || capri.fullscreen || chat.turn || talkMenu.visible) return;
+    if (typeof text !== 'string' || stella.gaming || stella.fullscreen || chat.turn || talkMenu.visible) return;
     if (chat.open) panel.stream(text, { done: true });
     else if (panel.visible && ['alert', 'error', 'report'].includes(panel.current?.kind)) return;
     else panel.say({ kind: 'info', face: 'look', line: text, hold: 10000 });
@@ -390,7 +390,7 @@ async function boot() {
   host.onConversation?.(message => {
     const { text, voiceUntil, mood, replyTo, canBuild } = typeof message === 'string' ? { text: message } : (message || {});
     const available = () => !document.hidden && !wakeListener.session && !chat.open &&
-      !talkMenu.visible && !capri.gaming && !capri.fullscreen;
+      !talkMenu.visible && !stella.gaming && !stella.fullscreen;
     if (!available() || voiceCall.active || panel.visible ||
         typeof text !== 'string' || text.length > 320) return;
     const es = brain.lang === 'es';
@@ -411,7 +411,7 @@ async function boot() {
         if (id === 'quiet') await host.personalRoute('/companion off');
       },
     });
-    capri.perform('curious'); // a little pulse as she speaks up
+    stella.perform('curious'); // a little pulse as she speaks up
     const checkIn = panel.current;
     if (voiceUntil && checkIn?.line === text) {
       const canPlay = () => available() && panel.visible && panel.current === checkIn;
@@ -421,47 +421,47 @@ async function boot() {
       } else voice.spoken.speakProactive(text, voiceUntil, canPlay, mood);
     }
   });
-  new FullscreenPresence({ capri, host, onChange: () => {
+  new FullscreenPresence({ stella, host, onChange: () => {
     ++pointerRevision;
     // Main can override click-through during a transition; resend even when
     // the renderer cache thinks nothing changed, including rapid reversals.
     refreshHit(true);
-    if (capri.fullscreen) { talkMenu.hide(); if (!dictation.fromWake) dictation.cancel(); }
-    else if (!capri.gaming) pointerRecovery.sample(true);
+    if (stella.fullscreen) { talkMenu.hide(); if (!dictation.fromWake) dictation.cancel(); }
+    else if (!stella.gaming) pointerRecovery.sample(true);
   } });
   host.onWindows((data) => {
-    capri.setWindows(data);
-    capri.companion.desktop(data);
+    stella.setWindows(data);
+    stella.companion.desktop(data);
     brain.onWindows(data);
   });
   // the windows as they are now: the watcher only speaks again when something changes
-  host.windowsNow().then((data) => data && capri.setWindows(data));
+  host.windowsNow().then((data) => data && stella.setWindows(data));
 
   host.onResize(({ width, height }) => {
     chip.place(width, height);
-    capri.setView(width, height);
+    stella.setView(width, height);
   });
   window.addEventListener('resize', () => {
     chip.place(innerWidth, innerHeight);
-    capri.setView(innerWidth, innerHeight);
+    stella.setView(innerWidth, innerHeight);
   });
 
   host.onConfig((cfg) => {
     if ((!cfg.wakeWordEnabled && voiceCall.fromWake) || !cfg.ttsEnabled || cfg.muted ||
         (voiceCall.checkIn && (!cfg.checkInReplies || !cfg.proactiveVoice || !cfg.proactiveEnabled || cfg.volume === 0 ||
           cfg.gamingMode || cfg.visible === false))) voiceCall.end();
-    capri.companion.configure(companionConfig(cfg));
+    stella.companion.configure(companionConfig(cfg));
     wakeListener.configure(cfg);
     voice.configure(cfg);
     voice.spoken.configure(cfg);
-    capri.gaming = Boolean(cfg.gamingMode);
-    if (capri.gaming || cfg.visible === false) { talkMenu.hide(); if (!dictation.fromWake) dictation.cancel(); }
-    capri.wander = cfg.wander !== false;
-    if (cfg.scale !== capri.scale) capri.setScale(cfg.scale);
+    stella.gaming = Boolean(cfg.gamingMode);
+    if (stella.gaming || cfg.visible === false) { talkMenu.hide(); if (!dictation.fromWake) dictation.cancel(); }
+    stella.wander = cfg.wander !== false;
+    if (cfg.scale !== stella.scale) stella.setScale(cfg.scale);
     // Her anchor only when it changed elsewhere (a reset, another window); her own drops echo back unchanged.
     if (!sameAnchor(cfg.stellaAnchor, knownAnchor)) {
       knownAnchor = isPoint(cfg.stellaAnchor) ? { x: cfg.stellaAnchor.x, y: cfg.stellaAnchor.y } : null;
-      capri.anchor = knownAnchor ? clampToView(knownAnchor, capri.radius, capri.view) : capri.firstAnchor();
+      stella.anchor = knownAnchor ? clampToView(knownAnchor, stella.radius, stella.view) : stella.firstAnchor();
     }
     if (cfg.lang !== brain.lang) {
       brain.lang = cfg.lang;
@@ -478,20 +478,20 @@ async function boot() {
         chat.close();
         panel.hide();
         try {
-          await capri.gamingDeparture();
+          await stella.gamingDeparture();
         } finally {
           host.gamingAnimationReady();
         }
         break;
       case 'gamingPrepareReturn':
-        try { capri.prepareGamingReturn(); }
+        try { stella.prepareGamingReturn(); }
         finally { host.gamingAnimationReady(); }
         break;
       case 'gamingArrival':
-        await capri.gamingArrival();
+        await stella.gamingArrival();
         break;
       case 'teleport':
-        capri.glideTo(capri.spot('random'));
+        stella.glideTo(stella.spot('random'));
         break;
       case 'status':
         brain.status();
@@ -528,64 +528,64 @@ async function boot() {
         await chat.send('/routines list');
         break;
       case 'report': // "Mission report" in her menu
-        if (capri.stowed) {
+        if (stella.stowed) {
           host.setConfig({ visible: true });
-          await capri.unstow();
+          await stella.unstow();
         }
-        capri.wake();
-        if (brain.report()) capri.perform('curious', capri.towardCenter());
+        stella.wake();
+        if (brain.report()) stella.perform('curious', stella.towardCenter());
         break;
       case 'fakeClaude': { // --dev: the topmost window (the test window) is where a prompt was typed, and you're elsewhere
-        const win = capri.windows.wins[0];
+        const win = stella.windows.wins[0];
         if (win) {
           brain.sessions.set('dev', { id: 'dev', project: 'dev', taskStart: Date.now(), count: 0, files: new Set(), log: [], working: true, waiting: false, window: win.id, seen: Date.now() });
-          capri.windows = { ...capri.windows, fg: -1 };
+          stella.windows = { ...stella.windows, fg: -1 };
         }
         break;
       }
       case 'stow': // Ctrl+Alt+C: into her biochip, or back out
         if (cmd.on) voiceCall.end();
         if (cmd.on) dictation.cancel();
-        if (cmd.on) capri.stow();
-        else capri.unstow();
+        if (cmd.on) stella.stow();
+        else stella.unstow();
         break;
       case 'satellite': // tray: out of her biochip if put away, awake, a curious pulse
-        if (capri.stowed) {
+        if (stella.stowed) {
           host.setConfig({ visible: true });
-          await capri.unstow();
+          await stella.unstow();
         }
-        capri.wake();
-        capri.perform('curious');
+        stella.wake();
+        stella.perform('curious');
         break;
       // --dev helpers
       case 'intro': // her entrance again, as when she starts
         panel.hide();
-        await capri.materialize(capri.spot('post'));
+        await stella.materialize(stella.spot('post'));
         break;
       case 'pose':
-        if (cmd.still) capri.nextMove = capri.nextGaze = Infinity; // no wandering off mid-test
+        if (cmd.still) stella.nextMove = stella.nextGaze = Infinity; // no wandering off mid-test
         if (cmd.hush) {
           panel.setTicker(null);
           panel.hide();
         }
-        if (cmd.scale) capri.setScale(cmd.scale);
-        if (cmd.at) capri.pos = cmd.at;
-        capri.drawFrame();
+        if (cmd.scale) stella.setScale(cmd.scale);
+        if (cmd.at) stella.pos = cmd.at;
+        stella.drawFrame();
         break;
       case 'config': // a setting, as if changed from her menu
         host.setConfig(cmd.patch || {});
         break;
       case 'focus': // as if window `fg` had come to the front
-        capri.windows = { ...capri.windows, fg: cmd.fg };
-        brain.onWindows(capri.windows);
+        stella.windows = { ...stella.windows, fg: cmd.fg };
+        brain.onWindows(stella.windows);
         break;
       case 'freeze':
-        capri.hidden = Boolean(cmd.on);
+        stella.hidden = Boolean(cmd.on);
         break;
       case 'act':
         // her methods by name (celebrate, remind, pulse, wakeHeard...) or motions / acts by name
-        if (typeof capri[cmd.act] === 'function') capri[cmd.act](...(cmd.args || []));
-        else capri.perform(cmd.act, cmd.dir || 0);
+        if (typeof stella[cmd.act] === 'function') stella[cmd.act](...(cmd.args || []));
+        else stella.perform(cmd.act, cmd.dir || 0);
         break;
       default:
         break;
@@ -593,28 +593,28 @@ async function boot() {
   });
 
   // entrance: she unfolds where she was left (first run: her post); put away last time, she starts in her biochip
-  if (config.visible === false) capri.stowNow();
-  else await capri.materialize(knownAnchor ? capri.anchor : capri.spot('post'));
+  if (config.visible === false) stella.stowNow();
+  else await stella.materialize(knownAnchor ? stella.anchor : stella.spot('post'));
   if (!config.welcomed) host.setConfig({ welcomed: true });
   publishCompanionState();
   host.companionEvent?.('startup');
-  document.documentElement.dataset.caprigptReady = 'true';
+  document.documentElement.dataset.stellaReady = 'true';
 
   // In the evening, after a real day's work, she brings you her report card once, on her own,
   // at a quiet moment.
   setInterval(() => {
     const day = mission.day;
-    const quiet = !brain.busySessions.length && !panel.visible && !capri.busy && !capri.act;
-    if (!capri.companion.options.dailyRoutine || capri.gaming || capri.fullscreen) return;
+    const quiet = !brain.busySessions.length && !panel.visible && !stella.busy && !stella.act;
+    if (!stella.companion.options.dailyRoutine || stella.gaming || stella.fullscreen) return;
     if (new Date().getHours() < 18 || day.reported || day.missions < 3 || !quiet) return;
-    if (capri.stowed || capri.dormant || capri.mode === 'sleep') return;
+    if (stella.stowed || stella.dormant || stella.mode === 'sleep') return;
     if (brain.report()) {
       mission.markReported();
-      capri.perform('curious', capri.towardCenter());
+      stella.perform('curious', stella.towardCenter());
     }
   }, 60000);
 }
 
 boot().catch((err) => {
-  console.error('[capri] boot failed', err);
+  console.error('[stella] boot failed', err);
 });

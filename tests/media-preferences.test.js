@@ -13,7 +13,7 @@ function fixture() {
     openExternal:()=>assert.fail('must not launch Windows default')});
   const actions=new ActionAgent({settings:()=>cfg,desktop,browser:{stop(){}}});
   const tools=new CodexTools({actions,settings:()=>cfg,confirm:()=>assert.fail('explicit media requests need no clarification')});
-  const call=(text,query)=>tools.run('capri_desktop_step',{tool:'open_media',query,index:0,browser:''},
+  const call=(text,query)=>tools.run('stella_desktop_step',{tool:'open_media',query,index:0,browser:''},
     {text,signal:new AbortController().signal,check(){}});
   return {cfg,calls,actions,tools,call};
 }

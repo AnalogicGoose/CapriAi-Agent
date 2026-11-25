@@ -58,9 +58,9 @@ export const Acts = {
   agentActivity({ tool, op, phase, ok } = {}) {
     const motion = motionForAgentTool(tool, op), now = this.now();
     if (phase === 'start') {
-      if (tool === 'capri_apps') this.releaseMusic();
+      if (tool === 'stella_apps') this.releaseMusic();
       if (motion === 'think') { this.agentThink.set(tool, now); return; }
-      if (tool === 'capri_draw') this.drawTarget = null; // toward the middle until the drawing reports where it is
+      if (tool === 'stella_draw') this.drawTarget = null; // toward the middle until the drawing reports where it is
       const act = this.start(motion);
       if (act && MOTIONS[motion].hold) this.agentHolds.set(tool, act);
       return;
@@ -74,7 +74,7 @@ export const Acts = {
       if (this._act === act) act.until = now;
     }
     if (ok === false) this.play('glitch');
-    else if (ok && tool === 'capri_apps' && MUSIC_OPS.has(op)) this.musicUntil = now + MUSIC_MS;
+    else if (ok && tool === 'stella_apps' && MUSIC_OPS.has(op)) this.musicUntil = now + MUSIC_MS;
   },
 
   releaseMusic() {

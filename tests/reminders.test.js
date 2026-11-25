@@ -152,7 +152,7 @@ test('retention: reminders survive a MemoryStore prune (no dependency on MemoryS
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { SCHEMA_VERSION } = require('../src/main/reminders');
-const tempDb = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-reminders-')); return { dir, file: path.join(dir, 'reminders.sqlite') }; };
+const tempDb = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-reminders-')); return { dir, file: path.join(dir, 'reminders.sqlite') }; };
 
 test('an existing version-0 reminders.sqlite is upgraded in place and keeps its rows', () => {
   const { dir, file } = tempDb();

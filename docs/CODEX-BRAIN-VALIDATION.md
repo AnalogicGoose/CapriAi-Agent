@@ -36,8 +36,8 @@ Status: unreleased implementation; live inference has not been verified.
   is claimed verified.
 - Windows directory packaging reached Electron packaging but failed resolving
   github.com (ENOTFOUND) for a required download. No successful build is claimed.
-- Desktop special-folder CapriGPT.lnk already targets this checkout's Electron
-  executable, absolute project argument, working directory and Capri icon.
+- Desktop special-folder Stella.lnk already targets this checkout's Electron
+  executable, absolute project argument, working directory and Stella icon.
   No shortcut replacement or running-app restart was needed or performed.
 
 ## Remaining native acceptance
@@ -48,7 +48,7 @@ Stop during inference and tool use, game-mode silence, follow-up/browser choice,
 network/auth/allowance failures and packaged CLI discovery. Re-run the full suite,
 Windows packaging and interactive validation before merging or releasing.
 
-The previous running Capri process keeps its loaded implementation until restarted.
+The previous running Stella process keeps its loaded implementation until restarted.
 Restarting this checkout selects Codex and may surface the unverified connection
 error. No changes were committed, pushed, tagged or released by this migration.
 Git metadata remains read-only in this environment; existing dirty work is preserved.
@@ -84,6 +84,6 @@ node_modules/electron/dist/electron.exe scripts/check-codex-tools.cjs --launch-f
 The focused audit/Codex tests pass (23/23). This restricted session still cannot
 start the Codex account/state handshake. Its isolated Electron diagnostic exited
 with status 2147483651 before producing a result; no real Firefox launch is claimed.
-The user's running Capri was not restarted. The fix addresses the reproduced
+The user's running Stella was not restarted. The fix addresses the reproduced
 contract mismatch; confirming the screenshot's exact runtime failure still needs
 the diagnostic in a normal Windows session after loading the updated source.

@@ -1,8 +1,8 @@
-# Animation notes (retired Capri renderer)
+# Animation notes (retired Stella renderer)
 
 > **The character on screen is now Stella.** See [docs/STELLA.md](docs/STELLA.md) for how she
-> looks, moves and is tuned. Everything below documents the old sprite renderer "Capri"
-> (`capri.js`, `sprite*.js`, the cel art). Those modules are no longer used by the overlay and
+> looks, moves and is tuned. Everything below documents the old sprite renderer "Stella"
+> (`stella.js`, `sprite*.js`, the cel art). Those modules are no longer used by the overlay and
 > are removed in the rename project; `npm run test:animations` still exercises them in isolation.
 
 ---
@@ -24,9 +24,9 @@ the earlier rig-based expansion, which remains the fallback for unsupported stat
 
 ---
 
-# Capri animation expansion
+# Stella animation expansion
 
-The original `capri-full.png`, shader rig, colors, line boil and silhouette are unchanged.
+The original `stella-full.png`, shader rig, colors, line boil and silhouette are unchanged.
 Quiet exposure sheets now interpolate at display cadence (up to 60 fps), with short
 140–160 ms blends into and out of gestures. Their original key poses and durations
 remain intact. Impact sheets retain their original held drawings and 24 fps action
@@ -46,7 +46,7 @@ timing. No generated art, replacement sprites or new sounds.
 | `read` | Observed read/view/inspect/list tool |
 | `search` | Observed search/grep/glob/find/fetch/browser tool |
 | `type` | Observed write/edit/patch/notebook tool |
-| Gaming teleport | Gaming mode teleports Capri off screen; resuming teleports her back |
+| Gaming teleport | Gaming mode teleports Stella off screen; resuming teleports her back |
 
 The `gameReady` hand pose remains available for manual previews; Gaming mode uses
 the original teleport collapse, beam, shards and reassembly effects instead.
@@ -61,18 +61,18 @@ While a local chat response is pending, the existing focus cycle plays underneat
 the thinking gesture. It clears on the first answer text, completion, error or
 closing chat. Codex notification activity keeps its separate work/alert state.
 
-Gaming mode still pauses AI, stops window tracking, unloads models and hides Capri.
+Gaming mode still pauses AI, stops window tracking, unloads models and hides Stella.
 Its departure uses her existing teleport-out effect, with a 1.1 second fallback if
-the renderer does not answer. On resume, Capri starts invisible before the overlay
+the renderer does not answer. On resume, Stella starts invisible before the overlay
 is shown and teleports into her safe corner, since her old window may have closed.
-Hidden/stowed/dormant Capri stays put away. A short move may finish before departure;
+Hidden/stowed/dormant Stella stays put away. A short move may finish before departure;
 dragging or longer travel skips that departure. Reduced motion uses a short fade
 out/in and skips automatic idle gestures.
 
 ## Try it
 
 Desktop sitting uses the original artwork and leg rig. After 45–80 seconds at the
-desktop floor, an idle Capri can take a 20–40 second seated break. She then stands
+desktop floor, an idle Stella can take a 20–40 second seated break. She then stands
 and waits 90–150 seconds before another break. Resting pauses wandering and large
 idle flourishes. Travel, dragging, hidden/fullscreen and Gaming mode block new sits;
 work and chat generation block automatic breaks. Window perching is unchanged.
@@ -83,10 +83,10 @@ commands run locally without model inference; **siéntate / sentate** and
 Busy moves finish before accepting another posture command. Reduced motion uses
 a still sitting pose and immediate posture changes.
 
-Restart Capri when convenient to load the changed source; an already running copy
+Restart Stella when convenient to load the changed source; an already running copy
 keeps its loaded code. No automatic restart is performed.
 
-1. Leave Capri idle and watch for the quiet variations. Try her seated
+1. Leave Stella idle and watch for the quiet variations. Try her seated
    on a window too; she should stay anchored to its ledge.
 2. Open chat and send a question: she listens, thinks, and returns to her prior
    work/idle cycle when the reply arrives. Closing a pending chat clears focus.
@@ -103,7 +103,7 @@ keeps its loaded code. No automatic restart is performed.
 - `node_modules/electron/dist/electron.exe scripts/check-animations.js` uses an
   isolated renderer to check actual WebGL drawings, action priority, idle rotation,
   chat focus cleanup, seated anchoring and gaming gating. It saves a pose gallery
-  under `.caprigpt-local/animation-check/poses.png` without starting Capri or AI.
+  under `.stella-local/animation-check/poses.png` without starting Stella or AI.
 - `npm run test:settings` exercises the real control room and gaming pause/resume
   with an isolated test profile and model unload mocked.
 
@@ -112,7 +112,7 @@ is tied to the actual Gaming mode switch.
 
 ## Dragging and dropping
 
-Hold the left mouse button on Capri and move more than five pixels: she squirms
+Hold the left mouse button on Stella and move more than five pixels: she squirms
 with alternating arm swings, leg kicks and trailing mane motion. These physical
 animations interpolate at up to 60 fps, with short blends into pickup, falling
 and landing. Her original artwork and ink texture remain unchanged. The held
@@ -130,7 +130,7 @@ cleanup, falling to the floor, landing on a window and reduced-motion handling.
 
 ## Companion life and smooth motion
 
-The renderer's `Companion` controller extends `Capri.behave()` rather than starting
+The renderer's `Companion` controller extends `Stella.behave()` rather than starting
 another animation loop. Quiet base cycles, gestures, floor sitting and standing
 interpolate through their original poses. Gentle counter-lean and compression
 carry movement through the body; the mane and limbs retain their authored
@@ -146,7 +146,7 @@ animations take priority. Reduced motion freezes base poses and suppresses quiet
 gestures, cursor reactions, daily gestures and surprises.
 
 Personality is fictional, local energy/playfulness state, persisted in renderer
-localStorage under `capri.companion.v1`. It gradually settles toward a time-of-day
+localStorage under `stella.companion.v1`. It gradually settles toward a time-of-day
 energy level. Interaction increases playfulness; work/alerts use focused/attentive
 moods. The current state shapes gesture selection and provides bounded character
 context to existing chat. Turning personality off uses a calm mood. Corrupt or
@@ -184,8 +184,8 @@ through the production IPC boundary.
 
 ## Live panel portrait
 
-All message and chat panel avatars now use `assets/capri/portrait-blink.png`, a
-new two-frame portrait with open and closed eyes. It preserves Capri's red angular
+All message and chat panel avatars now use `assets/stella/portrait-blink.png`, a
+new two-frame portrait with open and closed eyes. It preserves Stella's red angular
 hair, lime face, blue concentric eyes and jagged grin with cleaner portrait art.
 Original full-body art, desktop icons and cinematic cut-ins remain in use.
 
@@ -201,8 +201,8 @@ portrait, with a brief glitch when the mood changes instead of different crops.
 
 `node_modules/electron/dist/electron.exe scripts/check-portraits.js` verifies asset
 loading, blinking, glitching, all mood names, visibility and reduced motion. It
-saves an actual-size panel preview to `.caprigpt-local/portrait-check/panels.png`.
-Art provenance and the generation prompt are in `assets/capri/portrait-source.md`.
+saves an actual-size panel preview to `.stella-local/portrait-check/panels.png`.
+Art provenance and the generation prompt are in `assets/stella/portrait-source.md`.
 
 The chat draft starts as a single-line textarea and grows to two and then three
 lines as text wraps, including long unbroken words or explicit newlines. Longer
@@ -216,7 +216,7 @@ wrapping, scrolling, multiline submission and keyboard/dictation guards.
 
 ## Automatic fullscreen teleport
 
-On Windows, Capri now teleports away when the foreground app covers her entire
+On Windows, Stella now teleports away when the foreground app covers her entire
 display, then teleports back when fullscreen ends or you switch away. Normal
 maximized windows and fullscreen apps on another display do not trigger this.
 The detector reads only native window geometry every 50 ms; it does not collect
@@ -232,7 +232,7 @@ is disabled during the transition so losing focus does not stall it.
 
 Fullscreen presence composes over the current sprite without changing its alpha
 or its regular teleport state. Manual stowing and Gaming mode remain independent;
-resuming Gaming mode while still fullscreen keeps Capri hidden. Putting her away
+resuming Gaming mode while still fullscreen keeps Stella hidden. Putting her away
 or bringing her out while fullscreen updates her state without waiting on hidden
 animation frames.
 
@@ -248,7 +248,7 @@ Fullscreen return also restores native mouse activation with `setFocusable(true)
 before `showInactive()`, without focusing over the foreground application. The
 renderer resends its click-through state and refreshes the cursor after arrival,
 even if it has not moved. Revision checks discard stale cursor replies during
-rapid toggles. This repairs a return path that showed Capri but retained the
+rapid toggles. This repairs a return path that showed Stella but retained the
 disabled native focus state. The fullscreen smoke test now checks focusability,
 stationary-pointer routing, actual pointer events for character clicks and drag,
 and Send/Close buttons, alongside the existing visibility and rapid-toggle cases.

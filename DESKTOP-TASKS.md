@@ -1,14 +1,14 @@
-# Capri can act on desktop requests
+# Stella can act on desktop requests
 
 Ask in ordinary chat. You do not need slash commands:
 
-- “Capri, open File Explorer.”
+- “Stella, open File Explorer.”
 - “Open Firefox.” (or another exact installed Start menu app name)
 - “Could you bring up Netflix using Firefox?”
 - “Pull up Wikipedia in Firefox.”
 - “Firefox.” also works as an installed-app launch shortcut, including after
-  Capri asks which browser/app to open.
-- “Capri, play the newest Rubius video on YouTube.”
+  Stella asks which browser/app to open.
+- “Stella, play the newest Rubius video on YouTube.”
 - “Play music.” uses YouTube Music; a named song/playlist is handled there.
 - “Watch anime” / “let's watch anime” opens Crunchyroll. Select Gabriel only if
   the profile picker appears; a direct signed-in landing needs no profile action.
@@ -60,7 +60,7 @@ Reasoning stays local. Requested searches and website visits use the Internet:
 - **Web search:** public Bing RSS results, with source buttons.
 - **Websites in a browser:** named sites are searched first, then an observed
   result is sent to the requested verified Firefox/Chrome/Edge/Brave executable
-  or Capri's preferred browser (Firefox by default). Explicit public HTTPS URLs
+  or Stella's preferred browser (Firefox by default). Explicit public HTTPS URLs
   can open directly. Saved music/anime destinations use the bounded `open_media`
   tool without a web search. Receipt text distinguishes sending
   the URL from verifying page loading, sign-in or playback.
@@ -71,16 +71,16 @@ Reasoning stays local. Requested searches and website visits use the Internet:
 
 No screen snapshots, PC context or personal memory are sent to search providers.
 Public fetches have fixed provider hosts, redirect checks, size limits and timeouts.
-All pages use your external browser; Capri has no separate browsing session.
-Capri prefers Firefox independently of Windows' browser default. Choose a browser
+All pages use your external browser; Stella has no separate browsing session.
+Stella prefers Firefox independently of Windows' browser default. Choose a browser
 in Updates & app → Browser & media, or use `system` explicitly for the Windows
 default. Firefox URL requests use `-new-tab` to reuse an open window
 (or start Firefox if closed), without private mode or a separate profile. Source
-buttons use Capri's preferred browser and open only observed URLs through opaque references that expire after ten
+buttons use Stella's preferred browser and open only observed URLs through opaque references that expire after ten
 minutes. Follow-ups can refer to the most recent result set during that period.
 
-Capri validates public HTTPS URLs before dispatch. Browser tabs use your own
-browser settings and sign-in; Capri does not copy cookies or automate login.
+Stella validates public HTTPS URLs before dispatch. Browser tabs use your own
+browser settings and sign-in; Stella does not copy cookies or automate login.
 
 ## Reporting and personality
 

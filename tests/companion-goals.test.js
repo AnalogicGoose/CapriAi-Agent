@@ -7,7 +7,7 @@ const path = require('node:path');
 const { CompanionGoals } = require('../src/main/companion-goals');
 
 function fixture(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-goals-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-goals-'));
   let at = 1_000_000, cfg = { privacy: { memoryEnabled: true } }, store;
   const open = () => store = new CompanionGoals({ file: path.join(dir, 'goals.sqlite'), settings: () => cfg, now: () => at });
   open();
@@ -19,12 +19,12 @@ function fixture(t) {
 test('user intentions and next steps survive restarts without becoming task authorization', t => {
   const f = fixture(t);
   assert.equal(f.store.route('Please save a goal'), null);
-  assert.match(f.store.route('/goals add Finish Capri roadmap').text, /Saved goal #1/);
+  assert.match(f.store.route('/goals add Finish Stella roadmap').text, /Saved goal #1/);
   assert.match(f.store.route('/goals next 1 Review the audit').text, /updated/);
   f.restart();
   assert.equal(f.store.context()[0].next_step, 'Review the audit');
   assert.match(f.store.context()[0].note, /not evidence of progress or permission/);
-  assert.match(f.store.route('/goals add Finish Capri roadmap').text, /already saved/);
+  assert.match(f.store.route('/goals add Finish Stella roadmap').text, /already saved/);
   f.store.route('/goals pause 1'); assert.deepEqual(f.store.context(), []);
   f.store.route('/goals resume 1'); assert.equal(f.store.context().length, 1);
   f.store.route('/goals done 1'); f.restart(); assert.deepEqual(f.store.context(), []);

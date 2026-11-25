@@ -8,8 +8,8 @@ import { fmt } from './util.js';
 const IDLE_FOR = 10 * 60 * 1000; // no wandering off while she's showing you something
 
 export class Guide {
-  constructor({ capri, panel, voice, host, brain }) {
-    this.capri = capri;
+  constructor({ stella, panel, voice, host, brain }) {
+    this.stella = stella;
     this.panel = panel;
     this.voice = voice;
     this.host = host;
@@ -51,25 +51,25 @@ export class Guide {
   // Run a scene: she stays put meanwhile, and stops pointing at the end whatever happened.
   // A new scene ends the one that was on (its panel goes, it returns); only the last one cleans up.
   async scene(play) {
-    const { capri } = this;
+    const { stella } = this;
     const id = ++this.sceneId;
     this.answer(null);
-    capri.stopPointing(); // whatever the last scene was showing
-    if (capri.stowed) {
+    stella.stopPointing(); // whatever the last scene was showing
+    if (stella.stowed) {
       this.host.setConfig({ visible: true });
-      await capri.unstow();
+      await stella.unstow();
     }
-    capri.wake();
+    stella.wake();
     this.running = true;
-    capri.nextMove = capri.nextGaze = performance.now() + IDLE_FOR;
+    stella.nextMove = stella.nextGaze = performance.now() + IDLE_FOR;
     try {
       await play();
     } finally {
       if (id === this.sceneId) {
         this.running = false;
-        capri.stopPointing();
-        capri.nextMove = performance.now() + 30000;
-        capri.nextGaze = performance.now() + 60000;
+        stella.stopPointing();
+        stella.nextMove = performance.now() + 30000;
+        stella.nextGaze = performance.now() + 60000;
         if (this.panel.current?.token) this.panel.hide();
       }
     }
@@ -111,16 +111,16 @@ export class Guide {
     if (id !== 'connect') return;
     const result = await this.host.installHooks();
     if (!result.ok) {
-      this.capri.hurt();
+      this.stella.hurt();
       await this.ask({ kind: 'error', face: 'wide', line: fmt(w.failed, { error: result.error }), actions: this.ok() });
       return;
     }
     this.voice.play('hello');
-    this.capri.perform('hop');
+    this.stella.perform('hop');
     // she knows where Claude is if you've used it with her before: she shows you where to restart it
     const win = this.claudeWindow();
     const scene = this.sceneId;
-    if (win && this.capri.canPoint(win)) await this.capri.pointAt(win, { label: this.t.labels.claude });
+    if (win && this.stella.canPoint(win)) await this.stella.pointAt(win, { label: this.t.labels.claude });
     if (scene !== this.sceneId) return; // another scene took over meanwhile
     await this.ask({ kind: 'done', face: 'laugh', line: w.connected, quote: w.restart, actions: [{ id: 'ok', label: w.ok }] });
   }
@@ -130,7 +130,7 @@ export class Guide {
     const t = this.t.icon;
     const place = await this.host.trayPlace();
     const scene = this.sceneId;
-    await this.capri.pointAt(place.icon || place.corner, { label: this.t.labels.icon });
+    await this.stella.pointAt(place.icon || place.corner, { label: this.t.labels.icon });
     if (scene !== this.sceneId) return; // another scene took over meanwhile
     await this.ask({ face: 'look', line: t.line, quote: place.icon ? t.quote : t.hidden, actions: this.ok() });
   }
@@ -141,11 +141,11 @@ export class Guide {
     const win = this.claudeWindow();
     if (!win) {
       await this.ask({ face: 'aside', line: t.unknown, quote: t.unknownHow, actions: this.ok() });
-    } else if (!this.capri.canPoint(win)) {
+    } else if (!this.stella.canPoint(win)) {
       await this.ask({ face: 'calm', line: t.behind, quote: t.behindHow, actions: this.ok() });
     } else {
       const scene = this.sceneId;
-      await this.capri.pointAt(win, { label: this.t.labels.claude });
+      await this.stella.pointAt(win, { label: this.t.labels.claude });
       if (scene !== this.sceneId) return; // another scene took over meanwhile
       await this.ask({ face: 'look', line: t.there, quote: t.thereHow, actions: this.ok() });
     }
@@ -154,18 +154,18 @@ export class Guide {
   // Claude Code's folder: she opens it, waits for the window to come up, and points at it.
   async folder() {
     const t = this.t.folder;
-    const { capri } = this;
-    const before = capri.windows.fg;
+    const { stella } = this;
+    const before = stella.windows.fg;
     const opened = await this.host.openClaudeFolder();
     if (!opened.found) {
       await this.ask({ face: 'wide', line: t.missing, quote: t.missingHow, actions: this.ok() });
       return;
     }
     // Explorer comes up in front: a new window, or the one already showing that folder, brought back
-    const front = () => capri.windows.wins.find((w) => w.id === capri.windows.fg) || null;
-    const win = (await this.until(() => (capri.windows.fg !== before ? front() : null), 2500)) || front();
+    const front = () => stella.windows.wins.find((w) => w.id === stella.windows.fg) || null;
+    const win = (await this.until(() => (stella.windows.fg !== before ? front() : null), 2500)) || front();
     const scene = this.sceneId;
-    if (win && capri.canPoint(win)) await capri.pointAt(win, { label: opened.file ? 'settings.json' : '.claude' });
+    if (win && stella.canPoint(win)) await stella.pointAt(win, { label: opened.file ? 'settings.json' : '.claude' });
     if (scene !== this.sceneId) return; // another scene took over meanwhile
     const id = await this.ask({
       face: 'smug',
@@ -181,7 +181,7 @@ export class Guide {
 
   // Claude's window: the one you typed your last prompt in, if it's still around.
   claudeWindow() {
-    const { wins } = this.capri.windows;
+    const { wins } = this.stella.windows;
     const sessions = [...this.brain.sessions.values()].filter((s) => s.window).sort((a, b) => b.seen - a.seen);
     for (const s of sessions) {
       const win = wins.find((w) => w.id === s.window);
