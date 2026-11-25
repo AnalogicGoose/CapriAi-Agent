@@ -63,6 +63,9 @@ export function bodyResponse(action) {
   return { motion: null, reply: null, ...(Object.hasOwn(BODY, action) ? BODY[action] : {}) };
 }
 
+// Holds that layer instead of replacing each other: the aimed blade and the approval ring.
+export const CO_HOLDS = new Set(['aim', 'approval']);
+
 const ROUTINE_GAP = 1800, CROSSFADE = 250, RELEASE = 400, HOLD_IN = 150;
 
 export class MotionMixer {
@@ -107,7 +110,7 @@ export class MotionMixer {
       if (now - this.lastRoutine < ROUTINE_GAP) return false;
       this.lastRoutine = now;
     }
-    for (const a of live) a.killedAt = now;
+    for (const a of live) if (!(CO_HOLDS.has(name) && CO_HOLDS.has(a.name))) a.killedAt = now;
     this.list.push({ name, start: now, duration: def.duration, priority: def.priority, hold: !!def.hold });
     return true;
   }

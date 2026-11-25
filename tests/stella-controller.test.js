@@ -231,22 +231,32 @@ const settle = () => new Promise(r => setImmediate(r));
 const band = async () => (await loadRenderer('stella/wander.js')).inBand;
 const DT = 50;
 
-test('wandering stays in the band for an hour', async () => {
+test('wandering stays in the band for an hour, calm and slow', async () => {
   const inBand = await band();
   const { stella, step } = await make({ random: lcg(7) });
-  let starts = 0, maxJump = 0, out = 0;
-  stella.onTeleport = p => { if (p === 'start') starts++; };
+  let maxJump = 0, out = 0, cur = null, hop = null;
+  const hops = [], phases = [];
+  stella.onTeleport = p => phases.push(p);
   assert.ok(inBand(stella.pos, R(stella), stella.view), 'first-run anchor is in the band');
   let last = { ...stella.pos };
   for (let i = 0; i < 3600 * 1000 / DT; i++) {
     step(DT);
     if (!inBand(stella.pos, R(stella), stella.view)) out++;
-    maxJump = Math.max(maxJump, dist(stella.pos, last));
+    const jump = dist(stella.pos, last);
+    maxJump = Math.max(maxJump, jump);
     last = { ...stella.pos };
+    if (stella.travel !== cur) {
+      if (hop) hops.push(hop);
+      cur = stella.travel;
+      hop = cur ? { len: jump, ms: DT } : null;
+    } else if (hop) { hop.len += jump; hop.ms += DT; }
   }
   assert.equal(out, 0, 'never left the band');
-  assert.ok(starts >= 10, `she wandered (${starts} hops)`);
-  assert.ok(maxJump < 6, `calm and continuous (${maxJump} px per frame)`);
+  assert.ok(hops.length >= 10, `she wandered (${hops.length} hops)`);
+  const fastest = Math.max(...hops.map(h => h.len / (h.ms / 1000)));
+  assert.ok(fastest <= 45, `average hop speed ${fastest} px/s`);
+  assert.ok(maxJump <= 45 * 1.5 * DT / 1000 + 0.05, `calm and continuous (${maxJump} px per frame)`);
+  assert.deepEqual(phases, [], 'glides never report onTeleport');
 });
 
 test('first run anchor sits in the lower-right band', async () => {
@@ -408,7 +418,7 @@ test('come stops outside the center zone', async () => {
     assert.ok(await q);
     assert.equal(bad, 0, `through the zone toward ${JSON.stringify(cursor)}`);
     assert.ok(dist(s2.stella.pos, cursor) < dist({ x: 1840, y: 540 }, cursor), 'closer to the cursor');
-    assert.deepEqual(phases, ['start', 'end']);
+    assert.deepEqual(phases, [], 'no onTeleport for glides');
   }
 });
 
@@ -533,8 +543,241 @@ test('reduced motion: no wandering, and functions place her at once', async () =
   stella.onTeleport = p => phases.push(p);
   const rect = { x: 200, y: 100, w: 300, h: 200 };
   const p = stella.pointAt(rect);
-  step(DT);
+  step(DT, 10);
   assert.ok(await p);
   assert.ok(distToRect(stella.pos, rect) >= R(stella), 'beside it right away');
   assert.deepEqual(phases, []);
+});
+
+// ---------- Task 10 review round 1 ----------
+
+const glidingTo = async (stella, step, frames = 500) => { step(DT, frames); await settle(); };
+const heldEnv = (stella, name) => stella.motions.update(stella.now())[name] || 0;
+const WIN = { x: 200, y: 100, w: 500, h: 300 }; // a window she points at
+
+test('A(a) drags and function glides never report onTeleport', async () => {
+  const { stella, step } = await make({ random: lcg(20) });
+  const phases = [];
+  stella.onTeleport = p => phases.push(p);
+  stella.pointAt(WIN); step(DT, 500);
+  stella.stopPointing(); step(DT, 500);
+  stella.pointerDown(stella.pos.x, stella.pos.y);
+  for (let i = 1; i <= 10; i++) { stella.pointerMove(stella.pos.x - i * 10, stella.pos.y); step(); }
+  stella.pointerUp(stella.pos.x - 100, stella.pos.y); step(DT, 40);
+  assert.deepEqual(phases, []);
+});
+
+test('A(b) a drag interrupts a function glide and keeps the aim', async () => {
+  const { stella, step, saved } = await make({ random: lcg(21) });
+  let result = 'pending';
+  stella.pointAt(WIN).then(r => { result = r; });
+  step(DT, 40);
+  assert.equal(stella.travel?.reason, 'point');
+  const at = { ...stella.pos };
+  assert.ok(stella.pointerDown(at.x, at.y), 'she can be grabbed mid-glide');
+  stella.pointerMove(at.x + 50, at.y + 20); step();
+  await settle();
+  assert.equal(result, false, 'pointAt reports she was displaced');
+  stella.pointerUp(at.x + 60, at.y + 20); step(DT, 200);
+  assert.equal(stella.travel, null, 'placement ended');
+  assert.equal(saved.length, 1);
+  assert.ok(stella.focus, 'still aiming');
+  assert.ok(heldEnv(stella, 'aim') > 0.99);
+  const c = { x: WIN.x + WIN.w / 2, y: WIN.y + WIN.h / 2 };
+  assert.ok(Math.abs(wrap(stella.aimAngle - Math.atan2(c.y - stella.pos.y, c.x - stella.pos.x))) < 0.02);
+  stella.stopPointing();
+  step(DT, 10);
+  assert.ok(!(heldEnv(stella, 'aim') > 0));
+});
+
+test('A(b) a drop cancels a pending return', async () => {
+  for (const pending of ['point', 'remind']) {
+    const { stella, step } = await make({ anchor: { x: 1700, y: 900 }, random: lcg(22) });
+    if (pending === 'point') { stella.pointAt(WIN); step(DT, 500); stella.stopPointing(); }
+    else { stella.remind(); step(DT, 200); }
+    const at = { ...stella.pos };
+    stella.pointerDown(at.x, at.y);
+    stella.pointerMove(at.x - 40, at.y); step();
+    stella.pointerUp(at.x - 40, at.y);
+    step(DT, 400); // 20 s: past both the 1.5 s and the 10 s return timers
+    assert.ok(dist(stella.pos, { x: at.x - 40, y: at.y }) < 1, `${pending}: stays where dropped`);
+  }
+});
+
+test('A(c) routes around the zone turn smoothly', async () => {
+  const { stella, step } = await make({ anchor: { x: 1840, y: 540 }, random: lcg(23) });
+  stella.summon({ x: 150, y: 540 });
+  let last = { ...stella.pos }, heading = null, maxTurn = 0;
+  for (let i = 0; i < 600; i++) {
+    step(DT);
+    const dx = stella.pos.x - last.x, dy = stella.pos.y - last.y;
+    if (Math.hypot(dx, dy) > 0.3) {
+      const h = Math.atan2(dy, dx);
+      if (heading != null) maxTurn = Math.max(maxTurn, Math.abs(wrap(h - heading)));
+      heading = h;
+    }
+    last = { ...stella.pos };
+  }
+  assert.ok(stella.pos.x < 500, 'got there');
+  assert.ok(maxTurn < 0.15, `turned ${maxTurn} rad in one frame`);
+});
+
+test('B(1) pointAt resolves false when displaced, and glideTo clears the focus', async () => {
+  const { stella, step } = await make({ random: lcg(24) });
+  let r = 'pending';
+  stella.pointAt(WIN).then(v => { r = v; });
+  step(DT, 20);
+  const g = stella.glideTo({ x: 1700, y: 950 });
+  await settle();
+  assert.equal(r, false);
+  assert.equal(stella.focus, null);
+  assert.equal(stella.pointing, null);
+  step(DT, 500);
+  assert.ok(await g);
+  assert.ok(!(heldEnv(stella, 'aim') > 0));
+});
+
+test('B(2) while pointing, remind/approval/come only play their motions (brain permission path)', async () => {
+  const { stella, step } = await make({ anchor: { x: 1700, y: 900 }, random: lcg(25) });
+  const played = [];
+  const play = stella.motions.play.bind(stella.motions);
+  stella.motions.play = (n, t) => { const ok = play(n, t); if (ok) played.push(n); return ok; };
+  const p = stella.pointAt(WIN);
+  step(DT, 500);
+  assert.equal(await p, true);
+  const beside = { ...stella.pos };
+  await Promise.all([stella.approval(true), (step(DT, 40), null)]);
+  assert.deepEqual(stella.pos, beside, 'approval does not move her');
+  assert.ok(heldEnv(stella, 'approval') > 0.99 && heldEnv(stella, 'aim') > 0.99, 'ring and blade together');
+  stella.remind();
+  step(DT, 60);
+  assert.ok(played.includes('chime'));
+  assert.deepEqual(stella.pos, beside, 'remind does not move her');
+  assert.ok(heldEnv(stella, 'approval') > 0.99 && heldEnv(stella, 'aim') > 0.99, 'both back after the chime');
+  assert.equal(await stella.bodyAction('come'), 'done');
+  step(DT, 40);
+  assert.deepEqual(stella.pos, beside, 'come does not move her');
+  stella.approval(false);
+  step(DT, 400);
+  assert.deepEqual(stella.pos, beside, 'answered: still pointing, still there');
+  assert.ok(heldEnv(stella, 'aim') > 0.99);
+  stella.stopPointing();
+  step(DT, 500);
+  assert.ok(dist(stella.pos, { x: 1700, y: 900 }) <= 200, 'home after pointing ends');
+});
+
+test('B(3) aim and approval coexist in the mixer', async () => {
+  const { MotionMixer } = await loadRenderer('stella/motions.js');
+  const m = new MotionMixer();
+  assert.ok(m.play('aim', 0));
+  assert.ok(m.play('approval', 10));
+  const e = m.update(500);
+  assert.ok(e.aim > 0.99 && e.approval > 0.99, JSON.stringify(e));
+  assert.ok(m.play('glitch', 600), 'a glitch still cuts in');
+});
+
+test('#8 busy while aim or approval holds', async () => {
+  const { stella, step } = await make({ random: lcg(26) });
+  stella.approval(true);
+  step(DT, 500);
+  assert.equal(stella.travel, null);
+  assert.equal(stella.busy, true, 'approval hold');
+  stella.approval(false);
+  step(DT, 500);
+  stella.pointAt(WIN);
+  step(DT, 500);
+  assert.equal(stella.busy, true, 'aim hold');
+  stella.stopPointing();
+  step(DT, 20);
+  assert.equal(stella.motions.list.some(a => a.hold && a.releasedAt == null && a.killedAt == null), false);
+});
+
+test('C#2 a 2 s grace before wandering after each pause', async () => {
+  // each pause: [what keeps it on each frame, how it ends]
+  const pauses = {
+    speak: s => [() => { s.speechLevel = 0.5; }, () => { s.speechLevel = 0; }],
+    listen: s => [() => { s.listenUntil = s.now() + 3000; }, () => {}],
+    think: s => { s.setChatThinking(true); return [() => {}, () => s.setChatThinking(false)]; },
+    agent: s => { s.agentActivity({ tool: 'capri_unknown', phase: 'start' }); return [() => {}, () => s.agentActivity({ tool: 'capri_unknown', phase: 'end', ok: true })]; },
+  };
+  for (const [name, begin] of Object.entries(pauses)) {
+    const { stella, step, clock } = await make({ random: lcg(27) });
+    stella.nextMove = clock.t;
+    const [hold, end] = begin(stella);
+    for (let i = 0; i < 20; i++) { hold(); step(DT); }
+    assert.equal(stella.travel, null, `${name}: paused`);
+    end();
+    let idleAt = null, n = 0;
+    while (!stella.travel && n++ < 400) { step(DT); if (idleAt == null && stella.blend.mode === 'idle') idleAt = clock.t; }
+    assert.ok(stella.travel, `${name}: wanders again`);
+    assert.ok(clock.t - idleAt >= 2000, `${name}: waited ${clock.t - idleAt} ms after the pause`);
+  }
+});
+
+test('C#3 reduced motion function moves fade out and in', async () => {
+  const { stella, step } = await make({ reduced: true, random: lcg(28) });
+  const from = { ...stella.pos };
+  const p = stella.pointAt(WIN);
+  const seen = [];
+  for (let i = 0; i < 20; i++) { step(25); seen.push({ o: Number(stella.root.style.opacity ?? 1), moved: dist(stella.pos, from) > 1 }); }
+  assert.ok(await p);
+  const firstMoved = seen.findIndex(s => s.moved);
+  assert.ok(firstMoved > 0);
+  assert.ok(seen[firstMoved].o < 0.05, 'placed only while faded out');
+  assert.ok(seen.slice(0, firstMoved).some(s => s.o > 0.3 && s.o < 0.95), 'fades out over frames');
+  assert.ok(seen.slice(firstMoved).some(s => s.o > 0.3 && s.o < 0.95), 'fades in over frames');
+  assert.equal(Number(stella.root.style.opacity), 1);
+  assert.ok(seen.length * 25 >= 300);
+});
+
+test('C#5 remind does not stack nudges while approval is on, and guide end respects approval', async () => {
+  const { stella, step } = await make({ anchor: { x: 1700, y: 900 }, random: lcg(29) });
+  stella.approval(true);
+  step(DT, 200);
+  const near = { ...stella.pos };
+  stella.remind();
+  step(DT, 400);
+  assert.deepEqual(stella.pos, near, 'remind during approval: chime only');
+  stella.guideFocus({ rect: WIN });
+  step(DT, 500);
+  const beside = { ...stella.pos };
+  stella.guideFocus(null);
+  step(DT, 500);
+  assert.deepEqual(stella.pos, beside, 'waits for the answer');
+  stella.approval(false);
+  step(DT, 500);
+  assert.ok(dist(stella.pos, { x: 1700, y: 900 }) <= 200, 'then home');
+});
+
+test('C#7 setView re-plans the whole route and keeps the anchor in the band', async () => {
+  const inBand = await band();
+  const { stella, step } = await make({ anchor: { x: 1840, y: 540 }, random: lcg(30) });
+  stella.summon({ x: 150, y: 540 }); // a multi-leg route
+  step(DT, 60);
+  stella.setView(1280, 720);
+  let bad = 0;
+  for (let i = 0; i < 500; i++) { step(DT); if (!inBand(stella.pos, R(stella), stella.view)) bad++; }
+  assert.equal(bad, 0, 'the re-planned route stays in the new view and band');
+  for (const leg of [].concat(stella.travel?.route?.legs || [])) assert.ok(leg.to.x <= 1280);
+  assert.ok(inBand(stella.anchor, R(stella), stella.view), `anchor ${JSON.stringify(stella.anchor)}`);
+});
+
+test('C#9 concurrent pointAt, and stopPointing during a glide', async () => {
+  const { stella, step } = await make({ anchor: { x: 1700, y: 900 }, random: lcg(31) });
+  const B = { x: 1300, y: 80, w: 300, h: 200 };
+  const a = stella.pointAt(WIN);
+  step(DT, 20);
+  const b = stella.pointAt(B);
+  step(DT, 500);
+  assert.equal(await a, false);
+  assert.equal(await b, true);
+  assert.ok(distToRect(stella.pos, B) >= R(stella));
+  assert.ok(Math.abs(wrap(stella.aimAngle - Math.atan2(B.y + B.h / 2 - stella.pos.y, B.x + B.w / 2 - stella.pos.x))) < 0.02);
+  const c = stella.pointAt(WIN);
+  step(DT, 20);
+  stella.stopPointing();
+  step(DT, 600);
+  assert.equal(await c, false);
+  assert.ok(dist(stella.pos, { x: 1700, y: 900 }) <= 200, 'home');
+  assert.equal(stella.aimAngle, null);
 });

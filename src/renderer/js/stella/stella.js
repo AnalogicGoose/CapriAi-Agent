@@ -19,6 +19,8 @@ import { Focus, isPoint, live } from './focus.js';
 const MAX_DT = 0.05;        // s
 const SPEAK_LEVEL = 0.015, SPEAK_HOLD = 400;
 const LISTEN_MS = 3000, AGENT_THINK_MS = 60000;
+const GRACE_MS = 2000;      // after speaking, listening or thinking, before she wanders again
+const PAUSES = new Set(['speak', 'listen', 'think']);
 const resolved = () => Promise.resolve();
 
 function defaultRenderer(canvas) {
@@ -99,7 +101,9 @@ export class Stella {
     this.agentThink = new Map(); // tool → when it started
     this.musicUntil = 0;
     this.last = null;
+    this.lastBlend = 'idle';
     this.moved = null;
+    this.shownOpacity = null;
 
     this.setScale(this.scale);
     this.bindPointer();
@@ -128,9 +132,12 @@ export class Stella {
     this.reclamp();
   }
 
+  // A new view: her route is planned again, and an anchor that was in the band stays in it.
   setView(w, h) {
+    const wasIn = this.anchor && inBand(this.anchor, this.bandRadius, this.view);
     this.view = { w, h };
     this.reclamp();
+    if (wasIn) this.anchor = nearestBandPoint(this.anchor, this.bandRadius, this.view);
   }
 
   // Keeps her (and where she's heading) fully inside the view.
@@ -258,6 +265,8 @@ export class Stella {
     this.stepPosition(dt, reduced);
 
     const mode = this.blendMode(now);
+    if (PAUSES.has(this.lastBlend) && !PAUSES.has(mode)) this.nextMove = Math.max(this.nextMove, now + GRACE_MS);
+    this.lastBlend = mode;
     this.blend.setMode(mode);
     this.blend.step(dt);
     const calm = mode === 'idle' && this.mode === 'idle' && !this.dragging && !this.travel?.fn && !reduced;
@@ -287,6 +296,8 @@ export class Stella {
       this.root.style.transform = `translate3d(${(this.pos.x - half).toFixed(1)}px, ${(y - half).toFixed(1)}px, 0)`;
     }
     if (this.canvas?.style) this.canvas.style.transform = `rotate(${this.lean.toFixed(4)}rad)`;
+    const o = this.traveler.opacity;
+    if (this.root?.style && o !== this.shownOpacity) { this.root.style.opacity = String(Number(o.toFixed(3))); this.shownOpacity = o; }
     const m = this.moved;
     if (!m || m.x !== this.pos.x || m.y !== this.pos.y || m.size !== this.size) {
       this.moved = { x: this.pos.x, y: this.pos.y, size: this.size };

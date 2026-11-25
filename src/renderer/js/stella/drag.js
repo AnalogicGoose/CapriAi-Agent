@@ -29,7 +29,7 @@ export const Drag = {
 
   // Returns true when the press landed on her and is now held.
   pointerDown(x, y, id = 0) {
-    if (this.down || this.gaming || this.fullscreen || this.travel?.fn || !this.hit(x, y)) return false;
+    if (this.down || this.gaming || this.fullscreen || !this.hit(x, y)) return false; // any glide can be interrupted
     this.down = { x, y, id, pos: { ...this.pos } };
     this.pointerHeld = true;
     this.onPointerHold?.();
@@ -44,8 +44,7 @@ export const Drag = {
       this.dragging = true;
       this.wake();
       this.endAct(false);
-      this.traveler.stop(false, true); // the drag takes over any travel; onTeleport stays open
-      this.traveler.report(true);
+      this.traveler.stop(false); // the drag takes over any travel; a focus keeps aiming
     }
     this.dragTo = this.dropPoint(x, y);
   },
@@ -74,6 +73,7 @@ export const Drag = {
     try { if (this.root?.hasPointerCapture?.(d.id)) this.root.releasePointerCapture(d.id); } catch {}
     if (wasDragging) {
       const drop = to || { ...this.pos };
+      this.homeToken++; // she stays where dropped: pending returns are off
       this.anchor = { ...drop };
       this.saveAnchor({ ...drop });
       if (this.reduced()) { this.pos = { ...drop }; this.traveler.stop(true); } // she followed 1:1: nothing to settle

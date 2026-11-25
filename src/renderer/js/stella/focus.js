@@ -3,7 +3,7 @@
 // prototype; `this` is the controller.
 import { clamp } from './math.js';
 import { besideTarget, edgeToward } from './wander.js';
-import { MOTIONS, bodyResponse } from './motions.js';
+import { CO_HOLDS, MOTIONS, bodyResponse } from './motions.js';
 import { approachCenter, nearestBandPoint } from './travel.js';
 
 const AIM_TURN = 2;         // rad/s: fastest her aim swings to a new target
@@ -20,9 +20,11 @@ export const live = (a, now) => Boolean(a) && a.killedAt == null && (a.hold ? a.
 export const letGo = (a, now) => { if (a?.hold && a.releasedAt == null && a.killedAt == null) a.releasedAt = now; };
 
 export const Focus = {
-  // Glides to `point` along a gentle curve. Resolves true on arrival, false if something replaced it.
+  // Glides to `point` along a gentle curve (whatever she was pointing at is let go). Resolves true
+  // on arrival, false if something replaced it.
   glideTo(point, { reason = 'glide' } = {}) {
     if (!isPoint(point)) return Promise.resolve(false);
+    if (this.focus || this.pointing) { this.focus = this.pointing = null; this.homeToken++; }
     return this.traveler.go(point, { reason, fn: true });
   },
 
@@ -36,7 +38,8 @@ export const Focus = {
   },
 
   // Glides beside `target` (a window rect or a point) and aims a blade at its center until
-  // stopPointing() or the next focus. Resolves true when she's there and still pointing at it.
+  // stopPointing() or the next focus. While a focus is on, pointing owns her position. Resolves true
+  // when she got there (not dragged or sent elsewhere first) and is still pointing at it.
   pointAt(target, { label = '' } = {}) {
     const rect = toRect(target);
     if (!rect) return Promise.resolve(false);
@@ -45,7 +48,7 @@ export const Focus = {
     const focus = this.focus = { at };
     this.pointing = { dir: at.x < this.pos.x ? -1 : 1, rect, label };
     const to = besideTarget({ target: rect, radius: this.bandRadius, view: this.view, from: this.pos });
-    return this.traveler.go(to, { reason: 'point', fn: true }).then(() => this.focus === focus);
+    return this.traveler.go(to, { reason: 'point', fn: true }).then(arrived => arrived && this.focus === focus);
   },
 
   // Done showing: the blade lets go, and after a moment she heads back to her anchor area.
@@ -57,23 +60,25 @@ export const Focus = {
   },
 
   // Walkthrough step: { rect } → beside it, aiming; { direction } → the edge of her display that
-  // way, aiming out; null → let go and go back to her anchor area.
+  // way, aiming out; null → let go and go back to her anchor area (once any approval is answered).
   guideFocus(focus) {
     if (focus?.rect) return this.pointAt(focus.rect, { label: focus.label });
     const angle = DIRECTIONS[focus?.direction];
     this.homeToken++;
     if (angle === undefined) {
       this.focus = this.pointing = null;
-      return this.goHome();
+      return this.approvalOn ? resolved() : this.goHome();
     }
     const f = this.focus = { angle };
     this.pointing = { dir: Math.round(Math.cos(angle)) };
     const to = edgeToward({ direction: focus.direction, radius: this.bandRadius, view: this.view, from: this.pos });
-    return this.traveler.go(to, { reason: 'guide', fn: true }).then(() => this.focus === f);
+    return this.traveler.go(to, { reason: 'guide', fn: true }).then(arrived => arrived && this.focus === f);
   },
 
   // Toward the cursor, stopping at the edge of the center zone; without one, toward the middle.
+  // While she points at something she stays there.
   summon(cursor) {
+    if (this.focus) return resolved();
     if (!isPoint(cursor)) return this.approach(Infinity, 'come');
     this.homeToken++;
     const r = this.bandRadius;
@@ -82,20 +87,23 @@ export const Focus = {
   },
 
   approach(maxDist, reason) {
+    if (this.focus) return resolved();
     this.homeToken++;
     return this.traveler.go(approachCenter(this.pos, maxDist, this.bandRadius, this.view), { reason, fn: true });
   },
 
-  // A reminder is due: three bright rings, a small drift toward the middle, then back.
+  // A reminder is due: three bright rings, a small drift toward the middle, then back. Pointing
+  // or waiting on an approval, she's already placed: just the rings.
   remind() {
     this.play('chime');
+    if (this.focus || this.approvalOn) return resolved();
     const arrive = this.approach(NUDGE, 'remind');
     const token = this.homeToken;
     this.after(REMIND_STAY, () => { if (token === this.homeToken && !this.focus && !this.approvalOn) this.goHome(); });
     return arrive;
   },
 
-  // Waiting on an approval: the ring holds and she comes a little closer, until answered.
+  // Waiting on an approval: the ring holds and she comes a little closer (unless pointing), until answered.
   approval(on) {
     on = Boolean(on);
     if (on === this.approvalOn) return resolved();
@@ -116,13 +124,14 @@ export const Focus = {
     return r.reply ?? 'done';
   },
 
-  // Keeps her function holds up (approval first: it matters more than the blade) and lets them go when done.
+  // Keeps her function holds up and lets them go when done. Aim and approval coexist (CO_HOLDS);
+  // anything else as strong (a glitch, a chime) plays first.
   stepHolds(now) {
     for (const [name, want] of [['approval', this.approvalOn], ['aim', Boolean(this.focus)]]) {
       const mine = this.holds[name];
       if (!want) { letGo(mine, now); this.holds[name] = null; continue; }
       if (live(mine, now) || this.dragging || this.dormant) continue;
-      if (this.motions.list.some(a => live(a, now) && a.priority >= MOTIONS[name].priority)) continue;
+      if (this.motions.list.some(a => live(a, now) && !CO_HOLDS.has(a.name) && a.priority >= MOTIONS[name].priority)) continue;
       if (this.motions.play(name, now)) this.holds[name] = this.motions.list[this.motions.list.length - 1];
     }
   },
