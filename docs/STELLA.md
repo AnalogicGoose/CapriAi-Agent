@@ -69,7 +69,7 @@ Put away (Ctrl+Alt+C), a game, or a fullscreen app on her display: her points re
 | Music playing | Blades pulse gently for 45 s after she starts music or a video (a fixed time; it doesn't follow the actual playback) |
 | Wake word heard | Quick brighten and turn toward listening |
 
-`capri_body` actions (the reply comes as soon as she starts; nothing waits for her to arrive): `come` glides toward the cursor (stops at the center zone's edge), `nap` rests (dimmed, no wandering) until `wake`, `mood` and `wave` give soft pulses, `dance` a spin burst, `stretch` a breath pulse, `sit`/`stand` a short reply that she no longer sits.
+`capri_body` actions (the reply comes as soon as she starts; nothing waits for her to arrive): `come` glides toward the cursor (stops at the center zone's edge), `nap` rests (dimmed, no wandering) until `wake`, `mood` and `wave` give soft pulses, `dance` a spin burst, `stretch` a breath pulse, `sit`/`stand` a short reply that she no longer sits. Put away, in a game or folded, she does nothing and says she's tucked away. With no working renderer (none, or its context lost for more than a second) she can't be clicked or dragged, so there's no invisible target on screen.
 
 Removed pet behaviors (teleporting, sitting, window perching and possession, gestures, falling, cut-ins) are not coming back; the settings that controlled them have no effect.
 

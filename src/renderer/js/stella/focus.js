@@ -12,6 +12,8 @@ const RETURN_MS = 1500;     // after pointing, before she heads back
 const NUDGE = 120;          // px: how far a reminder or approval brings her toward the middle
 const REMIND_STAY = 10000;  // ms near the middle after a reminder
 const DIRECTIONS = { left: Math.PI, right: 0, up: -Math.PI / 2, down: Math.PI / 2 };
+const TUCKED = 'I’m tucked away right now — bring me back first.';
+const GESTURES = new Set(['wave', 'dance', 'stretch']);
 const resolved = () => Promise.resolve();
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 export const isPoint = p => Boolean(p) && Number.isFinite(p.x) && Number.isFinite(p.y);
@@ -118,15 +120,19 @@ export const Focus = {
   },
 
   // The capri_body tool. `come` goes to `cursor` when given, else toward the middle. The reply
-  // comes as soon as the move starts: callers never wait for her to arrive.
+  // comes as soon as the move starts: callers never wait for her to arrive. Put away, in a game or
+  // folded, nothing starts and she says so. Gestures use the companion's words when it has them.
   async bodyAction(action, { cursor } = {}) {
+    if (this.tucked) return TUCKED;
     const r = bodyResponse(action);
     if (r.wake) this.wake();
     if (r.rest) this.resting = true;
     if (r.motion) this.play(r.motion);
     if (r.come) void this.summon(cursor);
-    return r.reply ?? 'done';
+    return r.reply ?? (GESTURES.has(action) ? this.companion?.reply?.(action) : null) ?? 'done';
   },
+
+  get tucked() { return Boolean(this.stowed || this.stowing || this.gaming || this.folding.target === 1 || this.fold >= 1); },
 
   // capri_draw finished drawing: { rect } on her display, { direction } of another display, or null
   // (unknown: toward the middle). Aims the trail there (replaying it if it's over); she doesn't move.

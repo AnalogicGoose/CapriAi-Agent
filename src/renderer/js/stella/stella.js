@@ -22,6 +22,7 @@ const SPEAK_LEVEL = 0.015, SPEAK_HOLD = 400;
 const LISTEN_MS = 3000, AGENT_THINK_MS = 60000;
 const GRACE_MS = 2000;      // after speaking, listening or thinking, before she wanders again
 const PAUSES = new Set(['speak', 'listen', 'think']);
+const LOST_MS = 1000;       // a drawing context lost this long (or no renderer at all): she can't be hit
 const resolved = () => Promise.resolve();
 
 function defaultRenderer(canvas) {
@@ -161,8 +162,10 @@ export class Stella {
 
   towardCenter() { return this.pos.x < this.view.w / 2 ? 1 : -1; }
 
+  // Not while she can't be seen: hidden, folded, no renderer, or its context lost for good.
   hit(x, y) {
-    if (this.hidden || this.fold > 0.5) return false;
+    if (this.hidden || this.fold > 0.5 || !this.renderer) return false;
+    if (this.lostSince != null && this.now() - this.lostSince >= LOST_MS) return false;
     return Math.hypot(x - this.pos.x, y - this.pos.y) <= 0.45 * this.size;
   }
 
@@ -269,6 +272,7 @@ export class Stella {
     }
     for (const [tool, at] of this.agentThink) if (now - at > AGENT_THINK_MS) this.agentThink.delete(tool);
     if (this._act && (now >= this._act.until || !live(this._act.entry, now))) this.endAct(now >= this._act.until);
+    this.lostSince = this.renderer?.lost ? this.lostSince ?? now : null;
     this.stepFold(dt, reduced);
     this.stepMusic(now);
     this.stepHolds(now);

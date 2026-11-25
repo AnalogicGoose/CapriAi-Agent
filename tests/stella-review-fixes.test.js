@@ -237,3 +237,57 @@ test('the same destination again does not re-plan; a new one keeps her speed', a
   msUntil(u, () => !u.stella.travel);
   assert.ok(Math.abs(Math.atan2(Math.sin(u.stella.aimAngle), Math.cos(u.stella.aimAngle))) < Math.PI, 'arrived');
 });
+
+// ---------- 7. the body-action gate ----------
+
+test('tucked away (stowed, gaming, folded) a body action says so and starts nothing', async () => {
+  const TUCKED = 'I’m tucked away right now — bring me back first.';
+  for (const tuck of [s => { s.stowNow(); }, s => { s.gaming = true; }, s => { s.foldTo(1, { instant: true }); },
+    s => { s.fullscreenProgress = 1; }]) {
+    const t = await make({ anchor: { x: 1700, y: 900 } });
+    const s = t.stella;
+    tuck(s);
+    t.step(F);
+    const at = { ...s.pos };
+    for (const action of ['come', 'wave', 'nap', 'dance']) {
+      assert.equal(await s.bodyAction(action, { cursor: { x: 300, y: 300 } }), TUCKED, action);
+    }
+    t.step(F, 30);
+    assert.equal(s.travel, null, 'no move');
+    assert.deepEqual(s.pos, at);
+    assert.equal(s.resting, false, 'no nap');
+    assert.deepEqual(s.motions.update(s.now()), {}, 'no motion');
+  }
+});
+
+test('wave, dance and stretch reply with the companion’s words', async () => {
+  const t = await make();
+  t.stella.companion = { reply: a => ({ wave: 'Hi! A little wave for you.', dance: 'A little ghost dance!', stretch: 'Stretching out.' }[a] ?? null) };
+  assert.equal(await t.stella.bodyAction('wave'), 'Hi! A little wave for you.');
+  assert.equal(await t.stella.bodyAction('dance'), 'A little ghost dance!');
+  assert.equal(await t.stella.bodyAction('stretch'), 'Stretching out.');
+  assert.equal(await t.stella.bodyAction('nap'), 'done');
+  t.stella.companion = null;
+  assert.equal(await t.stella.bodyAction('wave'), 'done');
+});
+
+// ---------- 8. no invisible hit target ----------
+
+test('without a renderer, or with one lost for good, she cannot be hit', async () => {
+  const none = await make({ renderer: null });
+  none.step(F, 2);
+  assert.equal(none.stella.hit(none.stella.pos.x, none.stella.pos.y), false, 'no renderer');
+  assert.equal(none.stella.pointerDown(none.stella.pos.x, none.stella.pos.y), false);
+  const t = await make();
+  const s = t.stella;
+  t.step(F, 2);
+  assert.equal(s.hit(s.pos.x, s.pos.y), true);
+  t.renderer.lost = true;
+  t.step(F, 10);
+  assert.equal(s.hit(s.pos.x, s.pos.y), true, 'a brief context loss keeps her hit target');
+  t.step(F, 120);
+  assert.equal(s.hit(s.pos.x, s.pos.y), false, 'lost for good: no invisible target');
+  t.renderer.lost = false;
+  t.step(F);
+  assert.equal(s.hit(s.pos.x, s.pos.y), true, 'restored');
+});
