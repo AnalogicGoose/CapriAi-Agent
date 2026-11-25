@@ -44,7 +44,7 @@ function overlayRules(source) {
 }
 
 test('old look is gone from overlays', () => {
-  const rules = overlayRules(read('src/renderer/styles/capri.css'));
+  const rules = overlayRules(read('src/renderer/styles/stella.css'));
   assert.ok(rules.length > 20, 'overlay rules found');
   for (const { selector, body } of rules) {
     assert.doesNotMatch(body, /polygon\(/, `${selector} has no cut corners`);
@@ -69,7 +69,7 @@ test('guide and highlight use theme tokens', () => {
 
 test('hovering an overlay button never moves it out from under the pointer', () => {
   // The overlay is click-through outside its buttons: a hover lift makes the hit test flip on and off.
-  const rules = overlayRules(read('src/renderer/styles/capri.css'));
+  const rules = overlayRules(read('src/renderer/styles/stella.css'));
   for (const { selector, body } of rules.filter(r => /:hover/.test(r.selector)))
     assert.doesNotMatch(body, /transform/, `${selector} moves on hover`);
 });

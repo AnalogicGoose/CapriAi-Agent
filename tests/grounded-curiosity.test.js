@@ -15,7 +15,7 @@ const reflection = { question: 'Would a specific check result help clarify the n
   counterpoint: 'An exit code does not establish the cause or the user’s intent.', confidence: 0.4, priority: 0.7, next_step: 'ask_later' };
 
 function fixture(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-grounded-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-grounded-'));
   const a = path.join(dir, 'alpha'), b = path.join(dir, 'beta'); fs.mkdirSync(a); fs.mkdirSync(b);
   let at = 1000000, cfg = { lang: 'en', privacy: { memoryEnabled: true } }, goals, journal, source, reads = 0;
   const open = () => {
@@ -195,13 +195,13 @@ test('curiosity lookup exposes current evidence with speculation labels and obey
   const f = fixture(t); f.check(1); f.check(1); const row = f.sync()[0]; f.reflect(row);
   const tools = new CodexTools({ curiosity: () => f.journal });
   const ctx = { text: 'Why did you ask that?', check() {}, signal: new AbortController().signal };
-  const result = await tools.run('capri_curiosity_lookup', { id: row.id }, ctx);
+  const result = await tools.run('stella_curiosity_lookup', { id: row.id }, ctx);
   assert.equal(result.questions[0].evidence.records[0].receipt.exitCode, 1);
   assert.match(result.note, /Tentative|not personal facts/);
   f.cfg({ privacy: { memoryEnabled: false } });
-  assert.deepEqual((await tools.run('capri_curiosity_lookup', { id: row.id }, ctx)).questions, []);
+  assert.deepEqual((await tools.run('stella_curiosity_lookup', { id: row.id }, ctx)).questions, []);
   f.cfg({ privacy: { memoryEnabled: true } }); f.goals.projects.select(f.b);
-  assert.deepEqual((await tools.run('capri_curiosity_lookup', { id: row.id }, ctx)).questions, []);
+  assert.deepEqual((await tools.run('stella_curiosity_lookup', { id: row.id }, ctx)).questions, []);
 });
 
 test('a feedback quiet period survives restart and ordinary foreground interaction', t => {

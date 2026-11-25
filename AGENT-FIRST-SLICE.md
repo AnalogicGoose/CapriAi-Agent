@@ -1,13 +1,13 @@
 > **Action tools are now implemented:** Capability registry revision 2 adds natural-language app launching, verified newest-upload YouTube playback, live news/web search and Steam specials. See [DESKTOP-TASKS.md](DESKTOP-TASKS.md) for current behavior. This document records the earlier first-slice baseline.
 
-# Capri local agent — first vertical slice
+# Stella local agent — first vertical slice
 
 Implemented October 28, 2026. Existing character art, animations, voice effects,
 chat layout, memory confirmation, and app protection remain in use.
 
 ## What works
 
-- `src/main/capabilities.js` owns revision 1 of Capri’s self-description. The main
+- `src/main/capabilities.js` owns revision 1 of Stella’s self-description. The main
   process injects a current registry into every chat request and agent decision.
   Enabled permissions and installed skills are reflected at request time. Old
   chat claims cannot define her current abilities. Increase the revision when
@@ -39,7 +39,7 @@ chat layout, memory confirmation, and app protection remain in use.
 
 ## Use
 
-Start from **Capri** on the desktop. In chat or the offline local commands panel:
+Start from **Stella** on the desktop. In chat or the offline local commands panel:
 
 ```text
 /agent status
@@ -49,7 +49,7 @@ Start from **Capri** on the desktop. In chat or the offline local commands panel
 /agent cancel
 ```
 
-Right-click Capri or her tray icon for the custom **Control room**. The local
+Right-click Stella or her tray icon for the custom **Control room**. The local
 agent and confirmed app actions are built in and enabled by default. Use
 **Overview → Gaming mode** to pause AI. **Appearance → Sit on windows** enables sitting on
 ordinary restored windows with enough room above them. Maximized windows have
@@ -106,12 +106,12 @@ native observations and real model JSON; it cannot discover or close targets.
   functional but too slow for fluid spoken interaction; latency remains a
   milestone. Models unload after each request to release gaming resources.
 - `test:release` passed: real running-app question and real Qwen chat reply in
-  Capri’s UI, with no new visible terminal windows during the reply.
+  Stella’s UI, with no new visible terminal windows during the reply.
 - The saved profile now selects Qwen and enables perching and the agent. Its
-  previous settings were backed up under ignored `.caprigpt-local/`.
+  previous settings were backed up under ignored `.stella-local/`.
 - The Windows Desktop special-folder shortcut already had the correct direct
-  Electron target, absolute checkout argument, working directory and Capri icon;
-  it was verified and left intact. No running Capri was restarted.
+  Electron target, absolute checkout argument, working directory and Stella icon;
+  it was verified and left intact. No running Stella was restarted.
 
 Foreground-priority correction: both user-message routing and ordinary chat
 generation reserve priority before waiting for background inference to stop.

@@ -9,7 +9,7 @@ const { CodexTools } = require('../src/main/codex-tools');
 const { CodexBrain } = require('../src/main/codex-brain');
 
 function fixture(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-continuity-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-continuity-'));
   const a = path.join(dir, 'alpha'), b = path.join(dir, 'beta');
   fs.mkdirSync(a); fs.mkdirSync(b);
   let cfg = { privacy: { memoryEnabled: true } }, at = Date.now(), goals;
@@ -17,8 +17,8 @@ function fixture(t) {
   open();
   const tools = new CodexTools({ settings: () => cfg, goals: () => goals, actions: { context: { interrupt() {} } } });
   const ctx = text => ({ text, check() {}, signal: new AbortController().signal });
-  const run = (action, id, text, request) => tools.run('capri_project_change', { action, id, text }, ctx(request));
-  const lookup = (query = '') => tools.run('capri_project_lookup', { query }, ctx('Where did we leave off?'));
+  const run = (action, id, text, request) => tools.run('stella_project_change', { action, id, text }, ctx(request));
+  const lookup = (query = '') => tools.run('stella_project_lookup', { query }, ctx('Where did we leave off?'));
   t.after(() => { goals.close(); fs.rmSync(dir, { recursive: true, force: true }); });
   return { a, b, tools, ctx, run, lookup, get goals() { return goals; }, get continuity() { return goals.continuity; },
     setCfg(value) { cfg = value; }, advance(ms) { at += ms; }, restart() { goals.close(); tools.endTurn(); open(); } };
@@ -237,15 +237,15 @@ test('foreground Codex protocol carries real local save/lookup receipts and rest
     cwd: f.a, tools: f.tools, locate: () => 'mock-codex', clientFactory,
     context: () => ({ savedContinuity: f.continuity.context(), currentProject: f.goals.projects.context(0) }) });
   let brain = makeBrain();
-  plan = [{ tool: 'capri_project_change', args: { action: 'add-goal', id: 0, text: 'Review renderer' } }];
+  plan = [{ tool: 'stella_project_change', args: { action: 'add-goal', id: 0, text: 'Review renderer' } }];
   await brain.chat('Remember our goal: Review renderer');
   assert.equal(JSON.parse(responses.at(-1).result.contentItems[0].text).changed, true);
   assert.deepEqual(brain.history, [], 'A mutation clears stale conversation history');
-  plan = [{ tool: 'capri_project_lookup', args: { query: '' } },
-    { tool: 'capri_project_change', args: { action: 'complete-goal', id: 1, text: '' } }];
+  plan = [{ tool: 'stella_project_lookup', args: { query: '' } },
+    { tool: 'stella_project_change', args: { action: 'complete-goal', id: 1, text: '' } }];
   await brain.chat('That task is finished');
   assert.ok(responses.every(row => row.result.success));
-  f.restart(); brain = makeBrain(); plan = [{ tool: 'capri_project_lookup', args: { query: '' } }];
+  f.restart(); brain = makeBrain(); plan = [{ tool: 'stella_project_lookup', args: { query: '' } }];
   await brain.chat('Where did we leave off?');
   assert.match(lastInput, /user-marked-done/);
   assert.doesNotMatch(lastInput, /Prior conversation/);
@@ -261,13 +261,13 @@ test('foreground Codex protocol carries real local save/lookup receipts and rest
       return { completed: true, text: 'Project folder observed open.' };
     },
   };
-  plan = [{ tool: 'capri_desktop_step', args: { tool: 'open_workspace', query: '', index: 0, browser: '' } }];
+  plan = [{ tool: 'stella_desktop_step', args: { tool: 'open_workspace', query: '', index: 0, browser: '' } }];
   await brain.chat('Resume my saved task', undefined, undefined, { voice: true });
   assert.deepEqual(desktops, [{ text: 'Open my workspace', step: { tool: 'open_workspace', query: '', index: 0 } }]);
   assert.match(lastInput, /"savedTaskInvocation":\{.*"next_step":"Open my workspace"/);
   const spoken = 'I’d like to pick up the project again.';
-  plan = [{ tool: 'capri_saved_work', args: { action: 'resume-task', target: '#2', requestEvidence: spoken } },
-    { tool: 'capri_desktop_step', args: { tool: 'open_workspace', query: '', index: 0, browser: '', requestEvidence: spoken } }];
+  plan = [{ tool: 'stella_saved_work', args: { action: 'resume-task', target: '#2', requestEvidence: spoken } },
+    { tool: 'stella_desktop_step', args: { tool: 'open_workspace', query: '', index: 0, browser: '', requestEvidence: spoken } }];
   await brain.chat(spoken, undefined, undefined, { voice: true });
   assert.equal(responses.at(-2).result.success, true);
   assert.equal(responses.at(-1).result.success, true);

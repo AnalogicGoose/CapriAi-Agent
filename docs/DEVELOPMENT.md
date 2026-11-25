@@ -1,11 +1,11 @@
 # Branches and integration
 
-The canonical GitHub repository is [CapriAi Agent](https://github.com/AnalogicGoose/CapriAi-Agent). The setup notes below record the earlier fork-based history.
+The canonical GitHub repository is [Stella](https://github.com/AnalogicGoose/Stella). The setup notes below record the earlier fork-based history.
 
 ## Local transition completed (2026-11-07)
 
 The existing process work and current application snapshot were deliberately
-saved as separate commits on `codex/caprigpt-local` (`c08ad43`, `a1a388e`). The
+saved as separate commits on `codex/stella-local` (`c08ad43`, `a1a388e`). The
 machine-specific `.codex/config.toml` remains local and untracked. Local
 `development` now exists at the documented `3095c18` baseline. Shared work branch
 `feature/project-companion` was created from development, then fast-forwarded to
@@ -16,14 +16,14 @@ read-only session; platform/windows remains to be established when needed.
 
 ## Starting point (2026-11-06)
 
-The inspected checkout is `codex/caprigpt-local` at `3095c18`, 17 commits ahead
+The inspected checkout is `codex/stella-local` at `3095c18`, 17 commits ahead
 of `origin/main` (`79a016c`, upstream 0.3.1). Both tracked package versions are
 0.4.0. The working tree contains substantial ongoing companion, voice and
 request-routing work; it is not part of any new branch until deliberately
 committed. No local tags or tracked GitHub workflows existed.
 
 `origin` is `Chocoyito1/capri-desktop`; `analogicgoose` is
-`AnalogicGoose/CapriGPT`. Read-only GitHub inspection confirmed that the latter's
+`AnalogicGoose/Stella`. Read-only GitHub inspection confirmed that the latter's
 main already points to `3095c18`, while origin/main remains at `79a016c`.
 Both repositories returned empty release lists. Remote tag/workflow enumeration
 was unavailable; do not assume they are absent. Recheck before enabling CI.

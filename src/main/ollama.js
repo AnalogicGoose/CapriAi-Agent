@@ -7,7 +7,7 @@ const { validateMessages, packConversation, CHAT_CONTEXT, CHAT_REPLY } = require
 // Remote Ollama hosts and redirects are deliberately forbidden in this milestone.
 
 function base() {
-  // A separate local server lets Capri control the Windows launch mode without
+  // A separate local server lets Stella control the Windows launch mode without
   // restarting or changing the user's normal Ollama service on port 11434.
   let host = process.env.OLLAMA_HOST || '127.0.0.1:11435';
   if (!/^https?:\/\//.test(host)) host = `http://${host}`;

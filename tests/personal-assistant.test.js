@@ -14,7 +14,7 @@ const RESTRICTED = { allApps: false, contextPower: false, contextForeground: fal
   contextTitles: false, contextProcesses: false, contextPerformance: false, contextEvents: false };
 
 test('topic progress, discussion and explicit spoiler limits survive chat expiry and restart', t => {
-  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-topic-recaps-'));
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-topic-recaps-'));
   const file = path.join(folder, 'memory.sqlite');
   let now = Date.UTC(2026, 10, 7);
   const open = () => new MemoryStore(file, { now: () => new Date(now), retentionDays: () => 30 });
@@ -54,7 +54,7 @@ test('recap learning uses the user’s point and never invents a title from an a
 test('automatic memory keeps stated preferences, activities and belongings and recalls them by relevance', () => {
   const store = new MemoryStore(':memory:');
   try {
-    store.learn("Hey Capri, I like Black Clover, and I practice table tennis. I've got a Steam Deck.");
+    store.learn("Hey Stella, I like Black Clover, and I practice table tennis. I've got a Steam Deck.");
     store.learn('I LIKE BLACK CLOVER.');
     store.learn('Me gusta la música y tengo una guitarra.');
     assert.equal(store.list().length, 5);
@@ -74,7 +74,7 @@ test('automatic memory ignores questions, fictional examples, transient plans an
     'I have a password of p4ssw0rd', 'I like this. Do not remember that.']) {
     assert.deepEqual(statements(text), [], text);
   }
-  assert.deepEqual(topicRequest('Capri, could you talk less about Black Clover?'), { action: 'less', topic: 'Black Clover' });
+  assert.deepEqual(topicRequest('Stella, could you talk less about Black Clover?'), { action: 'less', topic: 'Black Clover' });
   assert.deepEqual(topicRequest('Please talk less about Black Clover.'), { action: 'less', topic: 'Black Clover' });
   assert.deepEqual(topicRequest('You can bring up Black Clover again.'), { action: 'more', topic: 'Black Clover' });
   assert.deepEqual(topicRequest('Forget it.'), null);
@@ -83,7 +83,7 @@ test('automatic memory ignores questions, fictional examples, transient plans an
 });
 
 test('clear corrections replace matching old facts and preserve unrelated facts and the profile flag', t => {
-  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-memory-update-'));
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-memory-update-'));
   const file = path.join(folder, 'memory.sqlite');
   let store = new MemoryStore(file);
   t.after(() => { store.close(); fs.rmSync(folder, { recursive: true, force: true }); });
@@ -114,7 +114,7 @@ function fixture(t, privacy = {}) {
 }
 
 test('SQLite survives restart, records provenance, edits without changing creation date, literal search and forget', t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-memory-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-memory-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'memory.sqlite');
   let at = new Date('2026-10-01T00:00:00Z');
@@ -179,7 +179,7 @@ test('profile facts survive restart and recall without keywords; edits, forgetti
 
 test('existing version-two SQLite memories migrate without being promoted to profile facts', t => {
   const { DatabaseSync } = require('node:sqlite');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-profile-migration-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-profile-migration-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'memory.sqlite');
   const old = new DatabaseSync(file);
@@ -366,7 +366,7 @@ test('natural running-app questions return real allowlisted data without a model
     assert.equal(options.contextPerformance, false);
     return { processes: ['code', 'chrome', 'secret-app'] };
   };
-  const result = await f.assistant.route('capri which apps are open rn?');
+  const result = await f.assistant.route('stella which apps are open rn?');
   assert.equal(result.handled, true);
   assert.match(result.text, /Visual Studio Code, Google Chrome/);
   assert.match(result.text, /allowlist/);
@@ -450,7 +450,7 @@ test('all-app mode does not retain the old 30-name cap and includes unknown fore
 test('exact screenshot wording and everyday variants bypass the model and report real apps', async t => {
   const f = fixture(t, { allApps: true, contextProcesses: true });
   f.context.provider = async () => ({ processes: ['firefox', 'discord'], apps: ['firefox', 'discord'] });
-  for (const question of ['whats openned in my pc capri?', "what's opened on my computer?", 'what’s open on my laptop?', 'what is open on my desktop?']) {
+  for (const question of ['whats openned in my pc stella?', "what's opened on my computer?", 'what’s open on my laptop?', 'what is open on my desktop?']) {
     const result = await f.assistant.route(question);
     assert.equal(result.handled, true, question);
     assert.match(result.text, /^Open desktop apps: Firefox, Discord/);

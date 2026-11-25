@@ -1,6 +1,6 @@
 'use strict';
 
-// Operational interests belong to Capri's fictional companion persona. They are
+// Operational interests belong to Stella's fictional companion persona. They are
 // not personal memories, subjective feelings, user goals or action permission.
 const DOMAINS = ['worldbuilding', 'game-design', 'music-and-rhythm', 'visual-art',
   'everyday-science', 'language-and-stories', 'creative-tools', 'playful-puzzles'];

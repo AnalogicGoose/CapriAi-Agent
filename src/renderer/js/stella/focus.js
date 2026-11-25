@@ -119,7 +119,7 @@ export const Focus = {
     return this.goHome();
   },
 
-  // The capri_body tool. `come` goes to `cursor` when given, else toward the middle. The reply
+  // The stella_body tool. `come` goes to `cursor` when given, else toward the middle. The reply
   // comes as soon as the move starts: callers never wait for her to arrive. Put away, in a game or
   // folded, nothing starts and she says so. Gestures use the companion's words when it has them.
   async bodyAction(action, { cursor } = {}) {
@@ -134,7 +134,7 @@ export const Focus = {
 
   get tucked() { return Boolean(this.stowed || this.stowing || this.gaming || this.folding.target === 1 || this.fold >= 1); },
 
-  // capri_draw finished drawing: { rect } on her display, { direction } of another display, or null
+  // stella_draw finished drawing: { rect } on her display, { direction } of another display, or null
   // (unknown: toward the middle). Aims the trail there (replaying it if it's over); she doesn't move.
   drawAt(info) {
     const rect = toRect(info?.rect), angle = DIRECTIONS[info?.direction];

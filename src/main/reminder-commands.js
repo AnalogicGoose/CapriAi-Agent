@@ -3,8 +3,8 @@
 const { describe } = require('./reminder-schedule');
 const { DISPLAY_NAME } = require('./identity');
 
-// Appended to the tool instructions only while capri_reminder is offered (kept under 200 bytes).
-const REMINDER_INSTRUCTIONS = '\nFor reminders use capri_reminder. Give the schedule JSON in the user\'s local time, and repeat the exact time from its result back to them.';
+// Appended to the tool instructions only while stella_reminder is offered (kept under 200 bytes).
+const REMINDER_INSTRUCTIONS = '\nFor reminders use stella_reminder. Give the schedule JSON in the user\'s local time, and repeat the exact time from its result back to them.';
 
 const pad = n => String(n).padStart(2, '0');
 function localTime(ms) {

@@ -5,9 +5,9 @@ const path = require('node:path');
 // A locally prepared voice is applied once, on launch, without touching a live
 // process's cached preferences. Later user choices always take precedence.
 function voiceSetup(root, saved) {
-  if (process.env.CAPRIGPT_TEST_PROFILE) return saved;
+  if (process.env.STELLA_TEST_PROFILE) return saved;
   try {
-    const file = path.join(root, '.caprigpt-local/voice-setup.json');
+    const file = path.join(root, '.stella-local/voice-setup.json');
     if (fs.statSync(file).size > 16000) return saved;
     const setup = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (typeof setup.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(setup.id) || saved.ttsSetupId === setup.id) return saved;

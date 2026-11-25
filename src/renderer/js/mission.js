@@ -3,7 +3,7 @@
 
 import { today } from './util.js';
 
-const KEY = 'capri.mission';
+const KEY = 'stella.mission';
 
 const blank = () => ({
   date: today(),

@@ -11,7 +11,7 @@ const AIM_SWING = 1.2;  // fastest the aimed blade swings toward/away from its t
 const BURSTS = ['celebrate', 'spinBurst'];
 const TIMED = ['chime', 'doublePulse'];   // motions shaped by time since they started
 const QUARTER = TAU / P.blades.count;
-const TRAIL = {count: 12, rate: 0.9, rIn: 0.3, rOut: 0.98, lim: 0.46, spread: 0.05}; // capri_draw's stream of dots
+const TRAIL = {count: 12, rate: 0.9, rIn: 0.3, rOut: 0.98, lim: 0.46, spread: 0.05}; // stella_draw's stream of dots
 
 // Small seeded PRNG so the dot swarm is the same every run.
 function stellaRandom(seed) {

@@ -1,4 +1,4 @@
-# Capri vVERSION
+# Stella vVERSION
 
 Stability: alpha
 Platform: Windows x64

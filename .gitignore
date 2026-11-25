@@ -9,7 +9,7 @@ Thumbs.db
 captures/
 
 # Per-checkout local connection credentials (never publish)
-.caprigpt-local/
+.stella-local/
 
 # Machine-specific Codex notification executable path
 .codex/config.toml

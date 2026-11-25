@@ -12,9 +12,9 @@ const ollama=require('../src/main/ollama');
     progress:event=>console.log('PROGRESS:',event.text),
   });
   for(const [goal,expected] of [
-    ['capri play the newest rubius video in youtube',/Opened .*Rubius Z/],
-    ['capri look for the latest news of ai models',/Fresh headlines/],
-    ['capri look for the best discounts in steam',/Current featured Steam discounts/],
+    ['stella play the newest rubius video in youtube',/Opened .*Rubius Z/],
+    ['stella look for the latest news of ai models',/Fresh headlines/],
+    ['stella look for the best discounts in steam',/Current featured Steam discounts/],
   ]) {
     const at=Date.now(),result=await runner.route(goal);
     assert.match(result.text,expected,result.text);assert.ok(result.links?.length);

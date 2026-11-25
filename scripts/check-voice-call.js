@@ -2,28 +2,28 @@
 // Offline native renderer/VAD check using synthesized audio, never the user's mic.
 const {app,BrowserWindow,protocol,net}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),{pathToFileURL}=require('node:url');
-const root=path.resolve(__dirname,'..'),scratch=path.join(root,'.caprigpt-local/voice-call-check');
+const root=path.resolve(__dirname,'..'),scratch=path.join(root,'.stella-local/voice-call-check');
 fs.mkdirSync(scratch,{recursive:true});app.setPath('userData',path.join(scratch,'profile'));
-protocol.registerSchemesAsPrivileged([{scheme:'capri',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
-const sourceFile=process.env.CAPRI_VOICE_TEST_WAV;
-if(!sourceFile)throw Error('Set CAPRI_VOICE_TEST_WAV to an authorized local speech sample.');
+protocol.registerSchemesAsPrivileged([{scheme:'stella',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
+const sourceFile=process.env.STELLA_VOICE_TEST_WAV;
+if(!sourceFile)throw Error('Set STELLA_VOICE_TEST_WAV to an authorized local speech sample.');
 app.whenReady().then(async()=>{
-  protocol.handle('capri',request=>{
+  protocol.handle('stella',request=>{
     const target=path.resolve(root,'.'+new URL(request.url).pathname);
     if(!target.startsWith(root+path.sep))return new Response('forbidden',{status:403});
     return net.fetch(pathToFileURL(target).href);
   });
   const html=fs.readFileSync(path.join(root,'src/renderer/index.html'),'utf8');
   const mic=html.match(/<button id="voice-indicator"[\s\S]*?<\/button>/)[0];
-  fs.writeFileSync(path.join(scratch,'check.html'),`<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'self';script-src 'self' 'wasm-unsafe-eval';style-src 'self';connect-src 'self' capri:;worker-src 'self';img-src 'self';media-src 'self' blob:"><link rel="stylesheet" href="capri://app/src/renderer/styles/capri.css"><body class="voice-session">${mic}<section class="panel">Hidden chat content must not be visible.</section>`);
+  fs.writeFileSync(path.join(scratch,'check.html'),`<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'self';script-src 'self' 'wasm-unsafe-eval';style-src 'self';connect-src 'self' stella:;worker-src 'self';img-src 'self';media-src 'self' blob:"><link rel="stylesheet" href="stella://app/src/renderer/styles/stella.css"><body class="voice-session">${mic}<section class="panel">Hidden chat content must not be visible.</section>`);
   const win=new BrowserWindow({show:false,width:600,height:450,webPreferences:{autoplayPolicy:'no-user-gesture-required',backgroundThrottling:false}});
   win.webContents.on('console-message',event=>{if(event.level>=2)console.error(event.message);});
   const limit=setTimeout(()=>{console.error('Voice call check timed out');app.exit(1);},60000);
   try{
-    await win.loadURL('capri://app/.caprigpt-local/voice-call-check/check.html');
+    await win.loadURL('stella://app/.stella-local/voice-call-check/check.html');
     const sample=fs.readFileSync(sourceFile).toString('base64');
     const result=await win.webContents.executeJavaScript(`(async()=>{
-      const {VoiceCall}=await import('capri://app/src/renderer/js/voice-call.js');
+      const {VoiceCall}=await import('stella://app/src/renderer/js/voice-call.js');
       const ctx=new AudioContext({sampleRate:16000});await ctx.resume();
       const destination=ctx.createMediaStreamDestination();
       const speech=await ctx.decodeAudioData(Uint8Array.from(atob(${JSON.stringify(sample)}),c=>c.charCodeAt(0)).buffer);

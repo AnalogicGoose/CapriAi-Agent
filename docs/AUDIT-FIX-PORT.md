@@ -1,6 +1,6 @@
 # Audit fixes on the Codex implementation
 
-Source: [AnalogicGoose/CapriGPT commit 12462ee](https://github.com/AnalogicGoose/CapriGPT/commit/12462ee66c8813d6ed0dd59f1e162600143cd219).
+Source: [AnalogicGoose/Stella commit 12462ee](https://github.com/AnalogicGoose/Stella/commit/12462ee66c8813d6ed0dd59f1e162600143cd219).
 Ported its bug fixes individually onto the existing working tree. The following
 branch/release-process commit was not part of this bug-fix port.
 

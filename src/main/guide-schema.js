@@ -102,7 +102,7 @@ function validateWalkthrough(args) {
   return { title: str(args.title, 'title', 80), steps };
 }
 
-// JSON schema for capri_walkthrough and re-plans. Codex requires every field, so "" and 0 mean "none":
+// JSON schema for stella_walkthrough and re-plans. Codex requires every field, so "" and 0 mean "none":
 // empty id/text/snapshotId/name/role/expectApp are ignored by the validator; nth 0 is dropped by walkthroughFromTool.
 const object = properties => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
 const string = maxLength => ({ type: 'string', maxLength });

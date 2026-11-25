@@ -10,7 +10,7 @@ const { ReflectionEngine } = require('../src/main/cognitive-reflection');
 const reflection = { question: 'What evidence would make help useful?', hypothesis: 'This may be ordinary work.',
   counterpoint: 'App visits alone cannot tell me why.', confidence: 0.3, priority: 0.4, next_step: 'wait' };
 function fixture(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-inquiry-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-inquiry-'));
   const file = path.join(dir, 'curiosity.sqlite');
   let time = 1_000_000;
   let journal;

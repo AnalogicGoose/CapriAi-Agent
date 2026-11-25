@@ -12,7 +12,7 @@ test('quiet notifications animate work bursts and retain completion, error and a
   let pulses = 0, mode;
   const callbacks = {};
   const companion = new IntegrationCompanion({
-    capri: { setMode: value => { mode = value; }, pulse: () => pulses++, perform: value => acts.push(value), hurt: () => acts.push('hurt') },
+    stella: { setMode: value => { mode = value; }, pulse: () => pulses++, perform: value => acts.push(value), hurt: () => acts.push('hurt') },
     panel: { setTicker() {}, clearKind() {}, say: value => messages.push(value) },
     voice: { play: value => sounds.push(value) }, brain: { lang: 'en' },
     host: { onIntegrationState: fn => { callbacks.state = fn; }, onIntegrationEvent: fn => { callbacks.event = fn; }, integrationStatus: async () => ({ lastSeen: null, sessions: [] }) },
@@ -20,7 +20,7 @@ test('quiet notifications animate work bursts and retain completion, error and a
   await Promise.resolve();
   const send = (stage, sessions = [{ stage }]) => {
     callbacks.state({ lastSeen: 1, sessions });
-    callbacks.event({ stage, project: 'Capri', demo: false });
+    callbacks.event({ stage, project: 'Stella', demo: false });
   };
   send('ready');
   send('working');
@@ -70,7 +70,7 @@ test('chat opens immediately even if Codex status is unavailable', async () => {
   const { Chat } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
   let started = 0, message;
   const panel = { chatInput: { focus() {} }, say: msg => { message = msg; return true; }, setActions() {}, hide() {} };
-  const chat = new Chat({ panel, capri: { wake() {}, towardCenter() {}, perform() {} }, voice: {},
+  const chat = new Chat({ panel, stella: { wake() {}, towardCenter() {}, perform() {} }, voice: {},
     brain: { lang: 'en', t: { chat: { offline: 'Cannot reach Ollama', ok: 'OK', hello: ['Hello'], again: ['Hello again'] } }, integrationActivity: () => 'Codex is working.' },
     host: { onChatDelta() {}, chatStatus: async () => { assert.fail('Opening chat must never wait for Codex status'); },
       startOllama: async () => { started++; return { ok: true }; }, focusOverlay() {}, openApps: async () => [] },
@@ -91,13 +91,13 @@ test('ordinary chat does not launch app discovery; only a requested close does',
   let discoveries = 0;
   const chat = new Chat({
     panel: { setChatBusy() {}, setActions() {}, chatTurn() {}, stream() {}, setFace() {} },
-    capri: { pulse() {} }, voice: {}, brain: { t: { chat: {} } },
+    stella: { pulse() {} }, voice: {}, brain: { t: { chat: {} } },
     host: { onChatDelta() {}, personalRoute: async () => ({ handled: false }),
       chatSend: async () => ({ ok: true, text: 'Hello.' }), openApps: async () => { discoveries++; return []; } },
   });
   chat.open = true;
   chat.persona = () => 'Persona';
-  await chat.send('Hello Capri');
+  await chat.send('Hello Stella');
   assert.equal(discoveries, 0);
   await chat.send('close Spotify please');
   assert.equal(discoveries, 1);

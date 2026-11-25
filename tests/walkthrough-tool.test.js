@@ -64,7 +64,7 @@ const ctx = (text = 'how do I change the refresh rate?') => ({ text, check: () =
 test('the tool starts one walkthrough and refuses a second', async () => {
   const f = fixture();
   const t = tools(f.ctl);
-  const spec = t.specs().find(row => row.name === 'capri_walkthrough');
+  const spec = t.specs().find(row => row.name === 'stella_walkthrough');
   assert.ok(spec);
   assert.ok(Buffer.byteLength(spec.description) <= 500, `${Buffer.byteLength(spec.description)} bytes`);
   assert.equal(spec.inputSchema, WALKTHROUGH_SCHEMA);
@@ -73,23 +73,23 @@ test('the tool starts one walkthrough and refuses a second', async () => {
     if (schema.type === 'array') walk(schema.items);
   };
   walk(WALKTHROUGH_SCHEMA);
-  assert.match(t.instructions(), /capri_walkthrough/);
+  assert.match(t.instructions(), /stella_walkthrough/);
   assert.ok(Buffer.byteLength(require('../src/main/personality').WALKTHROUGH_INSTRUCTIONS) <= 300);
   // Not offered without the controller, or while screen awareness is off.
-  assert.equal(new CodexTools({ settings: () => ({}), screen: { enabled: () => true } }).specs().some(row => row.name === 'capri_walkthrough'), false);
-  assert.doesNotMatch(new CodexTools({ settings: () => ({}), screen: { enabled: () => true } }).instructions(), /capri_walkthrough/);
-  assert.equal(new CodexTools({ settings: () => ({}), screen: { enabled: () => false }, walkthroughs: f.ctl }).specs().some(row => row.name === 'capri_walkthrough'), false);
+  assert.equal(new CodexTools({ settings: () => ({}), screen: { enabled: () => true } }).specs().some(row => row.name === 'stella_walkthrough'), false);
+  assert.doesNotMatch(new CodexTools({ settings: () => ({}), screen: { enabled: () => true } }).instructions(), /stella_walkthrough/);
+  assert.equal(new CodexTools({ settings: () => ({}), screen: { enabled: () => false }, walkthroughs: f.ctl }).specs().some(row => row.name === 'stella_walkthrough'), false);
 
-  assert.deepEqual(await t.execute('capri_walkthrough', PLAN, ctx()), { started: true, steps: 2 });
+  assert.deepEqual(await t.execute('stella_walkthrough', PLAN, ctx()), { started: true, steps: 2 });
   await f.advance(0);
   assert.equal(f.ctl.active, true);
   assert.deepEqual(f.s.cleared, ['walkthrough']); // an explain drawing gives the layer to the walkthrough
   assert.equal(f.ctl.current.request, 'how do I change the refresh rate?');
   assert.equal(f.ctl.current.state, 'waiting');
   assert.deepEqual(f.s.spoken, ['Open Display']);
-  await assert.rejects(t.execute('capri_walkthrough', PLAN, ctx()), /A walkthrough is already running\./);
-  await assert.rejects(t.execute('capri_draw', { marks: [], cards: [], clear: true }, ctx()), /walkthrough/i);
-  await assert.rejects(t.execute('capri_walkthrough', { title: 'x' }, ctx()), /Invalid Stella tool arguments/);
+  await assert.rejects(t.execute('stella_walkthrough', PLAN, ctx()), /A walkthrough is already running\./);
+  await assert.rejects(t.execute('stella_draw', { marks: [], cards: [], clear: true }, ctx()), /walkthrough/i);
+  await assert.rejects(t.execute('stella_walkthrough', { title: 'x' }, ctx()), /Invalid Stella tool arguments/);
 
   // The card carries localized buttons, and its native bounds come back to the walkthrough.
   const scene = f.s.renders.at(-1).get(1);
@@ -110,7 +110,7 @@ test('the tool starts one walkthrough and refuses a second', async () => {
   assert.equal(f.ctl.active, false);
   assert.equal(f.s.hover, null);
   assert.deepEqual(f.s.interactive.at(-1), [1, false]);
-  assert.deepEqual(await t.execute('capri_walkthrough', PLAN, ctx()), { started: true, steps: 2 });
+  assert.deepEqual(await t.execute('stella_walkthrough', PLAN, ctx()), { started: true, steps: 2 });
 });
 
 test('render maps the card box from its display to native pixels', async () => {
@@ -133,7 +133,7 @@ test('walkthrough reports its target and clears at the end', async () => {
   assert.equal(focus.at(-1).displayId, 1);
   assert.equal(focus.at(-1).rect.width, f.s.renders.at(-1).get(1).cards[0].box.width);
   const t = tools(f.ctl);
-  await t.execute('capri_walkthrough', PLAN, ctx());
+  await t.execute('stella_walkthrough', PLAN, ctx());
   await f.advance(0);
   f.ctl.stop();
   await f.advance(0);
@@ -149,7 +149,7 @@ test('a render finishing after the walkthrough ended sends no stale focus', asyn
   let release;
   const f = fixture({ extra: { focus: e => focus.push(e) } });
   const t = tools(f.ctl);
-  await t.execute('capri_walkthrough', PLAN, ctx());
+  await t.execute('stella_walkthrough', PLAN, ctx());
   await f.advance(0);
   const real = f.ctl.layer.render;
   f.ctl.layer.render = () => { f.ctl.layer.render = real; return new Promise(resolve => { release = resolve; }); }; // only this one render hangs
@@ -167,11 +167,11 @@ test('replacing a walkthrough does not clear focus; the new target takes over', 
   const focus = [];
   const f = fixture({ extra: { focus: e => focus.push(e) } });
   const t = tools(f.ctl);
-  await t.execute('capri_walkthrough', PLAN, ctx());
+  await t.execute('stella_walkthrough', PLAN, ctx());
   await f.advance(0);
   assert.ok(focus.length > 0 && !focus.includes(null));
   f.ctl.awaiting = true;
-  await t.execute('capri_walkthrough', PLAN, ctx());
+  await t.execute('stella_walkthrough', PLAN, ctx());
   await f.advance(0);
   assert.ok(!focus.includes(null));
   assert.ok(focus.at(-1)?.rect);
@@ -278,7 +278,7 @@ test('a question pauses and the answer resumes; a new task or stop ends it', asy
   assert.deepEqual(f.ctl.start(PLAN, { request: 'again' }), { started: true, steps: 2 });
   assert.equal(f.ctl.current.request, 'again');
 
-  assert.deepEqual(['next', 'siguiente', 'Suivant !', 'próximo', 'далее', 'back', 'atrás', 'repeat', 'repite', 'stop', 'continue', 'continúa', 'hey capri, next']
+  assert.deepEqual(['next', 'siguiente', 'Suivant !', 'próximo', 'далее', 'back', 'atrás', 'repeat', 'repite', 'stop', 'continue', 'continúa', 'hey stella, next']
     .map(walkthroughCommand), ['next', 'next', 'next', 'next', 'next', 'back', 'back', 'repeat', 'repeat', 'stop', 'continue', 'continue', 'next']);
   assert.equal(walkthroughCommand('next time remind me'), null);
 });
@@ -318,7 +318,7 @@ test('every walkthrough ending speaks a guideLine in the user\'s language', asyn
   assert.equal(guideLine('done', 'xx'), guideLine('done', 'en'));
   assert.ok(KINDS.includes('exclusive-fullscreen'));
   for (const lang of ['en', 'es', 'fr', 'pt', 'ru']) {
-    assert.ok(!/capri/i.test(guideLine('paused', lang)), `paused/${lang} has no literal name`);
+    assert.ok(!/stella/i.test(guideLine('paused', lang)), `paused/${lang} has no literal name`);
     assert.ok(guideButton('continue', lang) && guideButton('continue', lang) !== 'continue', `continue/${lang}`);
   }
   assert.notEqual(guideLine('paused', 'es'), guideLine('paused', 'en'));
@@ -328,9 +328,9 @@ test('combined new tool descriptions stay under 1500 bytes', () => {
   const t = tools(fixture().ctl);
   t.reminders = { list: () => [] };
   const specs = t.specs();
-  const names = ['capri_draw', 'capri_walkthrough', 'capri_reminder'];
+  const names = ['stella_draw', 'stella_walkthrough', 'stella_reminder'];
   const total = specs.filter(row => names.includes(row.name)).reduce((sum, row) => sum + Buffer.byteLength(row.description), 0);
-  assert.ok(specs.some(row => row.name === 'capri_draw') && specs.some(row => row.name === 'capri_walkthrough') && specs.some(row => row.name === 'capri_reminder'));
+  assert.ok(specs.some(row => row.name === 'stella_draw') && specs.some(row => row.name === 'stella_walkthrough') && specs.some(row => row.name === 'stella_reminder'));
   assert.ok(total < 1500, `${total} bytes`);
 });
 
@@ -393,7 +393,7 @@ test('a rejected replacement plan leaves the paused walkthrough in place', async
 test('chat:stop for the turn that started it leaves the walkthrough running; any other stop ends it', async () => {
   const f = fixture();
   const t = tools(f.ctl);
-  assert.deepEqual(await t.execute('capri_walkthrough', PLAN, { ...ctx(), turn: 41 }), { started: true, steps: 2 });
+  assert.deepEqual(await t.execute('stella_walkthrough', PLAN, { ...ctx(), turn: 41 }), { started: true, steps: 2 });
   await f.advance(0);
   f.ctl.chatStopped(41);
   assert.equal(f.ctl.active, true);
@@ -457,7 +457,7 @@ test('body reactions are requested only when the overlay is visible and never in
   const view = { visible: true, fullscreen: false };
   const body = [];
   const f = fixture({ extra: {
-    body: action => { body.push(action); return Promise.reject(Error('Capri’s body is unavailable.')); },
+    body: action => { body.push(action); return Promise.reject(Error('Stella’s body is unavailable.')); },
     bodyAllowed: () => view.visible && !view.fullscreen,
   } });
   f.ctl.start(PLAN, {});
@@ -525,7 +525,7 @@ test('exclusive fullscreen refuses with one spoken suggestion per session', asyn
   assert.throws(() => f.ctl.start(PLAN, {}), /do not suggest borderless again/i);
   assert.deepEqual(spoken, [guideLine('exclusive-fullscreen', 'es')], 'said once per game session');
 
-  // The plain guide (capri_draw) is refused the same way, without speaking again.
+  // The plain guide (stella_draw) is refused the same way, without speaking again.
   const session = new GuideSession({ targets: {}, layer: { render: async () => assert.fail('no drawing') }, layout: () => new Map(),
     foreground: () => ({ id: 1, pid: 9, ...box(0, 0, 800, 600) }), gate });
   await assert.rejects(session.draw({ clear: false, marks: [], cards: [] }), /exclusive fullscreen/i);
@@ -550,7 +550,7 @@ test('exclusive fullscreen refuses with one spoken suggestion per session', asyn
   assert.equal(QUNS_RUNNING_D3D_FULL_SCREEN, 3);
   for (const lang of ['en', 'es', 'fr', 'pt', 'ru']) {
     assert.match(guideLine('exclusive-fullscreen', lang), /borderless|sin bordes|sans bordure|sem bordas|без рамки/i, lang);
-    assert.doesNotMatch(guideLine('exclusive-fullscreen', lang), /Capri/);
+    assert.doesNotMatch(guideLine('exclusive-fullscreen', lang), /Stella/);
   }
 });
 

@@ -44,7 +44,7 @@ function markerLayout(target, display, label) {
   };
 }
 
-// onFocus({ displayId, rect } | null): a highlight shown with { focus: true } (capri_point) reports its DIP rect once
+// onFocus({ displayId, rect } | null): a highlight shown with { focus: true } (stella_point) reports its DIP rect once
 // visible, and null once it is gone (expired, the window moved, cleared); a replacing highlight reports only the new rect.
 function desktopHighlight({ BrowserWindow, screen, foreground, enabled, onError, onFocus }) {
   let active, focused = false;

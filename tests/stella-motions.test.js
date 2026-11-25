@@ -5,9 +5,9 @@ const fs = require('node:fs'), path = require('node:path');
 const { loadRenderer } = require('./helpers/esm.js');
 
 const toolIds = () => [...fs.readFileSync(path.join(__dirname, '../src/main/codex-tools.js'), 'utf8')
-  .matchAll(/^\s*\['(capri_\w+)'/gm)].map(m => m[1]);
+  .matchAll(/^\s*\['(stella_\w+)'/gm)].map(m => m[1]);
 
-test('every capri tool id has a motion', async () => {
+test('every stella tool id has a motion', async () => {
   const { MOTIONS, motionForAgentTool } = await loadRenderer('stella/motions.js');
   const ids = toolIds();
   assert.ok(ids.length >= 25, `parsed ${ids.length} ids`);
@@ -23,18 +23,18 @@ test('every capri tool id has a motion', async () => {
 test('apps operations split between flare and radar', async () => {
   const { motionForAgentTool: f } = await loadRenderer('stella/motions.js');
   for (const op of ['open_url', 'open_app', 'open_workspace', 'open_media', 'play_music', 'play_video', 'youtube_latest', 'open_result'])
-    assert.equal(f('capri_apps', op), 'flare', op);
-  for (const op of ['search_web', 'search_news', 'steam_deals']) assert.equal(f('capri_apps', op), 'radar', op);
-  assert.equal(f('capri_apps'), 'flare');
-  assert.equal(f('capri_apps', 'nope'), 'flare');
+    assert.equal(f('stella_apps', op), 'flare', op);
+  for (const op of ['search_web', 'search_news', 'steam_deals']) assert.equal(f('stella_apps', op), 'radar', op);
+  assert.equal(f('stella_apps'), 'flare');
+  assert.equal(f('stella_apps', 'nope'), 'flare');
 });
 
 test('desktop steps that open or search use the app motions, other steps tick', async () => {
   const { motionForAgentTool: f } = await loadRenderer('stella/motions.js');
   for (const op of ['open_app', 'open_url', 'open_workspace', 'open_media', 'play_music', 'play_video', 'youtube_latest', 'open_result'])
-    assert.equal(f('capri_desktop_step', op), 'flare', op);
-  for (const op of ['search_web', 'search_news', 'steam_deals']) assert.equal(f('capri_desktop_step', op), 'radar', op);
-  for (const op of [null, undefined, 'click', 'type_text']) assert.equal(f('capri_desktop_step', op), 'ticks', String(op));
+    assert.equal(f('stella_desktop_step', op), 'flare', op);
+  for (const op of ['search_web', 'search_news', 'steam_deals']) assert.equal(f('stella_desktop_step', op), 'radar', op);
+  for (const op of [null, undefined, 'click', 'type_text']) assert.equal(f('stella_desktop_step', op), 'ticks', String(op));
 });
 
 test('the AI\'s own built-in tools get motions too', async () => {

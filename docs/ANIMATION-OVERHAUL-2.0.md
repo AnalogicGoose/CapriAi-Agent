@@ -1,4 +1,4 @@
-# Capri Animation Overhaul 2.0
+# Stella Animation Overhaul 2.0
 
 Current direction: improve the original sprites and rig with bouncier, more
 charming motion. The generated-art overhaul below is retained as a historical
@@ -18,7 +18,7 @@ The new full-frame renderer/authoring workflow remains available.
 
 ## Audit and scope
 
-Inspected `sprite.js`, `acting.js`, `capri.js`, `companion.js`, existing PNGs,
+Inspected `sprite.js`, `acting.js`, `stella.js`, `companion.js`, existing PNGs,
 `tools/build-sprite.py`, `ANIMATIONS.md`, animation/sitting tests and isolated
 Electron animation checks. The source cutout is 240x420 with a large angular
 crimson mane, green mask, violet torso, and asymmetric green/red limbs. The old
@@ -27,7 +27,7 @@ warps the head/mane. Its exposure sheets contain numeric poses, not new images.
 Smooth sheets interpolate; legacy action beats hold poses. This explains the
 puppet-like movement despite an extensive action catalog.
 
-`Capri` owns stance, floor/ledge geometry, priority, pointer capture, falls,
+`Stella` owns stance, floor/ledge geometry, priority, pointer capture, falls,
 idle scheduling, activity cooldowns, work/alert/sleep, pointing and reduced
 motion. `Companion` chooses personality-driven idle acts. Keep those behavioral
 signals; do not add a competing timer or autonomous state controller.
@@ -139,7 +139,7 @@ and do not add routine audio. Do not add desktop capture or observation polling.
    hands, drifting anatomy or opaque backgrounds. Do not hide defects with rigs.
 4. Install the pinned authoring dependency with
    `python -m pip install -r tools/animation-requirements.txt`, then run:
-   `python tools/pack-animation.py assets/capri/animation-v2/source.png`.
+   `python tools/pack-animation.py assets/stella/animation-v2/source.png`.
    It reads adjacent `recipe.json`, crops whole drawings, uses a common scale per
    source, registers feet, and writes individual frames, `atlas.png`, and
    `atlas.json`. It rejects clipped drawings and atlas texture-budget overflow.
@@ -148,12 +148,12 @@ and do not add routine audio. Do not add desktop capture or observation polling.
 5. Run the same command with `--check` to compare atlas pixels/manifest with a
    deterministic rebuild. Source and per-frame SHA256 hashes record exactly which art was packed.
    Individual PNGs are verified too. Add
-   `--preview .caprigpt-local/cel-check` to export actual-frame dark/light GIFs.
+   `--preview .stella-local/cel-check` to export actual-frame dark/light GIFs.
 6. Run `npm test`, `npm run test:animations`, and `npm run test:cels`.
    The cel check uses isolated Electron with a separate local profile, decodes
    real PNGs, exercises twenty GPU drawings, loop seams, preference changes,
    alpha clicks and state fallbacks. Native-size light/dark GPU snapshots are
-   `.caprigpt-local/cel-check/breathing-gallery.png`. The check uses offscreen
+   `.stella-local/cel-check/breathing-gallery.png`. The check uses offscreen
    rendering and invalidates the compositor before capture to avoid partial
    hidden-window screenshots.
 7. Review runtime capture, both facings, dark/light backdrop and a full-speed loop;
@@ -190,11 +190,11 @@ automatic restart or opening-animation replacement is part of this change.
   unpacked Windows app produced. No installer or clean-machine install test.
 - `git diff --check`: passed. Compared the complete `intro()` function with
   branch HEAD and verified opening effects and original art have no changes.
-- Inspected the actual WebGL capture at `.caprigpt-local/cel-check/curious.png`.
-  An animated review export is `.caprigpt-local/cel-check/curious.gif`.
+- Inspected the actual WebGL capture at `.stella-local/cel-check/curious.png`.
+  An animated review export is `.stella-local/cel-check/curious.gif`.
 - Desktop special-folder shortcut inspected: already targets this checkout's
   Electron executable with quoted absolute project argument, project working
-  directory and Capri icon. No rewrite was needed.
+  directory and Stella icon. No rewrite was needed.
 
 No live-app restart was performed; restart normally to load the updated source.
 Interactive daily use, subjective full-speed art review, silhouette bridges,
@@ -222,7 +222,7 @@ cleanup before scaling production. No claims of human-drawn frames are made.
   unpacked Windows app. No installer or clean-machine validation performed.
 - Native desktop-size GPU gallery inspected on dark and light backgrounds.
   The closed-eye drawing is present and whole characters fit without clipping.
-  Review exports: `.caprigpt-local/cel-check/rest-dark.gif`, `rest-light.gif`,
+  Review exports: `.stella-local/cel-check/rest-dark.gif`, `rest-light.gif`,
   `curious-dark.gif`, `curious-light.gif`, and `breathing-gallery.png`.
 
 Phase 1 is still incomplete: front/three-quarter model sheets, separate relaxed
@@ -266,7 +266,7 @@ Before/after review: `npx electron scripts/preview-original-motion.js` reads the
 committed HEAD acting sheet as baseline, samples the real WebGL renderer at
 25 fps, and composites the same physical canvas transforms side by side.
 It uses a separate local profile, does not start/restart the live companion,
-and saves PNG sequences under `.caprigpt-local/charming-motion/`. The session
+and saves PNG sequences under `.stella-local/charming-motion/`. The session
 also exported `stand-before-after.gif`, `idleWave-before-after.gif` and
 `idleBounce-before-after.gif` there. PNG captures were visually inspected.
 The preview does not draw replacement art or synthesize new sprite frames.

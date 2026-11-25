@@ -8,7 +8,7 @@ const { nativeActivity } = require('./native-activity');
 
 const MAX_WARM_TURNS = 24;
 const THREAD_RELEASE_TIMEOUT = 400;
-const SCREEN_LOOKS = new Set(['capri_window_controls', 'capri_screen', 'capri_point', 'capri_point_on_snapshot', 'capri_draw']);
+const SCREEN_LOOKS = new Set(['stella_window_controls', 'stella_screen', 'stella_point', 'stella_point_on_snapshot', 'stella_draw']);
 
 function packContext(data, budget = 16000) {
   const packed = Object.create(null), omitted = [];
@@ -61,7 +61,7 @@ class CodexBrain {
     try {
       const store = this.recentConversation?.(create);
       if (store) return use(store);
-    } catch { console.error('[capri] Recent conversation storage unavailable.'); }
+    } catch { console.error('[stella] Recent conversation storage unavailable.'); }
   }
   discardHistory(keepRecent = false) {
     this.history = [];
@@ -243,7 +243,7 @@ class CodexBrain {
         const p = message.params;
         try {
           check();
-          if (!p || p.threadId !== this.threadId || !this.turnId || p.turnId !== this.turnId || typeof p.callId !== 'string' || !p.callId || (p.namespace && p.namespace !== 'capri')) throw Error('Stale or invalid tool request.');
+          if (!p || p.threadId !== this.threadId || !this.turnId || p.turnId !== this.turnId || typeof p.callId !== 'string' || !p.callId || (p.namespace && p.namespace !== 'stella')) throw Error('Stale or invalid tool request.');
           const fingerprint = JSON.stringify([p.tool, p.arguments]);
           let receipt = dedupe.get(p.callId);
           if (receipt && receipt.fingerprint !== fingerprint) throw Error('Conflicting duplicate tool call.');

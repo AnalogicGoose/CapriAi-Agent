@@ -1,6 +1,6 @@
 # Project companion — 2026-11-07
 
-Capri can now keep a selected workspace, goals and a small decision/outcome
+Stella can now keep a selected workspace, goals and a small decision/outcome
 journal for each project. Existing animations, voice and task execution remain
 in place. The working checkout continues to report version 0.4.0, an unreleased
 prototype; this change does not create a release or installer certification.
@@ -10,7 +10,7 @@ prototype; this change does not create a release or installer certification.
 Open **Control room → Connections → Project companion → Choose folder**.
 The selected folder becomes the working directory for requested native Codex
 tasks. **Use home folder** deselects it without deleting saved context. Chat also
-supports `/project choose` or `/project open "C:\Projects\Capri"`.
+supports `/project choose` or `/project open "C:\Projects\Stella"`.
 Selection is a persisted workspace preference, independent of the Memory switch.
 Choosing a folder does not read its contents, start work or grant action approval.
 A missing/moved folder stops native tasks with a request to select it again,
@@ -43,7 +43,7 @@ goals/notes; selection itself remains until changed/deleted.
 
 ## Verification evidence
 
-When Memory is enabled, Capri can save observed receipts from exact recognized
+When Memory is enabled, Stella can save observed receipts from exact recognized
 commands: `npm test` / `npm.cmd test`, `node --test` (optionally the tests glob),
 and `npx electron-builder --win --x64 --dir --publish never` (`npx.cmd` also works).
 Only a completed native command item with an integer exit code is eligible.
@@ -102,7 +102,7 @@ also checked for `cwd`, `command`, `exitCode` and status fields.
 
 Live model behavior, actual command receipts from a real model session, voice
 quality, and installer install/uninstall still need native acceptance. A normal
-Capri restart loads the changes; the running companion was left alone.
+Stella restart loads the changes; the running companion was left alone.
 
 Next: improve project decision retrieval and corrections, then use confirmed
 outcomes for a genuine daily review. Do not infer progress from app switching.

@@ -12,7 +12,7 @@ STT → LLM → TTS as its core pipeline and integrates multiple dedicated STT m
 Pipecat likewise has dedicated cloud and local speech services. These are modern
 neural recognition models, rather than the legacy Windows desktop dictation engine.
 
-Some frameworks also offer speech-to-speech models. Capri's current requirement
+Some frameworks also offer speech-to-speech models. Stella's current requirement
 is microphone dictation into a text draft, so an STT pipeline fits the existing app
 without replacing its local Ollama conversation model.
 
@@ -26,13 +26,13 @@ Primary references:
 - [Pipecat supported services](https://github.com/pipecat-ai/pipecat): cloud/local STT and speech-to-speech integrations.
 - [Deepgram + LiveKit guide](https://developers.deepgram.com/docs/build-voice-agent-with-livekit-and-deepgram): a documented hosted deployment needing credentials.
 
-## Options relevant to Capri
+## Options relevant to Stella
 
 | Approach | Practical consequence |
 | --- | --- |
 | Dedicated hosted STT, such as Deepgram | Established framework integrations and streaming services; requires credentials and sends audio to the provider. |
 | Local Whisper, via faster-whisper or whisper.cpp | Established open-source recognition implementations; model downloads and local compute, but no speech API key or external audio upload. |
-| Existing Windows desktop dictation | Already available, but failed this user's actual speech; removed from Capri's recognition path. |
+| Existing Windows desktop dictation | Already available, but failed this user's actual speech; removed from Stella's recognition path. |
 
 Pipecat explicitly supports offline Whisper and automatic language detection.
 Whisper's published research/model documentation describes multilingual training
@@ -48,7 +48,7 @@ Primary references:
 
 ## Implemented decision
 
-The user selected **Local Whisper, no API key**. Capri now uses:
+The user selected **Local Whisper, no API key**. Stella now uses:
 
 - Default-device microphone capture through Chromium with noise suppression and
   echo cancellation, mono 16 kHz PCM through an AudioWorklet.
@@ -64,7 +64,7 @@ The user selected **Local Whisper, no API key**. Capri now uses:
 
 The desktop app already has its own microphone/UI lifecycle, so a full LiveKit
 network transport deployment is unnecessary. This adopts the dedicated neural
-STT architecture used by those frameworks while fitting Capri's local desktop.
+STT architecture used by those frameworks while fitting Stella's local desktop.
 
 The pinned official whisper.cpp build is b5454 (the v1.9.5 commit), with SHA-256
 verification for the Windows binaries, model and Silero weights. Model audio
@@ -89,7 +89,7 @@ Public audio sources and attribution:
 - [LibriSpeech test fixture](https://huggingface.co/datasets/hf-internal-testing/librispeech_asr_dummy), clean/validation row 0; spoken book-review sentence.
 - [PolyAI MINDS-14](https://huggingface.co/datasets/PolyAI/minds14), es-ES/train row 0; CC BY 4.0; Spanish telephone/application-error sentence.
 
-Raw fixtures and results are kept only in ignored `.caprigpt-local/speech-check/`.
+Raw fixtures and results are kept only in ignored `.stella-local/speech-check/`.
 No microphone audio from the user was recorded for automated testing.
 
 The full production app was additionally tested with the recorded English file as

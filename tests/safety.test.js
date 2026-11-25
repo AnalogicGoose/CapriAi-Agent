@@ -69,7 +69,7 @@ test('chat respects a smaller installed model context and preserves the latest q
     request = JSON.parse(options.body);
     return new Response('{"message":{"content":"Hello"},"done":true}\n');
   };
-  await ollama.chat({ model: 'small', messages: [{ role: 'system', content: 'Capri' }, { role: 'user', content: 'Current question' }] }, () => {});
+  await ollama.chat({ model: 'small', messages: [{ role: 'system', content: 'Stella' }, { role: 'user', content: 'Current question' }] }, () => {});
   assert.equal(request.options.num_ctx, 8192);
   assert.equal(request.options.num_predict, 1024);
   assert.equal(request.messages.at(-1).content, 'Current question');

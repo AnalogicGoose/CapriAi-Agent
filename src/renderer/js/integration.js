@@ -3,8 +3,8 @@ export class IntegrationCompanion {
   visibleSessions() {
     return this.snapshot.lastSeen ? this.snapshot.sessions.filter((event) => !event.demo) : this.snapshot.sessions;
   }
-  constructor({ capri, panel, voice, host, brain }) {
-    Object.assign(this, { capri, panel, voice, host, brain });
+  constructor({ stella, panel, voice, host, brain }) {
+    Object.assign(this, { stella, panel, voice, host, brain });
     this.lastPulse = -Infinity;
     this.snapshot = { lastSeen: null, sessions: [] };
     host.onIntegrationState((snapshot) => {
@@ -13,7 +13,7 @@ export class IntegrationCompanion {
         const waiting = this.visibleSessions().find((event) => event.stage === 'waiting');
         if (waiting) this.handle(waiting);
         else if (!this.visibleSessions().some((event) => ['working', 'tool_failed'].includes(event.stage))) {
-          this.panel.clearKind('alert'); this.panel.setTicker(null); this.capri.setMode('idle');
+          this.panel.clearKind('alert'); this.panel.setTicker(null); this.stella.setMode('idle');
         }
       }
     });
@@ -65,7 +65,7 @@ export class IntegrationCompanion {
     const lines = this.lines();
     const active = this.visibleSessions().some((entry) => ['working', 'waiting', 'tool_failed'].includes(entry.stage));
     if (event.stage !== 'waiting' && this.visibleSessions().some((entry) => entry.stage === 'waiting')) {
-      this.capri.setMode('alert');
+      this.stella.setMode('alert');
       return; // another turn still needs its approval prompt
     }
     if (event.stage !== 'waiting' && this.panel.current?.badge?.startsWith('CODEX')) this.panel.clearKind('alert');
@@ -73,19 +73,19 @@ export class IntegrationCompanion {
       // A burst of tool hooks should not turn into continuous glitch flashes.
       const now = performance.now();
       if (now - this.lastPulse >= 1800) {
-        this.capri.pulse();
+        this.stella.pulse();
         this.lastPulse = now;
       }
-      this.capri.setMode('work');
-      this.capri.reactToTool?.(event.tool);
+      this.stella.setMode('work');
+      this.stella.reactToTool?.(event.tool);
       return; // Routine work stays silent; quiet action poses sit over the focus cycle.
     } else if (event.stage === 'waiting') {
-      this.capri.setMode('alert');
+      this.stella.setMode('alert');
       this.voice.play('alert');
     } else {
-      if (!active) { this.capri.setMode('idle'); this.panel.setTicker(null); }
-      if (event.stage === 'completed' && !active) this.capri.perform('hop');
-      if (event.stage === 'tool_failed') { this.capri.hurt(); this.voice.play('error'); }
+      if (!active) { this.stella.setMode('idle'); this.panel.setTicker(null); }
+      if (event.stage === 'completed' && !active) this.stella.perform('hop');
+      if (event.stage === 'tool_failed') { this.stella.hurt(); this.voice.play('error'); }
     }
     // Connection, interruption and session-close events update her state silently.
     if (!['waiting', 'tool_failed', 'completed'].includes(event.stage)) return;

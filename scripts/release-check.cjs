@@ -32,7 +32,7 @@ function source(checkout = root, env = process.env, git = (...args) =>
 function inspectArchive(archive, version) {
   const asar = require('@electron/asar');
   const entries = asar.listPackage(archive).map(name => name.replaceAll('\\', '/'));
-  const forbidden = /(?:^|\/)(?:\.caprigpt-local|\.git|captures|tests|\.env(?:\.[^/]*)?|[^/]+\.(?:gguf|onnx|safetensors|mp3|wav|pem|key))(?:\/|$)/i;
+  const forbidden = /(?:^|\/)(?:\.stella-local|\.git|captures|tests|\.env(?:\.[^/]*)?|[^/]+\.(?:gguf|onnx|safetensors|mp3|wav|pem|key))(?:\/|$)/i;
   for (const name of entries) assert.ok(!forbidden.test(name), `Private/development payload: ${name}`);
   for (const name of ['/package.json', '/src/main/main.js', '/src/preload.js', '/src/renderer/index.html', '/LICENSE']) {
     assert.ok(entries.includes(name), `Missing packaged entry: ${name}`);
@@ -50,7 +50,7 @@ async function artifacts() {
   const manifest = source();
   const dist = path.join(root, 'dist');
   inspectArchive(path.join(dist, 'win-unpacked', 'resources', 'app.asar'), manifest.version);
-  const installer = `Capri-Setup-${manifest.version}.exe`;
+  const installer = `Stella-Setup-${manifest.version}.exe`;
   const data = fs.readFileSync(path.join(dist, installer));
   assert.equal(data.subarray(0, 2).toString(), 'MZ', 'Installer must be a Windows executable');
   manifest.artifacts = [{ file: installer, bytes: data.length,

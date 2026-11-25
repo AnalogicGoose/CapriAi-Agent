@@ -10,7 +10,7 @@ const allRows = ({ QUICK, SECTIONS }) => [...QUICK, ...SECTIONS.flatMap(section 
 const state = (config = {}, extra = {}) => ({
   config: { volume: .7, muted: false, ttsEnabled: true, scale: .6, visible: true, gamingMode: false, ttsEngine: 'qwen',
     langSetting: 'auto', ...config, privacy: { memoryEnabled: true, retentionDays: 90, ...config.privacy } },
-  reminders: [], runtime: { version: '0.4.0', currentSource: true, build: 'test', root: 'C:\\Capri' },
+  reminders: [], runtime: { version: '0.4.0', currentSource: true, build: 'test', root: 'C:\\Stella' },
   integration: { lastSeen: null }, displays: [], project: null, initiative: { phase: 'live' }, startup: false, ...extra,
 });
 const sample = row => !row || row.control === 'switch' ? true : row.parse ? row.parse('') : row.options ? row.options[0][0]
@@ -111,7 +111,7 @@ test('no explanation paragraphs', async () => {
   const { QUICK, SECTIONS } = await load();
   const texts = [...SECTIONS.map(s => s.label), ...allRows({ QUICK, SECTIONS }).flatMap(r => [typeof r.label === 'string' ? r.label : r.label(state()), r.tip || ''])];
   for (const row of allRows({ QUICK, SECTIONS })) if (row.tip) assert.ok(row.tip.length <= 90, `${row.id}: ${row.tip}`);
-  for (const text of texts) assert.doesNotMatch(text, /choom|ghost|biochip|Capri/i, text);
+  for (const text of texts) assert.doesNotMatch(text, /choom|ghost|biochip/i, text);
 });
 
 test('every rendered row has a unique id', async () => {

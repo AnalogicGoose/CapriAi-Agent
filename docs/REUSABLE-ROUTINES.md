@@ -1,6 +1,6 @@
 # Teach a named process once, invoke it later
 
-In normal chat, tell Capri:
+In normal chat, tell Stella:
 
 > Remember a routine called Study setup: open Chrome, then mute yourself.
 
@@ -9,8 +9,8 @@ After she confirms the save, say:
 > Study setup
 
 `Run Study setup`, `Start routine Study setup`, and `Could you run Study setup?`
-also work. Named routines persist across restarts. When using voice, address Capri
-with the existing Hey Capri listener; the addressed request goes through the same
+also work. Named routines persist across restarts. When using voice, address Stella
+with the existing Hey Stella listener; the addressed request goes through the same
 foreground path. Real microphone/model phrasing still needs ordinary-use assessment.
 
 Saving a definition does not execute or schedule it. During a teaching-only turn,
@@ -24,7 +24,7 @@ normal chat so you can immediately ask for a routine by name.
 
 ## Definitions and execution
 
-Capri interprets the teaching request into one to eight faithful ordered steps:
+Stella interprets the teaching request into one to eight faithful ordered steps:
 
 - **App:** a named application launch through the existing desktop adapter.
 - **URL:** a supplied public HTTPS URL and optional browser choice.
@@ -34,7 +34,7 @@ Capri interprets the teaching request into one to eight faithful ordered steps:
   process requires reasoning, file work, browsing or desktop interaction.
 
 There is no separate shell executor or background replay engine. The normal Codex
-and Capri tools perform the work. Native shell/file tools are available only if
+and Stella tools perform the work. Native shell/file tools are available only if
 system tools were already enabled. An explicitly invoked routine gets the bounded
 forty-call/ten-minute foreground budget, even for app-only routines with system
 tools disabled. Each step starts and completes through a local step tracker. The
@@ -66,11 +66,11 @@ Missing input stops the run and asks the specific clarification.
 
 After addressing the reported problem, say **“Resume routine Study setup”** or
 **“Retry that routine.”** Naming it selects that routine’s latest run in the
-current project. Without a name, Capri uses the current project’s most recent
+current project. Without a name, Stella uses the current project’s most recent
 routine run. You can also use **“Resume routine #3.”**
 
 The new attempt starts at the first unfinished step and carries forward the
-receipts for earlier steps. This works after closing and reopening Capri. A
+receipts for earlier steps. This works after closing and reopening Stella. A
 failed or interrupted step may already have had an effect, so review its state
 before retrying. The same action reviews still apply. If the recipe has changed,
 use **“Run Study setup”** to start from step one with the new definition.
@@ -82,7 +82,7 @@ are global. Ask for a global routine explicitly when it should be available in
 other projects. Current-project and global names are available; other projects'
 definitions are excluded. Overlapping names require an explicit #ID.
 
-You can ask Capri to change a step, rename a routine or forget it. She must look up
+You can ask Stella to change a step, rename a routine or forget it. She must look up
 the existing definition in the current turn and preserve its scope. Saving uses
 the Memory **Review requested changes** preference; when that setting is on, the
 review shows the concrete name and ordered definition before committing it.
@@ -122,7 +122,7 @@ routine cannot be reported complete merely because the model says so.
 The isolated cognitive Electron smoke passed the actual preload/main/renderer
 teaching, name invocation, local tool receipts, safe setting change and review
 button paths. Codex inference and the app launch were mocked, so no real user apps
-were opened and no real user profile was modified. Restart Capri normally to load
+were opened and no real user profile was modified. Restart Stella normally to load
 the feature, then assess natural interpretation with the signed-in Codex account.
 
 Windows x64 directory packaging passed with publishing disabled and the installed

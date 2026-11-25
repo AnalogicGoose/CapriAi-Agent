@@ -70,8 +70,8 @@ test('opening the selected workspace verifies the exact folder and reports an un
   assert.deepEqual(calls, [['open', folder], ['observe', folder], ['open', folder], ['observe', folder]]);
 });
 test('ordinary action requests route locally while questions and hypothetical examples stay in chat',()=>{
-  for(const q of ['capri play the newest rubius video in youtube','look for the latest news of ai models','capri look for the best discounts in steam','what are the latest AI model news?','check Steam discounts','open File Explorer','abre calculadora','open Spotify'])assert.equal(actionIntent(q),true,q);
-  for(const q of ['hello Capri','can she open File Explorer?','for example play a YouTube video','how do I open Explorer?','remember I prefer Steam'])assert.equal(actionIntent(q),false,q);
+  for(const q of ['stella play the newest rubius video in youtube','look for the latest news of ai models','stella look for the best discounts in steam','what are the latest AI model news?','check Steam discounts','open File Explorer','abre calculadora','open Spotify'])assert.equal(actionIntent(q),true,q);
+  for(const q of ['hello Stella','can she open File Explorer?','for example play a YouTube video','how do I open Explorer?','remember I prefer Steam'])assert.equal(actionIntent(q),false,q);
 });
 test('all tool calls are validated before execution; scripts, duplicates and unrequested mutations are rejected',()=>{
   assert.throws(()=>validatePlan({message:'',steps:[step('shell','bad')]}));
@@ -82,7 +82,7 @@ test('all tool calls are validated before execution; scripts, duplicates and unr
 });
 test('newest YouTube lookup precedes playback; observed results produce expiring source buttons',async()=>{
   const f=fixture([step('youtube_latest','rubius'),step('play_video')]);
-  const result=await f.runner.route('capri play newest rubius video',7);
+  const result=await f.runner.route('stella play newest rubius video',7);
   assert.match(result.text,/Playing “Observed video” from Rubius Z/);
   assert.deepEqual(f.calls,[['youtube','rubius'],['play','abcdefghijk']]);
   assert.equal(result.links.length,1);await f.runner.openResult(result.links[0].ref);
@@ -95,7 +95,7 @@ test('unverified playback is reported as open, never playing',async()=>{
 });
 test('File Explorer fast path executes without a model or untrusted path',async()=>{
   const f=fixture([],{models:async()=>{throw Error('should not load model');}});
-  assert.match((await f.runner.route('capri open file explorer')).text,/launch request/);
+  assert.match((await f.runner.route('stella open file explorer')).text,/launch request/);
   assert.deepEqual(f.calls,[['app','File Explorer']]);
 });
 test('browser clarification followed by firefox launches the installed app without a model',async()=>{
@@ -111,13 +111,13 @@ test('explicit and shorthand installed app names resolve deterministically; ordi
   const opened=[];
   const desktop=new DesktopTools({openPath:async file=>{opened.push(file);return '';},shortcuts:()=>[{label:'Firefox',file:'C:\\Apps\\Firefox.lnk'},{label:'Google Chrome',file:'C:\\Apps\\Chrome.lnk'}],native:{desktopApps:()=>[{name:'firefox'},{name:'chrome'}]}});
   const f=fixture([],{desktop,models:async()=>{throw Error('should not plan known launches');}});
-  for(const input of ['Firefox','open Firefox','Capri, could you open Firefox for me?','Mozilla Firefox please','/do firefox','Chrome']) {
+  for(const input of ['Firefox','open Firefox','Stella, could you open Firefox for me?','Mozilla Firefox please','/do firefox','Chrome']) {
     assert.equal((await f.runner.route(input)).task,true,input);
   }
   assert.equal(opened.length,6);
   for(const input of ['Firefox is my favorite browser','can she open Firefox?','what is Firefox?','never open Firefox','not Firefox'])assert.equal(desktop.matchName(input),null,input);
   assert.equal(await f.runner.route('Firefox is my favorite browser'),null);
-  assert.equal(launchTarget('Capri, can you open Firefox for me?'),'Firefox');
+  assert.equal(launchTarget('Stella, can you open Firefox for me?'),'Firefox');
   assert.throws(()=>authorizePlan('do not open Firefox',{steps:[step('open_app','Firefox')]}),/not to perform/);
 });
 test('shorthand app launch respects gaming pause and disabled actions',async()=>{

@@ -99,11 +99,11 @@ try {
                     if (!$target -or $target.name -cne $request.control.name -or $target.role -ne $request.control.role) { throw 'The control changed. Inspect the window again.' }
                     if ($request.operation -eq 'locate') { $result = @{ control = $target }; break }
                     if (!$target.enabled -or $request.operation -notin $target.operations) { throw 'The selected action is unavailable on this control.' }
-                    Add-Type -Name Desktop -Namespace Capri -MemberDefinition @'
+                    Add-Type -Name Desktop -Namespace Stella -MemberDefinition @'
 [System.Runtime.InteropServices.DllImport("user32.dll")]
 public static extern System.IntPtr GetForegroundWindow();
 '@
-                    if ([Capri.Desktop]::GetForegroundWindow() -ne $handle) { throw 'The target window is no longer in front.' }
+                    if ([Stella.Desktop]::GetForegroundWindow() -ne $handle) { throw 'The target window is no longer in front.' }
                     if ($request.operation -eq 'set-value') {
                         $verified = Set-ControlValue $parent ([string]$request.value)
                         $result = @{ dispatched = $true; verified = $verified }

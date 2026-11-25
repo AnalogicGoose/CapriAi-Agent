@@ -29,7 +29,7 @@ const within = (p, b, m = 0) => Boolean(b) && Number.isFinite(p.x) && Number.isF
 const validBox = b => Boolean(b) && typeof b === 'object' && ['x', 'y', 'width', 'height'].every(k => Number.isFinite(b[k]))
   && b.width >= 0 && b.height >= 0;
 const appKey = s => (typeof s === 'string' ? s.trim().toLowerCase().replace(/\.exe$/, '') : '');
-const log = () => console.error('[capri] A walkthrough callback failed.');
+const log = () => console.error('[stella] A walkthrough callback failed.');
 
 class Walkthrough {
   // render(marks, card, { window }) draws the step (returns { cardBounds } or a promise of it); render([], null) clears.
@@ -283,7 +283,7 @@ class Walkthrough {
     try {
       const out = await this.deps.render(marks, card, extra);
       box = validBox(out?.cardBounds) ? { ...out.cardBounds } : null;
-    } catch { console.error('[capri] Could not update the walkthrough guide.'); return null; }
+    } catch { console.error('[stella] Could not update the walkthrough guide.'); return null; }
     if (seq < this.paintedSeq) {
       const latest = this.drawing;
       this.draw(latest.marks, latest.card, latest.extra).then(b => {

@@ -66,7 +66,7 @@ test('a reminder firing during fullscreen speaks with a grant and shows its card
   assert.equal(r.sent[0].line, 'Reminder, sweetheart: stretch');
   assert.equal(r.sent[0].grant, 'grant-1');
   assert.deepEqual(r.grants, [r.sent[0].line]);
-  assert.ok(!/capri/i.test(r.sent[0].line));
+  assert.ok(!/stella/i.test(r.sent[0].line));
   assert.deepEqual(r.windows, [], 'voice-only delivery opens no command window');
   r.controller.flush();
   assert.equal(r.sent.length, 1, 'still fullscreen: held');
@@ -77,7 +77,7 @@ test('a reminder firing during fullscreen speaks with a grant and shows its card
   assert.equal(card.id, row.id);
   assert.equal(card.speak, undefined, 'already spoken');
   assert.deepEqual(card.actions.map(a => a.id), ['done', 'snooze10', 'snooze']);
-  assert.ok(card.actions.every(a => a.label && !/capri/i.test(a.label)));
+  assert.ok(card.actions.every(a => a.label && !/stella/i.test(a.label)));
   assert.ok(card.snooze.every(a => a.label) && card.snooze.map(a => a.minutes).join() === '15,60,tomorrow');
   r.controller.flush();
   assert.equal(r.sent.length, 2, 'flushed once');
@@ -199,12 +199,12 @@ test('the wake-word strip uses the display name', () => {
   assert.equal(routeReminderCommand(`${DISPLAY_NAME} what are my reminders`, store, 'en').handled, true);
 });
 
-test('capri_reminder update/cancel on a non-active reminder returns an error', async () => {
+test('stella_reminder update/cancel on a non-active reminder returns an error', async () => {
   const store = new ReminderStore(':memory:', { now: () => new Date(at(23, 8)) });
   const tools = new CodexTools({ settings: () => ({ lang: 'en' }), reminders: store });
   const row = store.add({ text: 'x', schedule: { kind: 'once', date: '2026-11-24', at: '10:00' } });
   store.cancel(row.id);
-  const call = args => tools.run('capri_reminder', { operation: 'list', id: 0, text: '', schedule: '', requestEvidence: 'change reminder 1 to 11:00', ...args },
+  const call = args => tools.run('stella_reminder', { operation: 'list', id: 0, text: '', schedule: '', requestEvidence: 'change reminder 1 to 11:00', ...args },
     { text: 'change reminder 1 to 11:00', check: () => {}, signal: new AbortController().signal });
   assert.match((await call({ operation: 'update', id: row.id, schedule: JSON.stringify({ kind: 'daily', at: '11:00' }) })).error, /active/);
   assert.match((await call({ operation: 'cancel', id: row.id })).error, /active/);
@@ -231,7 +231,7 @@ test('a reminder firing while the session is locked is held, silent, and shown w
 });
 
 test('a pending occurrence survives a restart and is re-delivered once, as missed, until Done or Snooze', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-reminder-wiring-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-reminder-wiring-'));
   const file = path.join(dir, 'reminders.sqlite');
   try {
     let r = rig({ file });

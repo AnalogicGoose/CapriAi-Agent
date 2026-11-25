@@ -44,7 +44,7 @@ function installedShortcuts() {
       if(entry.isDirectory()){walk(file,root,depth+1);continue;}
       if(!entry.isFile()||path.extname(entry.name).toLowerCase()!=='.lnk')continue;
       const label=path.basename(entry.name,'.lnk');
-      if(/uninstall|desinstal|powershell|command prompt|terminal|registry|regedit|reset|restore|cleanup|update|installer|setup|capri/i.test(label))continue;
+      if(/uninstall|desinstal|powershell|command prompt|terminal|registry|regedit|reset|restore|cleanup|update|installer|setup|stella/i.test(label))continue;
       let real;try{real=fs.realpathSync(file);}catch{continue;}
       if(!real.toLowerCase().startsWith(root.toLowerCase()+path.sep))continue;
       rows.push({label:label.slice(0,100),file:real,id:crypto.createHash('sha256').update(real).digest('hex').slice(0,12)});

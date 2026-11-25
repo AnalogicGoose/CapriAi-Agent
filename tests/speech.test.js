@@ -199,7 +199,7 @@ test('commands mode starts the engine without any download',async()=>{
 test('WhisperEngine.start({download:false}) never calls ensureRuntime',async()=>{
   const {WhisperEngine}=require('../src/main/whisper-engine');
   let ensures=0;
-  const engine=new WhisperEngine({runtimeDir:path.join(require('node:os').tmpdir(),'capri-no-runtime'),ensure:async()=>{ensures++;throw Error('speech-download-failed');},probe:()=>null});
+  const engine=new WhisperEngine({runtimeDir:path.join(require('node:os').tmpdir(),'stella-no-runtime'),ensure:async()=>{ensures++;throw Error('speech-download-failed');},probe:()=>null});
   await assert.rejects(engine.start(()=>{},{download:false}),/speech-unavailable/);
   assert.equal(ensures,0);
   assert.equal(engine.installed(),false);
@@ -210,9 +210,9 @@ test('commands mode hears the wake word and hands off to the wake flow; other sp
   try{
     assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).ok,true);await tick();
     const slot=f.speech.current;
-    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[0].resolve('capri is nice');await tick();
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[0].resolve('stella is nice');await tick();
     assert.equal(JSON.stringify(f.events).includes('nice'),false,'no address: discarded');
-    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[1].resolve('Hey Capri, open Firefox');await tick();
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[1].resolve('Hey Stella, open Firefox');await tick();
     assert.deepEqual(f.events.at(-1),{id:'commands-0001',type:'wake',text:'open Firefox',complete:true});
     assert.equal(slot.mode,'dictation');assert.equal(slot.wakeActivated,true);assert.equal(slot.segmenter.maxSamples,20*16000);
     assert.ok(slot.timeout,'the dictation limit applies as in wake mode');
@@ -225,7 +225,7 @@ test('commands mode ignores the wake word while wake listening is not allowed',a
   try{
     assert.equal(f.speech.start({id:'commands-0001',mode:'commands'}).ok,true);await tick();
     const slot=f.speech.current;
-    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[0].resolve('Hey Capri, open Firefox');await tick();
+    f.speech.enqueue(slot,Buffer.alloc(4000));f.jobs[0].resolve('Hey Stella, open Firefox');await tick();
     assert.equal(f.events.some(event=>event.type==='wake'||'text' in event),false);
     assert.equal(slot.mode,'commands');
   }finally{f.speech.cancel();}

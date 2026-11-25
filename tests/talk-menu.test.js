@@ -28,8 +28,8 @@ test('launcher opens synchronously, clamps to screen, hits only circles and forw
     querySelector: selector => selector === 'button' ? buttons[0] : greeting,
     querySelectorAll: () => buttons, contains: () => false,
     addEventListener: (event, handler) => { handlers[event] = handler; } };
-  const capri = { wake() {}, head: () => ({ x: 795, top: 15, y: 30 }), view: { w: 800, h: 600 }, hit: () => false };
-  const menu = new TalkMenu({ el, capri, host: { focusOverlay: value => focus.push(value) }, language: () => 'en',
+  const stella = { wake() {}, head: () => ({ x: 795, top: 15, y: 30 }), view: { w: 800, h: 600 }, hit: () => false };
+  const menu = new TalkMenu({ el, stella, host: { focusOverlay: value => focus.push(value) }, language: () => 'en',
     onChoose: (...args) => chosen.push(args) });
   menu.show();
   assert.equal(menu.visible, true); assert.ok(greeting.textContent);
@@ -47,9 +47,9 @@ test('launcher opens synchronously, clamps to screen, hits only circles and forw
   assert.equal(menu.visible, false); assert.equal(chosen[0][0], 'voice'); assert.ok(chosen[0][1]);
   assert.deepEqual(focus, [true], 'Opening voice preserves focus so a synthetic blur cannot cancel the microphone');
   menu.toggle(); events.keydown({ key: 'Escape', preventDefault() {} }); assert.equal(menu.visible, false);
-  menu.toggle(); capri.dragging = true; menu.place(); assert.equal(menu.visible, false);
+  menu.toggle(); stella.dragging = true; menu.place(); assert.equal(menu.visible, false);
   assert.equal(focus.at(-1), true, 'Hiding the launcher for pickup must preserve pointer capture instead of blurring');
   const focusChanges = focus.length;
-  capri.dragging = false; capri.fullscreen = true; menu.toggle(); assert.equal(menu.visible, false);
+  stella.dragging = false; stella.fullscreen = true; menu.toggle(); assert.equal(menu.visible, false);
   assert.equal(focus.length, focusChanges, 'Fullscreen does not open or focus the launcher');
 });

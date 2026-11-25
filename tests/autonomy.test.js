@@ -47,10 +47,10 @@ test('bounded attempts, cooldown and silence prevent a background inference loop
 });
 test('the background tool boundary rejects commands and mutations even when the model asks for them', async () => {
   const calls = [];
-  const tools = observationTools({ specs: () => ['capri_screen', 'capri_context', 'capri_input', 'capri_approval', 'capri_memory_change', 'capri_memory_lookup'].map(name => ({ name })),
+  const tools = observationTools({ specs: () => ['stella_screen', 'stella_context', 'stella_input', 'stella_approval', 'stella_memory_change', 'stella_memory_lookup'].map(name => ({ name })),
     run: name => { calls.push(name); return { observed: true }; }, endTurn() {} });
-  assert.deepEqual(tools.specs().map(row => row.name), ['capri_screen', 'capri_context', 'capri_memory_lookup']);
-  for (const name of ['capri_input', 'capri_approval', 'capri_memory_change', 'shell']) assert.throws(() => tools.run(name, {}, {}), /Background actions/);
+  assert.deepEqual(tools.specs().map(row => row.name), ['stella_screen', 'stella_context', 'stella_memory_lookup']);
+  for (const name of ['stella_input', 'stella_approval', 'stella_memory_change', 'shell']) assert.throws(() => tools.run(name, {}, {}), /Background actions/);
   assert.deepEqual(calls, []);
-  assert.deepEqual(tools.run('capri_screen', {}, {}), { observed: true });
+  assert.deepEqual(tools.run('stella_screen', {}, {}), { observed: true });
 });

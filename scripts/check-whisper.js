@@ -1,7 +1,7 @@
 'use strict';
 const path=require('node:path'),fs=require('node:fs'),assert=require('node:assert/strict');
 const {WhisperEngine}=require('../src/main/whisper-engine');
-const root=path.resolve(__dirname,'..'),dir=path.join(root,'.caprigpt-local','speech-check');
+const root=path.resolve(__dirname,'..'),dir=path.join(root,'.stella-local','speech-check');
 fs.mkdirSync(dir,{recursive:true});
 async function fixture(dataset,config,split,name,textKey){
   const wav=path.join(dir,name+'.wav'),meta=path.join(dir,name+'.json');
@@ -42,7 +42,7 @@ function pcm16(wav){
   return pcm;
 }
 (async()=>{
-  const engine=new WhisperEngine({runtimeDir:path.join(root,'.caprigpt-local','speech-runtime')});
+  const engine=new WhisperEngine({runtimeDir:path.join(root,'.stella-local','speech-runtime')});
   try{
     const english=pcm16(await fixture('hf-internal-testing/librispeech_asr_dummy','clean','validation','recorded-english','text'));
     const spanish=pcm16(await fixture('PolyAI/minds14','es-ES','train','recorded-spanish','transcription'));

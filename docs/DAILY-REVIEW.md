@@ -1,6 +1,6 @@
 # Daily reflection from saved evidence
 
-Daily reviews connect Capri's existing goals, project notes, check receipts and
+Daily reviews connect Stella's existing goals, project notes, check receipts and
 resume points into a brief local recap. Ask **What did we do today?**, use
 `/review today`, or open **PC awareness > Daily reviews > Review today**.
 
@@ -25,14 +25,14 @@ device's local calendar day. It waits for the same availability gates as compani
 conversation: no foreground work, locked/suspended session, fullscreen, game mode,
 open chat, active dictation or unavailable overlay. Companion conversations and
 the agent must also be enabled. Saved records must have changed that day; visiting
-apps or leaving Capri running is not evidence of project progress.
+apps or leaving Stella running is not evidence of project progress.
 
 Automatic generation is limited to one opportunity per local day across projects,
 with twenty-hour minimum spacing. A durable cadence record prevents repeated
 generation after restart, clearing reviews or moving the clock backwards. Missed
 days are not queued. No new timer, model inference, screen capture or PC action is
 added. The recap is a local evidence synthesis; Codex can phrase it naturally when
-you ask in normal conversation through `capri_daily_review`.
+you ask in normal conversation through `stella_daily_review`.
 
 **Offer the daily recap** is off by default. Enabling it permits one short generic
 notification during an eligible automatic opportunity; it contains no project

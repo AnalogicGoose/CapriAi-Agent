@@ -208,13 +208,13 @@ test('loop survives bad dt and speech levels, and pauses drawing when hidden', a
 
 test('agent activity holds and music pulse', async () => {
   const { stella, step } = await make();
-  stella.agentActivity({ tool: 'capri_approval', phase: 'start' });
+  stella.agentActivity({ tool: 'stella_approval', phase: 'start' });
   step();
   assert.ok(stella.motions.busy(stella.now()));
-  stella.agentActivity({ tool: 'capri_approval', phase: 'end', ok: true });
+  stella.agentActivity({ tool: 'stella_approval', phase: 'end', ok: true });
   step(500);
   assert.ok(!stella.motions.busy(stella.now()));
-  stella.agentActivity({ tool: 'capri_apps', op: 'play_music', phase: 'end', ok: true });
+  stella.agentActivity({ tool: 'stella_apps', op: 'play_music', phase: 'end', ok: true });
   step(100, 10);
   assert.ok((stella.motions.update(stella.now()).musicPulse || 0) > 0);
   step(1000, 46);
@@ -491,12 +491,12 @@ test('reduced motion drag follows the pointer 1:1 and drops exactly', async () =
 
 test('perform only releases a hold it started', async () => {
   const { stella, step } = await make();
-  stella.agentActivity({ tool: 'capri_point', phase: 'start' });
+  stella.agentActivity({ tool: 'stella_point', phase: 'start' });
   step();
   stella.perform('point'); // refused: the agent's blade is already held
   step(100, 20);
   assert.ok(stella.motions.update(stella.now()).aim > 0.99, 'agent aim still held');
-  stella.agentActivity({ tool: 'capri_point', phase: 'end', ok: true });
+  stella.agentActivity({ tool: 'stella_point', phase: 'end', ok: true });
   step(100, 10);
   assert.ok(!(stella.motions.update(stella.now()).aim > 0));
   stella.perform('point');
@@ -506,7 +506,7 @@ test('perform only releases a hold it started', async () => {
 
 test('music pulse does not make her busy', async () => {
   const { stella, step } = await make();
-  stella.agentActivity({ tool: 'capri_apps', op: 'play_music', phase: 'end', ok: true });
+  stella.agentActivity({ tool: 'stella_apps', op: 'play_music', phase: 'end', ok: true });
   step(100, 10);
   assert.ok(stella.motions.update(stella.now()).musicPulse > 0);
   assert.equal(stella.busy, false);
@@ -522,12 +522,12 @@ test('act never reports a motion the mixer killed', async () => {
 
 test('a lost agent end does not leave her thinking', async () => {
   const { stella, step } = await make();
-  stella.agentActivity({ tool: 'capri_unknown', phase: 'start' });
+  stella.agentActivity({ tool: 'stella_unknown', phase: 'start' });
   step();
   assert.equal(stella.blend.mode, 'think');
   step(1000, 61);
   assert.equal(stella.blend.mode, 'idle', 'stale after 60 s');
-  stella.agentActivity({ tool: 'capri_unknown', phase: 'start' });
+  stella.agentActivity({ tool: 'stella_unknown', phase: 'start' });
   step();
   assert.equal(stella.blend.mode, 'think');
   stella.setMode('idle');
@@ -702,7 +702,7 @@ test('C#2 a 2 s grace before wandering after each pause', async () => {
     speak: s => [() => { s.speechLevel = 0.5; }, () => { s.speechLevel = 0; }],
     listen: s => [() => { s.listenUntil = s.now() + 3000; }, () => {}],
     think: s => { s.setChatThinking(true); return [() => {}, () => s.setChatThinking(false)]; },
-    agent: s => { s.agentActivity({ tool: 'capri_unknown', phase: 'start' }); return [() => {}, () => s.agentActivity({ tool: 'capri_unknown', phase: 'end', ok: true })]; },
+    agent: s => { s.agentActivity({ tool: 'stella_unknown', phase: 'start' }); return [() => {}, () => s.agentActivity({ tool: 'stella_unknown', phase: 'end', ok: true })]; },
   };
   for (const [name, begin] of Object.entries(pauses)) {
     const { stella, step, clock } = await make({ random: lcg(27) });

@@ -40,7 +40,7 @@ function fixture({ allowed = () => true, keep, render, yieldFocus, onDrawn } = {
   const scene = () => state.scenes.at(-1);
   return { session, state, tick, scene };
 }
-// Tool-format marks: every field present, empty values mean "none" (see the capri_draw description).
+// Tool-format marks: every field present, empty values mean "none" (see the stella_draw description).
 const tgt = (type, value, extra = {}) => ({ type, id: type === 'control' ? value : '', text: type === 'text' ? value : '', nth: 0,
   snapshotId: '', x: 0, y: 0, width: 0, height: 0, ...extra });
 const mark = (id, kind, target, more = {}) => ({ id, kind, target, to: [], text: '', ...more });
@@ -191,12 +191,12 @@ test('a rejected render is logged once and never thrown into timers', async t =>
   assert.match(String(errors.mock.calls[0].arguments[0]), /guide/i);
 });
 
-test('tool descriptions for capri_draw stay within budget', async () => {
+test('tool descriptions for stella_draw stay within budget', async () => {
   const calls = [];
   const guide = { draw: async (args, c) => { calls.push([args, c]); return { drawn: 1, failed: [] }; } };
   let enabled = true;
   const tools = new CodexTools({ settings: () => ({}), guide, screen: { enabled: () => enabled } });
-  const spec = tools.specs().find(row => row.name === 'capri_draw');
+  const spec = tools.specs().find(row => row.name === 'stella_draw');
   assert.ok(spec);
   assert.ok(Buffer.byteLength(spec.description) <= 450, `${Buffer.byteLength(spec.description)} bytes`);
   assert.deepEqual(spec.inputSchema.required, ['marks', 'cards', 'clear']);
@@ -206,16 +206,16 @@ test('tool descriptions for capri_draw stay within budget', async () => {
   };
   walk(spec.inputSchema);
   enabled = false;
-  assert.equal(tools.specs().some(row => row.name === 'capri_draw'), false);
-  assert.equal(new CodexTools({ settings: () => ({}), screen: { enabled: () => true } }).specs().some(row => row.name === 'capri_draw'), false);
+  assert.equal(tools.specs().some(row => row.name === 'stella_draw'), false);
+  assert.equal(new CodexTools({ settings: () => ({}), screen: { enabled: () => true } }).specs().some(row => row.name === 'stella_draw'), false);
 
   const check = () => {}, signal = new AbortController().signal;
   const args = { marks: [], cards: [], clear: true };
-  assert.deepEqual(await tools.execute('capri_draw', args, { check, signal }), { drawn: 1, failed: [] });
+  assert.deepEqual(await tools.execute('stella_draw', args, { check, signal }), { drawn: 1, failed: [] });
   assert.equal(calls[0][0], args);
   assert.equal(calls[0][1].check, check);
   assert.equal(calls[0][1].signal, signal);
-  await assert.rejects(tools.execute('capri_draw', { marks: [], cards: [] }, { check, signal }), /Invalid Stella tool arguments/);
+  await assert.rejects(tools.execute('stella_draw', { marks: [], cards: [] }, { check, signal }), /Invalid Stella tool arguments/);
 });
 
 test('a draw right after typing in her own window yields focus, then draws on the window behind', async () => {

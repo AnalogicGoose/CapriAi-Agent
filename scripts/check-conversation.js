@@ -18,7 +18,7 @@ const { packConversation, cost } = require('../src/main/conversation-context');
       { role: 'user', content: 'Can you help plan a small portfolio website?' },
       { role: 'assistant', content: 'Sure, choom. Maybe someday we will reach that satellite.' },
       { role: 'user', content: 'Give me three concrete first steps for building the portfolio. Keep it practical.' },
-    ], check: answer => { assert.doesNotMatch(answer, /satellite|orbit|capricorn/i); assert.ok(answer.length > 120); } },
+    ], check: answer => { assert.doesNotMatch(answer, /satellite|orbit|stellacorn/i); assert.ok(answer.length > 120); } },
     { name: 'older constraints and newer correction', history: (() => {
       const history = [
         { role: 'user', content: 'Our project is Orchid. The budget is 430 quetzales. We need it offline, with no subscription.' },
@@ -61,7 +61,7 @@ const { packConversation, cost } = require('../src/main/conversation-context');
     console.log(JSON.stringify(result));
     scenario.check(answer);
   }
-  const output = path.join(__dirname, '../.caprigpt-local/conversation-check');
+  const output = path.join(__dirname, '../.stella-local/conversation-check');
   fs.mkdirSync(output, { recursive: true });
   fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify(results, null, 2));
   console.log('PASS: real local Qwen conversation checks.');

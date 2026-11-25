@@ -1,6 +1,6 @@
 # Speech to text
 
-Restart Capri to load the new speech engine. The old Windows desktop recognizer
+Restart Stella to load the new speech engine. The old Windows desktop recognizer
 has been replaced by local **Whisper large-v3-turbo**, with Silero voice activity
 detection and GPU acceleration when available.
 
@@ -28,7 +28,7 @@ There is no fallback to the old Windows recognizer.
 ## Local runtime
 
 This checkout has the runtime and models installed under ignored
-`.caprigpt-local/speech-runtime/`. The model is approximately 574 MB; the NVIDIA
+`.stella-local/speech-runtime/`. The model is approximately 574 MB; the NVIDIA
 runtime is approximately 685 MB compressed. The user's RTX 5070 Ti was tested with
 GPU inference. An official CPU build is included as a compatibility fallback.
 
@@ -37,7 +37,7 @@ On first microphone use, missing runtime/model files download from official
 whisper.cpp GitHub releases and the linked Hugging Face model repositories. All
 archives and weights are pinned to SHA-256 digests and verified before use.
 Downloads carry model files only, never microphone audio. No speech model runs
-just because Capri starts.
+just because Stella starts.
 
 Recognized audio is processed by a hidden whisper.cpp process bound only to
 127.0.0.1, on a fresh local port and random private request path. Audio travels
@@ -84,7 +84,7 @@ connectivity for the initial model download. Already-installed models work offli
   are exercised together. Run `node scripts/check-whisper.js` first to cache the
   public audio fixture. The user's actual microphone is not opened.
 
-Recent local results are in `.caprigpt-local/speech-check/whisper-results.json`.
+Recent local results are in `.stella-local/speech-check/whisper-results.json`.
 Recorded English and Spanish, quieter/interfered English and silence checks passed;
 GPU transcription took about 0.2–0.3 seconds per tested speech clip after warm-up.
 Those are small fixture checks, not a general accuracy benchmark or a guarantee

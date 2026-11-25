@@ -1,7 +1,7 @@
 @echo off
 cd /d "%~dp0"
 if not exist "%~dp0node_modules\electron\dist\electron.exe" (
-  echo Capri dependencies are missing. Run npm.cmd ci in this folder first.
+  echo Stella dependencies are missing. Run npm.cmd ci in this folder first.
   pause
   exit /b 1
 )

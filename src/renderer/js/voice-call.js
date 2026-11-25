@@ -3,7 +3,7 @@ import { speechDetector } from './speech-detector.js';
 
 const clean = text => String(text || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '')
   .replace(/\[\[[\s\S]*?(\]\]|$)/g, '').trim();
-const goodbye = /^(?:cancel|never ?mind|stop listening|end (?:the )?call|goodbye(?: capri)?|cancelar|cancela|deja de escuchar|termina (?:la )?llamada|adios)[.!?]*$/i;
+const goodbye = /^(?:cancel|never ?mind|stop listening|end (?:the )?call|goodbye(?: stella)?|cancelar|cancela|deja de escuchar|termina (?:la )?llamada|adios)[.!?]*$/i;
 const CHECK_IN_SETUP_MS = 6000;
 const CHECK_IN_IDLE_MS = 12_000;
 const ECHO_SETTLE_MS = 120;
@@ -16,7 +16,7 @@ function isEcho(reply, line) {
     (heard.split(' ').length >= 2 && ` ${prompt} `.includes(` ${heard} `))));
 }
 
-// Voice turns share Capri's backend/history, but never create a chat surface.
+// Voice turns share Stella's backend/history, but never create a chat surface.
 export class VoiceCall {
   constructor({ host, speaker, indicator, history, onStart = async () => {}, onEnd = () => {}, onPromote = () => {},
     onThinking = () => {},
@@ -142,7 +142,7 @@ export class VoiceCall {
     }
     this.confirmSpeech(this.audioPlaying ? this.checkIn?.options.text : '', this.echoTailAt);
   }
-  // A detector can hear Capri through the speakers. Pause the current audio
+  // A detector can hear Stella through the speakers. Pause the current audio
   // clock briefly, then require speech to continue after the echo has faded.
   probeSpeech(holdAudio) {
     if (this.echoProbe) return;

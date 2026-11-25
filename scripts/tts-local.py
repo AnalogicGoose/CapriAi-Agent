@@ -1,4 +1,4 @@
-"""One isolated synthesis job; Capri kills the process on interruption to release VRAM."""
+"""One isolated synthesis job; Stella kills the process on interruption to release VRAM."""
 import json
 import os
 import sys

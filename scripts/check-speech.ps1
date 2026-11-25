@@ -1,7 +1,7 @@
 # Real offline recognition test using synthesized audio, not the user's microphone.
 $ErrorActionPreference = 'Stop'
 $speechRoot = Split-Path $PSScriptRoot -Parent
-$speechOut = Join-Path $speechRoot '.caprigpt-local/speech-check'
+$speechOut = Join-Path $speechRoot '.stella-local/speech-check'
 New-Item -ItemType Directory -Path $speechOut -Force | Out-Null
 Add-Type -AssemblyName System.Speech
 $speechWave = Join-Path $speechOut 'known-speech.wav'

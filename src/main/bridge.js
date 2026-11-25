@@ -40,7 +40,7 @@ function readJson(req) {
 function createBridge({ port, onDebug, integrationToken, onCodexEvent, onIntegrationStatus }) {
   const server = http.createServer(async (req, res) => {
     // Browsers always send an Origin header on cross-site requests; hooks never do.
-    // Refusing those keeps random web pages from puppeting Capri.
+    // Refusing those keeps random web pages from puppeting Stella.
     if (req.headers.origin) return send(res, 403, { ok: false });
 
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -62,7 +62,7 @@ function createBridge({ port, onDebug, integrationToken, onCodexEvent, onIntegra
     }
 
     if (req.method === 'GET' && url.pathname === '/health') {
-      return send(res, 200, { ok: true, name: 'capri', pid: process.pid });
+      return send(res, 200, { ok: true, name: 'stella', pid: process.pid });
     }
 
     if (onDebug && url.pathname.startsWith('/debug/')) {
@@ -79,13 +79,13 @@ function createBridge({ port, onDebug, integrationToken, onCodexEvent, onIntegra
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`[capri] port ${port} already in use, notifications will not reach this instance`);
+      console.error(`[stella] port ${port} already in use, notifications will not reach this instance`);
     } else {
-      console.error('[capri] bridge error:', err.message);
+      console.error('[stella] bridge error:', err.message);
     }
   });
 
-  server.listen(port, '127.0.0.1', () => console.log(`[capri] listening on 127.0.0.1:${port}`));
+  server.listen(port, '127.0.0.1', () => console.log(`[stella] listening on 127.0.0.1:${port}`));
   return server;
 }
 

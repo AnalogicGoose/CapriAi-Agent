@@ -8,7 +8,7 @@ const { runtimeInfo } = require('../src/main/runtime-info');
 const { environmentBlock, startHiddenOllama } = require('../src/main/hidden-ollama');
 
 test('runtime identity distinguishes a current build from files changed since startup', t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-build-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-build-'));
   t.after(() => fs.rmSync(root, { force: true, recursive: true }));
   fs.mkdirSync(path.join(root, 'src'));
   fs.writeFileSync(path.join(root, 'package.json'), '{"version":"0.4.0"}');

@@ -8,7 +8,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { CompanionGoals } = require('../src/main/companion-goals');
 
 function fixture(t, { legacy = false } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-project-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-project-'));
   const a = path.join(dir, 'alpha'), b = path.join(dir, 'beta'), file = path.join(dir, 'goals.sqlite');
   fs.mkdirSync(a); fs.mkdirSync(b);
   let cfg = { privacy: { memoryEnabled: true } }, at = 1_000_000, store;

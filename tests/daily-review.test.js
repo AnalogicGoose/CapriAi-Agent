@@ -11,7 +11,7 @@ const { dayRange } = require('../src/main/daily-review');
 const { dayKey } = require('../src/main/companion-interests');
 
 function fixture(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-review-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-review-'));
   const a = path.join(dir, 'alpha'), b = path.join(dir, 'beta');
   fs.mkdirSync(a); fs.mkdirSync(b);
   let at = new Date(2026, 10, 7, 18, 30).getTime(), cfg = { privacy: { memoryEnabled: true } }, goals;
@@ -167,13 +167,13 @@ test('Codex daily recap tool uses real local evidence and respects end-user memo
   const f = fixture(t); f.goals.route('/goals add Review the motion');
   const tools = new CodexTools({ goals: () => f.goals });
   const ctx = { text: 'What did we do today?', check() {}, signal: new AbortController().signal };
-  assert.ok(tools.specs().some(row => row.name === 'capri_daily_review'));
-  const result = await tools.run('capri_daily_review', { action: 'today', day: '' }, ctx);
+  assert.ok(tools.specs().some(row => row.name === 'stella_daily_review'));
+  const result = await tools.run('stella_daily_review', { action: 'today', day: '' }, ctx);
   assert.equal(result.review.groups.open[0].text, 'Review the motion');
-  await assert.rejects(tools.run('capri_daily_review', { action: 'forget', day: f.day }, ctx), /Invalid/);
+  await assert.rejects(tools.run('stella_daily_review', { action: 'forget', day: f.day }, ctx), /Invalid/);
   f.cfg({ privacy: { memoryEnabled: false } });
-  await assert.rejects(tools.run('capri_daily_review', { action: 'today', day: '' }, ctx), /disabled/);
-  assert.ok(!new CodexTools({}).specs().some(row => row.name === 'capri_daily_review'));
+  await assert.rejects(tools.run('stella_daily_review', { action: 'today', day: '' }, ctx), /disabled/);
+  assert.ok(!new CodexTools({}).specs().some(row => row.name === 'stella_daily_review'));
 });
 
 test('large multilingual recaps fit the tool byte limit without truncating saved records', async t => {

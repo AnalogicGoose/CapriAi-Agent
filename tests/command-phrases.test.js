@@ -21,7 +21,7 @@ test('command phrases in five languages map to the same commands', () => {
       for (const text of list) assert.equal(said(text), command, `${lang}: ${text}`);
     }
   }
-  assert.equal(said('Hey Capri, next'), 'next');
+  assert.equal(said('Hey Stella, next'), 'next');
   assert.equal(said('Hey Stella, next'), 'next');
   assert.equal(said('siguiente por favor'), 'next');
   for (const remark of ['what a nice day', 'next time remind me', 'I clicked it', 'please', 'stop the music', 'done with lunch soon', '', null, 42])
@@ -50,5 +50,5 @@ test('her display name is dropped as an address, from identity.js', () => {
   const { commandPhrase: phrase } = require('../src/main/command-phrases');
   assert.deepEqual(phrase(`${DISPLAY_NAME}, next`), { command: 'next' });
   const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/main/command-phrases.js'), 'utf8');
-  assert.ok(!/'capri'/i.test(src), 'no hard-coded name');
+  assert.ok(!/'stella'/i.test(src), 'no hard-coded name');
 });

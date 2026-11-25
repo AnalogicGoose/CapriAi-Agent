@@ -1,4 +1,4 @@
-// The transmission panel next to Capri, and the one-line ticker she wears while Claude works.
+// The transmission panel next to Stella, and the one-line ticker she wears while Claude works.
 
 import { clamp, ease, reducedMotion } from './util.js';
 import { renderRichText, plainText, partialText } from './rich-text.js';

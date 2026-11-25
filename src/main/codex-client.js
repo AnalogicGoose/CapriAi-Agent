@@ -13,7 +13,7 @@ class CodexClient {
   async start() {
     if (!this.executable) throw Error('Codex CLI was not found. Choose codex.exe in Connections.');
     const args = ['app-server', '--listen', 'stdio://'];
-    // The app server needs its local code-mode host to dispatch Capri's dynamic tools.
+    // The app server needs its local code-mode host to dispatch Stella's dynamic tools.
     const disabled = this.nativeTools ? ['hooks', 'memories', 'multi_agent']
       : ['shell_tool', 'unified_exec', 'apps', 'hooks', 'memories', 'multi_agent', 'view_image', 'remote_plugin', 'skill_search', 'workspace_dependencies'];
     for (const flag of disabled) {
@@ -49,7 +49,7 @@ class CodexClient {
       }
     });
     try {
-      await this.request('initialize', { clientInfo: { name: 'caprigpt', title: 'Capri', version: '0.4.0' },
+      await this.request('initialize', { clientInfo: { name: 'stella', title: 'Stella', version: '0.4.0' },
         capabilities: { experimentalApi: true } });
       this.send({ method: 'initialized', params: {} });
       return this;

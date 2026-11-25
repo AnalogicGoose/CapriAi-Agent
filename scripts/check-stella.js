@@ -8,14 +8,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const root = path.resolve(__dirname, '..');
-const output = path.join(root, '.caprigpt-local', 'stella-check');
+const output = path.join(root, '.stella-local', 'stella-check');
 fs.mkdirSync(output, { recursive: true });
 app.setPath('userData', path.join(output, 'profile'));
 const timeout = setTimeout(() => { console.error('Stella check timed out'); app.exit(1); }, 60000);
 const fail = message => { console.error('Stella check failed: ' + message); app.exit(1); };
-// The overlay page is served as in the app (capri://app/... -> this repo), so its CSP and modules behave the same.
+// The overlay page is served as in the app (stella://app/... -> this repo), so its CSP and modules behave the same.
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'capri', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: 'stella', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
 app.whenReady().then(async () => {
@@ -186,7 +186,7 @@ app.whenReady().then(async () => {
           return names.length + ' tiles ok (min off-center lit ' + (100 * minOuter).toFixed(1) + '%); idle t vs t+0.5s differs in ' + diff + ' channels; phase wrap ok at t up to 1e7 s; ripple+2pi*1e6 frame matches';
         });
 
-        // ---- section: trail (capri_draw: LED dots stream out toward the drawing) ----
+        // ---- section: trail (stella_draw: LED dots stream out toward the drawing) ----
         await section('trail', async () => {
           check(R3, 'renderer missing');
           const {buildScene, SceneClock} = await import('${url('scene.js')}');
@@ -349,7 +349,7 @@ const known = {
   cursor: async () => null,
   fullscreenState: async () => ({ active: false, revision: 0 }),
 };
-window.stellaCheck = { patches, listeners, capri: null };
+window.stellaCheck = { patches, listeners, stella: null };
 window.host = new Proxy({}, { get(_, key) {
   if (typeof key !== 'string') return undefined;
   if (Object.hasOwn(known, key)) return known[key];
@@ -364,15 +364,15 @@ window.host = new Proxy({}, { get(_, key) {
     win.webContents.on('console-message', e => { if (e.level === 'error') errors.push(String(e.message)); });
     win.webContents.on('preload-error', (_e, _p, error) => errors.push('preload: ' + error));
     win.webContents.on('render-process-gone', (_e, d) => errors.push('renderer gone: ' + d.reason));
-    if (!protocol.isProtocolHandled('capri')) {
-      protocol.handle('capri', request => {
+    if (!protocol.isProtocolHandled('stella')) {
+      protocol.handle('stella', request => {
         const url = new URL(request.url);
         const target = path.resolve(root, '.' + decodeURIComponent(url.pathname));
         if (url.host !== 'app' || !target.startsWith(root + path.sep)) return new Response('forbidden', { status: 403 });
         return net.fetch(pathToFileURL(target).toString());
       });
     }
-    await win.loadURL('capri://app/src/renderer/index.html');
+    await win.loadURL('stella://app/src/renderer/index.html');
     let r;
     try { r = await win.webContents.executeJavaScript(`(async () => {
       const S = window.stellaCheck, wait = ms => new Promise(res => setTimeout(res, ms));
@@ -380,8 +380,8 @@ window.host = new Proxy({}, { get(_, key) {
       const until = async (done, ms, what) => {
         for (const t0 = performance.now(); !done();) { if (performance.now() - t0 > ms) throw Error('timed out: ' + what); await wait(20); }
       };
-      await until(() => S.capri, 5000, 'Stella built by the page');
-      const c = S.capri, canvas = document.getElementById('stella-canvas'), notes = [];
+      await until(() => S.stella, 5000, 'Stella built by the page');
+      const c = S.stella, canvas = document.getElementById('stella-canvas'), notes = [];
       // non-blank pixels within 2 s (drawn and copied in one task, before the buffer is presented)
       const copy = () => {
         const k = document.createElement('canvas'); k.width = canvas.width; k.height = canvas.height;
@@ -398,19 +398,19 @@ window.host = new Proxy({}, { get(_, key) {
       }
       check(shot && shot.lit > 200, 'stella-canvas still blank after 2 s (' + (shot ? shot.lit : 0) + ' lit px; hidden=' + document.hidden + ' drawn=' + Boolean(c.drawn) + ' fold=' + c.fold + ' renderer=' + Boolean(c.renderer) + ' size=' + canvas.width + ')');
       notes.push('first lit frame ' + shot.lit + ' px');
-      await until(() => document.documentElement.dataset.caprigptReady === 'true', 5000, 'boot finished');
+      await until(() => document.documentElement.dataset.stellaReady === 'true', 5000, 'boot finished');
       await until(() => c.fold === 0, 2000, 'materialized');
       c.drawFrame(performance.now());
       const full = copy();
       check(full.lit > canvas.width * canvas.height * 0.1, 'materialized frame mostly blank (' + full.lit + ' lit px)');
       notes.push('materialized ' + full.lit + ' px');
-      check(c.hit(c.pos.x, c.pos.y), 'capri.hit false at her center');
+      check(c.hit(c.pos.x, c.pos.y), 'stella.hit false at her center');
       // her own agent searching the web: radar
       const act = S.listeners.onAgentActivity || [];
       check(act.length, 'no onAgentActivity listener');
-      for (const f of act) f({ tool: 'capri_apps', op: 'search_web', phase: 'start' });
+      for (const f of act) f({ tool: 'stella_apps', op: 'search_web', phase: 'start' });
       check(c.act && c.act.player.name === 'radar', 'agent search_web start: act ' + (c.act && c.act.player.name));
-      for (const f of act) f({ tool: 'capri_apps', op: 'search_web', phase: 'end', ok: true });
+      for (const f of act) f({ tool: 'stella_apps', op: 'search_web', phase: 'end', ok: true });
       notes.push('agent search_web -> radar');
       // a drag with synthetic pointer events moves her and saves the anchor
       const root = document.getElementById('stella'), from = { ...c.pos };

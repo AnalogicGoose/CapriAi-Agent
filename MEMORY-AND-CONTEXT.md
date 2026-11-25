@@ -1,4 +1,4 @@
-> **Settings update:** The native tray menu has been replaced by Capri’s custom control room. Right-click Capri or her tray icon. Memory and PC awareness have separate sections; appearance includes size and screen; sound has its own section; versions/restarts live in Updates & app. Legacy Claude integration and chat handoff have been removed.
+> **Settings update:** The native tray menu has been replaced by Stella’s custom control room. Right-click Stella or her tray icon. Memory and PC awareness have separate sections; appearance includes size and screen; sound has its own section; versions/restarts live in Updates & app. Legacy Claude integration and chat handoff have been removed.
 
 # Personal memory and PC context
 
@@ -6,7 +6,7 @@ This branch is an Electron/JavaScript assistant. There is no Python entry point
 or YAML planner here. Memory commands run before local Ollama chat, in Electron's
 main process. This implementation adds no cloud routing or paid API calls.
 
-Version 0.4.0 also fixes Ollama worker terminal flashes by starting Capri's own
+Version 0.4.0 also fixes Ollama worker terminal flashes by starting Stella's own
 loopback server on port 11435 with a hidden parent console. It shares downloaded
 models with the regular Ollama installation; it does not download another model
 or change the regular server. PC context remains a separate native Win32 path.
@@ -20,7 +20,7 @@ npm.cmd ci
 npm.cmd start
 ```
 
-Right-click Capri or her tray icon → **Memory & PC privacy**.
+Right-click Stella or her tray icon → **Memory & PC privacy**.
 **Enable personal memory** is off initially. Enable it to save or recall facts.
 **Offer conversational memories** is a separate opt-in. Requested saves, edits
 and individual removals run directly by default. **Review requested changes**
@@ -60,11 +60,11 @@ messages are skipped. No transcript or pending candidate is written to disk.
 
 ## Storage, retention, and deletion
 
-Confirmed facts live in `%APPDATA%\CapriGPT\personal-memory.sqlite`, outside the
+Confirmed facts live in `%APPDATA%\Stella\personal-memory.sqlite`, outside the
 repository. Each row has an ID, exact fact, source (`explicit`,
 `conversation-confirmed`, or `user-edit`), UTC creation, update and confirmation
 timestamps. Editing keeps the original creation time, replaces the text, and
-records new provenance and confirmation; Capri does not retain old versions.
+records new provenance and confirmation; Stella does not retain old versions.
 
 The database and JSON exports are **not encrypted**. They inherit local Windows
 folder access; anyone or any backup software with access to those files can read
@@ -75,7 +75,7 @@ is intentional.
 Retention defaults to **90 days from the last save/edit**. Choose 30 days, 90
 days, a year, or until deleted from the tray submenu. Expiry is enforced at
 startup, on setting changes, and before memory reads/writes/exports; there is no
-background retention job while Capri is closed. Recalling a fact does not renew
+background retention job while Stella is closed. Recalling a fact does not renew
 its lifetime. SQLite secure deletion is enabled; delete-all also vacuums the
 database. This does not erase exports, filesystem snapshots, backups, or copies
 previously sent anywhere else. Export includes every unexpired record, not just
@@ -92,7 +92,7 @@ never copied back into renderer history or the ChatGPT/Codex handoff. Ordinary
 messages that are not recognized as memory commands/candidates still use the
 existing ephemeral chat history. A user can manually repeat private facts in
 that conversation; forgetting a database record does not retroactively erase
-ordinary chat messages, model outputs or user-created handoffs. Restart Capri
+ordinary chat messages, model outputs or user-created handoffs. Restart Stella
 to clear the run's ephemeral conversation history.
 
 ## PC permissions and collection
@@ -108,16 +108,16 @@ settings and save confirmations.
 Each category can still be turned off. Turning **All apps** off enables the
 optional **Restricted app list**. Its **Choose from open apps…** picker discovers
 desktop app names on demand; only selected names are observed in this mode. The normalized
-`privacy.processAllowlist` in `%APPDATA%\CapriGPT\config.json` also accepts up to
+`privacy.processAllowlist` in `%APPDATA%\Stella\config.json` also accepts up to
 30 executable base names for other apps (restart after manual file edits).
 Window titles require both foreground observation and title observation, and can
 contain document names, URLs or other private information. They are capped at
-200 characters. When Capri's own chat has focus, the requested foreground app
-may be Capri itself. A missing foreground observation does not mean another app
+200 characters. When Stella's own chat has focus, the requested foreground app
+may be Stella itself. A missing foreground observation does not mean another app
 is closed.
 
 On Windows, direct Win32 calls through the pinned Koffi native dependency take
-each snapshot inside Capri. No PowerShell, script compiler or terminal helper
+each snapshot inside Stella. No PowerShell, script compiler or terminal helper
 is launched. The returned snapshot contains foreground information, process names,
 and power data; no process paths or command lines. Each OS provider is optional
 and fails independently. Batteryless desktops report a null battery percentage.
@@ -135,15 +135,15 @@ Revoking permissions filters/discards cached fields. Gaming mode blocks
 collection, drops event context, cancels chat and retains its existing model
 unload behavior.
 
-Questions such as “Capri, which apps are open rn?” return the permitted running
+Questions such as “Stella, which apps are open rn?” return the permitted running
 app names directly, without asking a model to interpret or invent them. These
 show desktop apps with windows. “Which processes are running?” also includes
 background process names. “Is Discord running?” and similarly named-app questions
 check process status directly. New apps require no catalogue entry. Windows may
 hide protected processes. Snapshots cap process names at 512 and desktop apps at
 256; a truncated process list is identified. In restricted mode, only allowlisted
-names are returned. With observation off or a failed provider, Capri reports that explicitly.
-The exact phrasing “whats openned in my pc capri?” is covered too, including its
+names are returned. With observation off or a failed provider, Stella reports that explicitly.
+The exact phrasing “whats openned in my pc stella?” is covered too, including its
 typo and common contractions, rather than falling back to a model refusal.
 Each relevant chat question collects only its requested categories: an app-list
 question does not collect titles, power or performance data. App-closing discovery
@@ -195,7 +195,7 @@ child-process launchers while exercising those reads. No real app is closed.
 The ignored `captures/personal-memory.png` is the app's own UI.
 
 For a manual check: enable memory, remember a harmless preference, cancel one
-save, restart Capri and recall the saved preference. Edit it, then forget its ID
+save, restart Stella and recall the saved preference. Edit it, then forget its ID
 and verify recall finds nothing. Toggle each PC permission and compare
 `/context`; disable titles while foreground remains on. Keep all PC permissions
 off for a command-only session. Nothing needs to be uploaded to test this.
@@ -217,7 +217,7 @@ Profile facts share the existing memory/recall switches, retention, edit,
 export, forget and delete-all behavior. Personal values are stored in the user's
 local SQLite database, never in tracked project source or a hardcoded persona.
 An authorized bootstrap manifest and pre-import database/config backup are kept
-under the ignored `.caprigpt-local/` folder. Backups are separate from live memory
+under the ignored `.stella-local/` folder. Backups are separate from live memory
 deletion. The default 90-day retention remains unchanged.
 
 Profile regression checks cover keyword-free recall, prompt limits, disabled

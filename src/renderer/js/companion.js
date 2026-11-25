@@ -1,5 +1,5 @@
 // Local decorative state. No desktop capture, background microphone or app actions.
-const KEY = 'capri.companion.v1';
+const KEY = 'stella.companion.v1';
 const MINUTE = 60000;
 const clamp = n => Math.max(0, Math.min(1, n));
 export function routineAt(date) {
@@ -8,8 +8,8 @@ export function routineAt(date) {
 }
 
 export class Companion {
-  constructor({ capri, host, storage, clock = () => new Date(), random = Math.random, reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches }) {
-    Object.assign(this, { capri, host, storage, clock, random, reduced });
+  constructor({ stella, host, storage, clock = () => new Date(), random = Math.random, reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches }) {
+    Object.assign(this, { stella, host, storage, clock, random, reduced });
     this.configure({});
     const now = clock().getTime();
     let saved;
@@ -48,9 +48,9 @@ export class Companion {
 
   get mood() {
     if (!this.options.personality) return 'calm';
-    if (this.capri.mode === 'work' || this.capri.chatThinking) return 'focused';
-    if (this.capri.mode === 'alert') return 'attentive';
-    if (this.capri.mode === 'sleep' || this.state.energy < 0.35) return 'sleepy';
+    if (this.stella.mode === 'work' || this.stella.chatThinking) return 'focused';
+    if (this.stella.mode === 'alert') return 'attentive';
+    if (this.stella.mode === 'sleep' || this.state.energy < 0.35) return 'sleepy';
     return this.state.warmth > 0.65 ? 'playful' : 'curious';
   }
 
@@ -63,7 +63,7 @@ export class Companion {
   }
 
   available() {
-    const c = this.capri;
+    const c = this.stella;
     return !['hidden', 'stowed', 'dormant', 'fullscreen', 'gaming', 'busy', 'dragging', 'chatThinking', 'pointing', 'sky'].some(k => c[k])
       && !c.act && !c.groundRest && c.mode === 'idle' && ['stand', 'sit', 'float'].includes(c.stance); // float: Stella
   }
@@ -84,7 +84,7 @@ export class Companion {
       this.state.routine = stamp;
       this.nextRoutine = now + MINUTE;
       this.save();
-      this.capri.perform({ morning: 'idleStretch', afternoon: 'idleListen', evening: 'idleBreathe', night: 'idleYawn' }[routineAt(date)]);
+      this.stella.perform({ morning: 'idleStretch', afternoon: 'idleListen', evening: 'idleBreathe', night: 'idleYawn' }[routineAt(date)]);
       return true;
     }
     if (this.options.surpriseAnimations && now >= this.nextSurprise) {
@@ -94,7 +94,7 @@ export class Companion {
       this.state.surprise = now;
       this.nextSurprise = Math.max(this.nextSurprise, now + 30 * MINUTE);
       this.save();
-      this.capri.perform(this.capri.stance === 'sit' ? 'split' : this.random() < 0.5 ? 'spin' : 'hop');
+      this.stella.perform(this.stella.stance === 'sit' ? 'split' : this.random() < 0.5 ? 'spin' : 'hop');
       return true;
     }
     return false;
@@ -102,13 +102,13 @@ export class Companion {
 
   pointer(x, y) {
     if (!this.options.cursorInteractions || !this.available() || this.reduced()) return false;
-    const now = this.clock().getTime(), h = this.capri.head();
+    const now = this.clock().getTime(), h = this.stella.head();
     if (Math.hypot(x - h.x, y - h.y) > 180) { this.hoverAt = null; return false; }
     if (this.hoverAt == null) this.hoverAt = now;
     if (now - this.hoverAt < 1200 || now < this.nextPointer) return false;
     this.nextPointer = now + 30000;
     this.interact();
-    this.capri.perform(this.mood === 'playful' ? 'idleWave' : 'idleListen', x < h.x ? -1 : 1);
+    this.stella.perform(this.mood === 'playful' ? 'idleWave' : 'idleListen', x < h.x ? -1 : 1);
     return true;
   }
 
@@ -118,7 +118,7 @@ export class Companion {
     const now = this.clock().getTime();
     if (!this.options.cursorInteractions || !this.available() || this.reduced() || !previous || previous === data.fg || now < this.nextDesktop) return;
     this.nextDesktop = now + MINUTE;
-    this.capri.perform('idleListen', this.capri.towardCenter());
+    this.stella.perform('idleListen', this.stella.towardCenter());
   }
 
   context() {
@@ -127,7 +127,7 @@ export class Companion {
   }
 
   async request(action) {
-    const c = this.capri;
+    const c = this.stella;
     if (action === 'help') return 'Try wave, dance, stretch, take a nap, wake up, come here, sit down, stand up, or how are you feeling. You can type or dictate, review, and Send.';
     if (action === 'mood') { this.evolve(); return `Feeling ${this.mood}. ${this.options.personality ? 'A little desktop ghost keeping you company.' : 'Personality changes are turned off.'}`; }
     if (['hidden', 'stowed', 'fullscreen', 'gaming', 'busy', 'dragging', 'chatThinking', 'pointing', 'sky'].some(k => c[k])

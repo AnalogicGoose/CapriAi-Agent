@@ -31,7 +31,7 @@ const DEFAULTS = {
   desktopActions: true,
   preferredBrowser: 'Firefox',
   crunchyrollProfile: 'Gabriel',
-  windowTracking: true, // decorative geometry only; restore Capri's window sitting
+  windowTracking: true, // decorative geometry only; restore Stella's window sitting
   agentEnabled: true,
   privacy: {}, // normalized by pc-context; PC awareness defaults on
   rememberRecentChat: false,
@@ -76,13 +76,13 @@ function load() {
     cache = { ...DEFAULTS, ...migrated, gamingMode: false };
     if (migrated !== saved || saved.gamingMode === true) {
       try { fs.writeFileSync(file(), JSON.stringify(cache, null, 2)); }
-      catch { console.error('[capri] Could not persist updated PC defaults.'); }
+      catch { console.error('[stella] Could not persist updated PC defaults.'); }
     }
   } catch {
     cache = { ...DEFAULTS, ...voiceSetup(path.resolve(__dirname, '../..'), migrateControlRoom(migratePcSettings())) };
     if (cache.ttsSetupId) {
       try { fs.mkdirSync(path.dirname(file()), { recursive: true }); fs.writeFileSync(file(), JSON.stringify(cache, null, 2)); }
-      catch { console.error('[capri] Could not persist prepared voice settings.'); }
+      catch { console.error('[stella] Could not persist prepared voice settings.'); }
     }
   }
   return cache;
@@ -94,7 +94,7 @@ function save(patch) {
     fs.mkdirSync(path.dirname(file()), { recursive: true });
     fs.writeFileSync(file(), JSON.stringify(cache, null, 2));
   } catch (err) {
-    console.error('[capri] could not save config:', err.message);
+    console.error('[stella] could not save config:', err.message);
   }
   return cache;
 }

@@ -1,4 +1,4 @@
-// Instant, local greetings. All actual conversation still uses Capri's AI.
+// Instant, local greetings. All actual conversation still uses Stella's AI.
 export const WELCOMES = {
   // These can appear without conversational context: keep care unconditional,
   // teasing light, and jealousy out of random greetings.

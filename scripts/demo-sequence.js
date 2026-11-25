@@ -33,5 +33,5 @@ module.exports = [
   [5200, done('Bash', { command: 'npm test -- gigs' }, 3100)],
   [1500, base('Stop', { last_assistant_message: "J'ai ajouté **GET /gigs** avec une pagination par curseur, et 6 tests passent. Le push est fait." })],
   // not a Claude event: starts the showcase once the done panel has been read
-  [9000, base('CapriShowcase')],
+  [9000, base('StellaShowcase')],
 ];

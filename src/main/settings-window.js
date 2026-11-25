@@ -42,7 +42,7 @@ function createSettingsWindow({ state, patch, action }) {
         window.setMenu(null);
         window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
         window.webContents.on('will-navigate', e => e.preventDefault());
-        window.loadURL('capri://app/src/renderer/settings.html');
+        window.loadURL('stella://app/src/renderer/settings.html');
         // If the page never reports (an error while drawing), still show it rather than nothing.
         window.webContents.once('did-finish-load', () => setTimeout(reveal, 1500));
         window.on('closed', () => { window = null; });

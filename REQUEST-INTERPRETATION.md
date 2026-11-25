@@ -9,7 +9,7 @@ checks that evidence against the actual message. Each tool still validates its
 arguments, permissions, target and outcome. Confirmations for consequential
 actions such as closing an app still use the native review.
 
-For example, **“You can talk again”** can unmute Capri, **“I need Firefox in front
+For example, **“You can talk again”** can unmute Stella, **“I need Firefox in front
 of me”** can open Firefox, and **“Let’s get back to the task we parked”** can resume
 a scoped saved task. **“Yes, that one”** can accept a specific proposal from the
 conversation. An ambiguous reference calls for a question. Local shortcuts and
@@ -35,7 +35,7 @@ trusted tools:
 
 Exact known app commands remain instant and can work without a model. Personal
 memory and PC-status commands retain their separate local routes. Ordinary chat
-returns to Capri's persona and full conversation context; the interpreter does
+returns to Stella's persona and full conversation context; the interpreter does
 not replace the character with a generic task classifier response.
 
 ## General mechanisms
@@ -71,7 +71,7 @@ addresses cannot be dispatched as direct URLs.
 
 Native browser dispatch uses an installed executable found in verified standard
 installation locations, with the public HTTPS URL as a separate argument and
-`shell: false`. Capri's default is its saved preferred browser (Firefox); `system` uses Electron's Windows URL opener. Firefox launches request `-new-tab` in the normal profile. It does not
+`shell: false`. Stella's default is its saved preferred browser (Firefox); `system` uses Electron's Windows URL opener. Firefox launches request `-new-tab` in the normal profile. It does not
 change the browser default, automate login, buy anything, control arbitrary
 desktop elements or verify a streaming player. A custom/portable installation
 outside discovered locations can require another browser or a future discovery
@@ -123,7 +123,7 @@ weights remain unloaded between requests under the existing Ollama policy.
   browser-constraint propagation, receipt and ordinary-chat fallback using an
   isolated profile and mocked model/search/launch effects.
 
-Restart Capri to load the updated main process and renderer. The existing
+Restart Stella to load the updated main process and renderer. The existing
 desktop shortcut launches this checkout; no new API key is needed.
 
 Validated locally: 113 automated tests passed, along with the eight-request

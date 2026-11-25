@@ -24,10 +24,10 @@ Status legend: **U** = automated unit test (mocked), **W** = real Windows run (h
 ## Not changed / open
 - The password-control exclusion and real invoke/set-value paths still need a manual pass.
 - `npm run test:desktop` (Electron smoke) was not run.
-- Native-resolution capture was reasoned from the Electron API and verified only by unit tests plus the OCR helper; run Capri on the desktop to confirm.
+- Native-resolution capture was reasoned from the Electron API and verified only by unit tests plus the OCR helper; run Stella on the desktop to confirm.
 
 ## Running the real-OCR test
-`$env:CAPRI_REAL_OCR='1'; npm test` (PowerShell). It is skipped by default: the first CI run of it failed on the GitHub runner (log not available to diagnose), so it is opt-in until it can be made deterministic there.
+`$env:STELLA_REAL_OCR='1'; npm test` (PowerShell). It is skipped by default: the first CI run of it failed on the GitHub runner (log not available to diagnose), so it is opt-in until it can be made deterministic there.
 
 ## Real-desktop check (`npm run test:windows-desktop`)
 Opens a fixture window on every display and exercises the real overlay, real screen capture and real Windows OCR. It needs an interactive Windows session and is not part of CI.
@@ -45,7 +45,7 @@ Automated: guide schema, scene layout, target resolution, the walkthrough state 
 |---|---|---|---|
 | Walkthrough, Windows Settings | "How do I change my refresh rate?": Settings → Display → Advanced display → refresh rate, one ring and card per step, Next/Back/Repeat/Stop by voice and on the card, the done line at the end, her body comes over on each step | M | Not run |
 | Explanation, browser | Ask her to explain a browser settings page (e.g. Chrome or Firefox privacy settings): marks land on the named controls, the drawing clears on a new request or when the page changes | M | Not run |
-| Borderless game, Gaming mode | Gaming mode on, a borderless-windowed game in front, "Hey Capri, show me how to change the graphics quality": the guide layer appears over the game menu, her body and panel stay hidden, commands-only listening works, the layer closes at the end and fullscreen hiding resumes | M | Not run |
+| Borderless game, Gaming mode | Gaming mode on, a borderless-windowed game in front, "Hey Stella, show me how to change the graphics quality": the guide layer appears over the game menu, her body and panel stay hidden, commands-only listening works, the layer closes at the end and fullscreen hiding resumes | M | Not run |
 | Exclusive fullscreen game | A game in exclusive fullscreen: asking for a guide draws nothing; she says once that it needs borderless window mode (not again until the game leaves fullscreen) and helps by voice. Detection reads the shell's Direct3D exclusive-mode state (`SHQueryUserNotificationState` = 3); note which games are missed (OpenGL/Vulkan exclusive, fullscreen-optimized D3D) | M | Not run |
 | Two monitors, mixed scaling | Monitors at 100% and 150%: a walkthrough on each display, and an app dragged across mid-step; rings sit on their controls and the card stays beside the window | M | Not run |
 | Capture privacy | Print Screen (and Snipping Tool) while a ring and card are shown: the guide marks do not appear in the capture (content protection) | M | Not run |

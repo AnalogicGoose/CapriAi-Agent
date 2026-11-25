@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { EVENTS } = require('../src/main/codex-events');
-const MARK = 'caprigpt-codex-hook.js';
+const MARK = 'stella-codex-hook.js';
 function file() { return path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'hooks.json'); }
 function read(target) {
   if (!fs.existsSync(target)) return {};
@@ -31,16 +31,16 @@ function configure(remove = false) {
       if (!Array.isArray(group.hooks)) throw Error(`Invalid ${event} handler; nothing changed`);
       return { ...group, hooks: group.hooks.filter((handler) => !own(handler)) };
     }).filter((group) => group.hooks.length);
-    if (!remove) data.hooks[event].push({ hooks: [{ type: 'command', command, async: event !== 'SessionEnd', timeout: 2, statusMessage: 'Notify Capri locally' }] });
+    if (!remove) data.hooks[event].push({ hooks: [{ type: 'command', command, async: event !== 'SessionEnd', timeout: 2, statusMessage: 'Notify Stella locally' }] });
     if (!data.hooks[event].length) delete data.hooks[event];
   }
   const content = JSON.stringify(data, null, 2) + '\n';
   if (fs.existsSync(target) && fs.readFileSync(target, 'utf8') === content) return { file: target, changed: false };
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  const backup = fs.existsSync(target) ? `${target}.caprigpt-backup-${Date.now()}` : null;
+  const backup = fs.existsSync(target) ? `${target}.stella-backup-${Date.now()}` : null;
   if (backup) fs.copyFileSync(target, backup, fs.constants.COPYFILE_EXCL);
-  fs.writeFileSync(`${target}.caprigpt-tmp`, content, { flag: 'wx' });
-  fs.renameSync(`${target}.caprigpt-tmp`, target);
+  fs.writeFileSync(`${target}.stella-tmp`, content, { flag: 'wx' });
+  fs.renameSync(`${target}.stella-tmp`, target);
   return { file: target, backup, changed: true, needsTrustReview: !remove };
 }
 if (require.main === module) {

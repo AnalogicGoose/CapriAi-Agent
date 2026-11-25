@@ -1,6 +1,6 @@
 'use strict';
 
-// Research diagnostic, not Capri's runtime backend. It never starts a thread,
+// Research diagnostic, not Stella's runtime backend. It never starts a thread,
 // generates a reply, invokes a tool, changes login or reads credential files.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -9,7 +9,7 @@ const { StringDecoder } = require('node:string_decoder');
 
 function findExecutable(explicit, env = process.env) {
   const name = process.platform === 'win32' ? 'codex.exe' : 'codex';
-  const candidates = [explicit, env.CAPRIGPT_CODEX_EXE,
+  const candidates = [explicit, env.STELLA_CODEX_EXE,
     env.CODEX_ELECTRON_RESOURCES_PATH && path.join(env.CODEX_ELECTRON_RESOURCES_PATH, name),
     ...(env.PATH || '').split(path.delimiter).filter(Boolean).map(dir => path.join(dir, name))];
   return candidates.find(file => typeof file === 'string' && path.isAbsolute(file)
@@ -90,7 +90,7 @@ async function probe(executable, { spawnProcess = spawn, timeoutMs = 12000 } = {
   const timer = setTimeout(() => { fail(Error('Codex diagnostic timed out.')); proc.kill(); }, timeoutMs);
   try {
     const initialized = await request('initialize', {
-      clientInfo: { name: 'caprigpt_research', title: 'Capri read-only research', version: '0.1.0' },
+      clientInfo: { name: 'stella_research', title: 'Stella read-only research', version: '0.1.0' },
       capabilities: { experimentalApi: true },
     });
     send({ method: 'initialized', params: {} });

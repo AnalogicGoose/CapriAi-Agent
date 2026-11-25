@@ -6,11 +6,11 @@
 
 const native = require('./native-windows');
 
-// never these: the desktop itself, Windows' own pieces, her (Capri), Codex and
+// never these: the desktop itself, Windows' own pieces, her (Stella), Codex and
 // Ollama (she talks through it)
 const KEEP = new Set([
   'explorer', 'applicationframehost', 'textinputhost', 'shellexperiencehost', 'startmenuexperiencehost',
-  'searchhost', 'searchapp', 'lockapp', 'dwm', 'capri', 'caprigpt', 'codex', 'chatgpt', 'electron', 'ollama', 'ollama app',
+  'searchhost', 'searchapp', 'lockapp', 'dwm', 'stella', 'stella', 'codex', 'chatgpt', 'electron', 'ollama', 'ollama app',
 ]);
 
 // [{ name, process, ids }]: one per program with a window open ("AM Music", "Discord"...)

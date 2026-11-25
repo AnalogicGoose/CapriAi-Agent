@@ -14,27 +14,27 @@ const APP_FLARE = new Set(['open_url', 'open_app', 'open_workspace', 'open_media
 const APP_RADAR = new Set(['search_web', 'search_news', 'steam_deals']);
 
 const AGENT = {
-  capri_close_app: 'fold',
-  capri_screen: 'scan', capri_context: 'scan', capri_point_on_snapshot: 'scan',
-  capri_input: 'ticks', capri_desktop_step: 'ticks', capri_control: 'ticks', capri_window_controls: 'ticks',
-  capri_routine_step: 'ticks',
-  capri_point: 'aim', capri_walkthrough: 'aim', capri_draw: 'trail', capri_reminder: 'swirlIn',
-  capri_memory_learn: 'swirlIn', capri_memory_change: 'swirlIn', capri_project_change: 'swirlIn',
-  capri_routines_save: 'swirlIn', capri_topic_recap: 'swirlIn',
-  capri_memory_lookup: 'swirlOut', capri_project_lookup: 'swirlOut', capri_routines_lookup: 'swirlOut',
-  capri_curiosity_lookup: 'swirlOut', capri_settings_read: 'swirlOut', capri_saved_work: 'swirlOut',
-  capri_daily_review: 'swirlOut',
-  capri_approval: 'approval',
-  capri_settings_change: 'pulse', capri_routines_delete: 'pulse', capri_body: 'pulse',
+  stella_close_app: 'fold',
+  stella_screen: 'scan', stella_context: 'scan', stella_point_on_snapshot: 'scan',
+  stella_input: 'ticks', stella_desktop_step: 'ticks', stella_control: 'ticks', stella_window_controls: 'ticks',
+  stella_routine_step: 'ticks',
+  stella_point: 'aim', stella_walkthrough: 'aim', stella_draw: 'trail', stella_reminder: 'swirlIn',
+  stella_memory_learn: 'swirlIn', stella_memory_change: 'swirlIn', stella_project_change: 'swirlIn',
+  stella_routines_save: 'swirlIn', stella_topic_recap: 'swirlIn',
+  stella_memory_lookup: 'swirlOut', stella_project_lookup: 'swirlOut', stella_routines_lookup: 'swirlOut',
+  stella_curiosity_lookup: 'swirlOut', stella_settings_read: 'swirlOut', stella_saved_work: 'swirlOut',
+  stella_daily_review: 'swirlOut',
+  stella_approval: 'approval',
+  stella_settings_change: 'pulse', stella_routines_delete: 'pulse', stella_body: 'pulse',
 };
 
 // The AI's own built-in tools (src/main/native-activity.js).
 const NATIVE = { native_web_search: 'radar', native_file_change: 'ticks', native_image_view: 'scan', native_tool: 'think' };
 
 export function motionForAgentTool(tool, op) {
-  if (tool === 'capri_apps') return APP_RADAR.has(op) ? 'radar' : 'flare';
-  // Desktop steps that open or look something up are the same as capri_apps; the rest are clicks and typing.
-  if (tool === 'capri_desktop_step' && (APP_RADAR.has(op) || APP_FLARE.has(op))) return APP_RADAR.has(op) ? 'radar' : 'flare';
+  if (tool === 'stella_apps') return APP_RADAR.has(op) ? 'radar' : 'flare';
+  // Desktop steps that open or look something up are the same as stella_apps; the rest are clicks and typing.
+  if (tool === 'stella_desktop_step' && (APP_RADAR.has(op) || APP_FLARE.has(op))) return APP_RADAR.has(op) ? 'radar' : 'flare';
   if (tool === 'native_command') return op === 'launch' ? 'flare' : 'ticks';
   if (Object.hasOwn(NATIVE, tool)) return NATIVE[tool];
   return Object.hasOwn(AGENT, tool) ? AGENT[tool] : 'think';

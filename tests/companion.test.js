@@ -9,13 +9,13 @@ async function fixture({saved, random = () => 0} = {}) {
   const {Companion} = await load();
   let now = new Date(2026, 9, 30, 8).getTime();
   const acts = [], writes = [];
-  const capri = {mode:'idle', stance:'stand', head:() => ({x:100,y:100}), towardCenter:()=>1,
+  const stella = {mode:'idle', stance:'stand', head:() => ({x:100,y:100}), towardCenter:()=>1,
     perform:(name)=>acts.push(name), wake(){this.mode='idle';this.dormant=false;}, setMode(mode){this.mode=mode;},
     async summon(cursor){this.summoned=cursor;}};
   const storage = {getItem:()=>saved || null, setItem:(key,value)=>writes.push(value)};
-  const companion = new Companion({capri, host:{cursor:async()=>({inside:true,x:300,y:200})}, storage,
+  const companion = new Companion({stella, host:{cursor:async()=>({inside:true,x:300,y:200})}, storage,
     clock:()=>new Date(now), random, reduced:()=>false});
-  return {companion,capri,acts,writes,advance:ms=>now+=ms,setDate:date=>now=date.getTime()};
+  return {companion,stella,acts,writes,advance:ms=>now+=ms,setDate:date=>now=date.getTime()};
 }
 
 test('daily routine uses local phases, runs once per phase and survives a restart', async()=>{
@@ -42,9 +42,9 @@ test('surprises are rare, rate limited across restarts and never burst after blo
 
 test('autonomous behavior respects every protected state, preferences and reduced motion',async()=>{
   for(const field of ['hidden','stowed','dormant','fullscreen','gaming','busy','dragging','chatThinking','pointing','sky','act','groundRest']) {
-    const f=await fixture();f.capri[field]=true;f.advance(3600000);assert.equal(f.companion.tick(),false,field);assert.deepEqual(f.acts,[]);
+    const f=await fixture();f.stella[field]=true;f.advance(3600000);assert.equal(f.companion.tick(),false,field);assert.deepEqual(f.acts,[]);
   }
-  for(const mode of ['work','alert','sleep']) {const f=await fixture();f.capri.mode=mode;f.advance(3600000);f.companion.tick();assert.equal(f.acts.length,0);}
+  for(const mode of ['work','alert','sleep']) {const f=await fixture();f.stella.mode=mode;f.advance(3600000);f.companion.tick();assert.equal(f.acts.length,0);}
   const f=await fixture();f.advance(3600000);f.companion.reduced=()=>true;f.companion.tick();assert.equal(f.acts.length,0);
   f.companion.reduced=()=>false;f.companion.configure({dailyRoutine:false,surpriseAnimations:false});f.companion.tick();assert.equal(f.acts.length,0);
 });
@@ -54,7 +54,7 @@ test('mood evolves gently, is bounded, persists and neutralizes when disabled',a
   assert.equal(f.companion.state.energy,1);assert.equal(f.companion.state.warmth,0);
   for(let i=0;i<15;i++)f.companion.interact();assert.equal(f.companion.mood,'playful');
   assert.ok(f.companion.state.warmth<=1);assert.ok(f.writes.length);
-  f.capri.mode='work';assert.equal(f.companion.mood,'focused');f.capri.mode='idle';
+  f.stella.mode='work';assert.equal(f.companion.mood,'focused');f.stella.mode='idle';
   f.setDate(new Date(2026,9,31,1));f.companion.evolve();assert.equal(f.companion.mood,'sleepy');
   f.companion.configure({personality:false});assert.equal(f.companion.mood,'calm');
   f.companion.storage={setItem(){throw Error('unavailable');}};assert.doesNotThrow(()=>f.companion.save());
@@ -71,20 +71,20 @@ test('pointer dwell and foreground reactions have cooldowns, use geometry only a
 
 test('action requests execute locally, respect pause, recover wake and recheck asynchronous cursor results',async()=>{
   const f=await fixture();await f.companion.request('dance');assert.deepEqual(f.acts,['idleBounce']);
-  await f.companion.request('nap');assert.equal(f.capri.mode,'sleep');await f.companion.request('wake');assert.equal(f.capri.mode,'idle');
-  f.capri.gaming=true;assert.match(await f.companion.request('wave'),/finish/);assert.equal(f.acts.length,1);f.capri.gaming=false;
-  f.companion.host.cursor=async()=>{f.capri.gaming=true;return {inside:true,x:1,y:1};};
-  await f.companion.request('come');assert.equal(f.capri.summoned,undefined);
-  f.capri.gaming=false;f.companion.reduced=()=>true;await f.companion.request('dance');assert.equal(f.acts.length,1);
-  f.capri.dormant=true;await f.companion.request('wake');assert.equal(f.capri.dormant,false);
+  await f.companion.request('nap');assert.equal(f.stella.mode,'sleep');await f.companion.request('wake');assert.equal(f.stella.mode,'idle');
+  f.stella.gaming=true;assert.match(await f.companion.request('wave'),/finish/);assert.equal(f.acts.length,1);f.stella.gaming=false;
+  f.companion.host.cursor=async()=>{f.stella.gaming=true;return {inside:true,x:1,y:1};};
+  await f.companion.request('come');assert.equal(f.stella.summoned,undefined);
+  f.stella.gaming=false;f.companion.reduced=()=>true;await f.companion.request('dance');assert.equal(f.acts.length,1);
+  f.stella.dormant=true;await f.companion.request('wake');assert.equal(f.stella.dormant,false);
 });
 
 test('typed and reviewed voice transcripts share strict local command routing',async()=>{
   const {companionRequest,Chat}=await import(uri(source('chat.js').replace("import { welcomePicker } from './welcome.js';", "const welcomePicker=()=>()=>'Hey. What is on your mind?';").replace("import { pick, fmt } from './util.js';",'const pick=x=>x[0],fmt=x=>x;')));
-  for(const [text,action] of [['Capri, could you wave please?','wave'],['baila','dance'],['estírate','stretch'],['take a nap','nap'],['wake up','wake'],['ven aquí','come'],['how are you feeling?','mood'],['/actions','help']])assert.equal(companionRequest(text),action);
+  for(const [text,action] of [['Stella, could you wave please?','wave'],['baila','dance'],['estírate','stretch'],['take a nap','nap'],['wake up','wake'],['ven aquí','come'],['how are you feeling?','mood'],['/actions','help']])assert.equal(companionRequest(text),action);
   for(const text of ['do not dance','what if I say wave?','tell me how to dance','make Firefox dance','"wave"','wave and close Firefox'])assert.equal(companionRequest(text),null,text);
   let routed=0,executed=0,reply,busy;
-  const chat=new Chat({capri:{companion:{async request(action){executed++;assert.equal(action,'wave');return 'Hi!';}}},
+  const chat=new Chat({stella:{companion:{async request(action){executed++;assert.equal(action,'wave');return 'Hi!';}}},
     panel:{setChatBusy:value=>busy=value,chatTurn(){},stream:text=>reply=text},brain:{},voice:{},
     host:{onChatDelta(){},personalRoute(){routed++;throw Error('Gesture must not need a model');}}});
   chat.open=true;await chat.send('wave');assert.equal(executed,1);assert.equal(routed,0);assert.equal(reply,'Hi!');assert.equal(busy,false);assert.equal(chat.turn,0);
@@ -98,16 +98,16 @@ test('all companion toggles cross the settings boundary as booleans only',()=>{
 });
 
 test('Stella floats: she is available, and a local "come here" goes to her body (not refused)',async()=>{
-  const f=await fixture();f.capri.stance='float';
+  const f=await fixture();f.stella.stance='float';
   assert.equal(f.companion.available(),true,'float counts as available');
   f.advance(60001);assert.equal(f.companion.tick(),true,'daily routine gestures run (Stella maps them to a breath)');
-  const calls=[];f.capri.bodyAction=async(action,options)=>{calls.push([action,options]);return 'done';};
+  const calls=[];f.stella.bodyAction=async(action,options)=>{calls.push([action,options]);return 'done';};
   assert.equal(await f.companion.request('come'),'Here I am.');
   assert.deepEqual(calls,[['come',{cursor:{inside:true,x:300,y:200}}]]);
-  assert.equal(f.capri.summoned,undefined,'not the old summon path');
-  f.capri.bodyAction=async()=>'I’m tucked away right now — bring me back first.';
+  assert.equal(f.stella.summoned,undefined,'not the old summon path');
+  f.stella.bodyAction=async()=>'I’m tucked away right now — bring me back first.';
   assert.match(await f.companion.request('come'),/tucked away/,'her honest reply passes through');
-  const old=await fixture();old.capri.stance='float';delete old.capri.bodyAction;
-  assert.equal(await old.companion.request('come'),'Here I am.');assert.ok(old.capri.summoned,'summon without a body action');
+  const old=await fixture();old.stella.stance='float';delete old.stella.bodyAction;
+  assert.equal(await old.companion.request('come'),'Here I am.');assert.ok(old.stella.summoned,'summon without a body action');
   assert.equal(f.companion.reply('wave'),'Hi! A little wave for you.');assert.equal(f.companion.reply('come'),null);
 });

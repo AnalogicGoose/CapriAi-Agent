@@ -68,7 +68,7 @@ test('closing an app ignores unrelated background processes with the same name',
 });
 
 test('speech archives are extracted by Windows tar in a separate process, into the bin folder', async t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'capri-unpack-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-unpack-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const calls = [];
   const bin = path.join(dir, 'bin');
@@ -88,7 +88,7 @@ test('Codex cannot turn a bare app question into a launch or a confirmation', as
   const f = launcher();
   const tools = new CodexTools({ settings: () => ({}), actions: f.runner,
     confirm: () => assert.fail('A question must not ask to launch an app') });
-  await assert.rejects(tools.run('capri_desktop_step', { tool: 'open_app', query: 'Firefox', index: 0, browser: '' },
+  await assert.rejects(tools.run('stella_desktop_step', { tool: 'open_app', query: 'Firefox', index: 0, browser: '' },
     { text: 'Firefox?', check() {}, signal: new AbortController().signal }), /not a request to launch/);
   assert.deepEqual(f.opened, []);
 });
@@ -173,7 +173,7 @@ test('memory review replaces an open Codex chat and can return to Codex without 
     hide() { hidden++; const old = this.current; this.current = null; old?.onLeave?.(); },
     say(msg) { if (this.current?.chat) return false; this.current = msg; return true; },
   };
-  chat = new Chat({ panel, capri: { wake() {}, perform() {}, towardCenter: () => 1 }, voice: {},
+  chat = new Chat({ panel, stella: { wake() {}, perform() {}, towardCenter: () => 1 }, voice: {},
     brain: { t: { chat: { hello: ['Hello'], again: ['Back'] } } },
     host: { onChatDelta() {}, focusOverlay() {}, chatStop() { stopped++; }, chatStatus: async () => { checks++; return { ok: true, model: 'codex-test' }; } },
   });

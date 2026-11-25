@@ -64,7 +64,7 @@ class SpeechOutput {
     if (!['windows', 'chatterbox', 'f5'].includes(cfg.ttsEngine)) return { ok: false, error: 'Invalid voice engine.' };
     let dir, child;
     try {
-      dir = await fs.mkdtemp(path.join(os.tmpdir(), 'capri-tts-'));
+      dir = await fs.mkdtemp(path.join(os.tmpdir(), 'stella-tts-'));
       const file = path.join(dir, 'request.json'), output = path.join(dir, 'speech.wav');
       await fs.writeFile(file, JSON.stringify({ ttsEngine: cfg.ttsEngine, ttsDevice: cfg.ttsDevice, ttsReference: cfg.ttsReference, ttsReferenceText: cfg.ttsReferenceText, text, output }), 'utf8');
       if (epoch !== this.epoch) return { ok: false, error: 'cancelled' };

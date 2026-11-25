@@ -46,7 +46,7 @@ test('unfinished test activity cannot keep a real completed task looking busy', 
 
 test('installer preserves unrelated hooks, backs up, is idempotent and removes only its own handlers', () => {
   const before = process.env.CODEX_HOME;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'caprigpt-hook-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-hook-test-'));
   process.env.CODEX_HOME = dir;
   try {
     const target = path.join(dir, 'hooks.json');
@@ -78,7 +78,7 @@ test('real hook process delivers to authenticated local bridge with no permissio
   const server = createBridge({ port: 0, onEvent: () => {}, integrationToken: token, onCodexEvent: (event) => state.accept(event), onIntegrationStatus: () => state.snapshot() });
   await once(server, 'listening');
   const port = server.address().port;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'caprigpt-bridge-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stella-bridge-test-'));
   const connection = path.join(dir, 'integration.json');
   fs.writeFileSync(connection, JSON.stringify({ port, token }));
   try {
@@ -87,8 +87,8 @@ test('real hook process delivers to authenticated local bridge with no permissio
     assert.equal((await fetch(`http://127.0.0.1:${port}/integration/status`)).status, 403);
     const origin = await fetch(`http://127.0.0.1:${port}/integration/codex`, { method: 'POST', headers: { origin: 'https://example.com', authorization: `Bearer ${token}` }, body: '{}' });
     assert.equal(origin.status, 403);
-    const child = spawn(process.execPath, [path.resolve(__dirname, '../hooks/caprigpt-codex-hook.js'), '--test'],
-      { env: { ...process.env, CAPRIGPT_CONNECTION_FILE: connection }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [path.resolve(__dirname, '../hooks/stella-codex-hook.js'), '--test'],
+      { env: { ...process.env, STELLA_CONNECTION_FILE: connection }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     const finished = once(child, 'exit');
