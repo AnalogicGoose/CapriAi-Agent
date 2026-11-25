@@ -109,11 +109,24 @@ app.whenReady().then(async () => {
           const n = 10, d = c.getContext('2d').getImageData(c.width / 2 - n / 2, c.height / 2 - n / 2, n, n).data;
           let m = 0; for (let i = 3; i < d.length; i += 4) m = Math.max(m, d[i]); return m;
         };
+        // Share of pixels with alpha > 40 in the annulus 0.2s..0.46s: blades, sticks,
+        // dots and LED glow only (the globe never reaches it), so a blank finish fails.
+        const outerLit = c => {
+          const w = c.width, d = c.getContext('2d').getImageData(0, 0, w, w).data;
+          let n = 0, lit = 0;
+          for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) {
+            const r = Math.hypot(x + 0.5 - w / 2, y + 0.5 - w / 2) / w;
+            if (r < 0.2 || r > 0.46) continue;
+            n++; if (d[(y * w + x) * 4 + 3] > 40) lit++;
+          }
+          return lit / n;
+        };
         await section('renderer', async () => {
           const {StellaRenderer} = await import('${url('renderer.js')}');
           const {MOTIONS} = await import('${url('motions.js')}');
           R3 = new StellaRenderer(rcv); R3.setSize(S, 1); G3 = rcv.getContext('webgl2');
           check(G3, 'no webgl2 context');
+          let minOuter = 1;
           const names = ['idle', ...MODES3, ...Object.keys(MOTIONS)], cols = 6, lab = 14;
           const gal = document.createElement('canvas');
           gal.width = cols * S; gal.height = Math.ceil(names.length / cols) * (S + lab);
@@ -125,6 +138,8 @@ app.whenReady().then(async () => {
             check(err === G3.NO_ERROR, names[i] + ': gl error ' + err);
             const ca = centerAlpha(c);
             check(ca > 40, names[i] + ': center region transparent (max alpha ' + ca + ')');
+            const ol = outerLit(c); minOuter = Math.min(minOuter, ol);
+            check(ol > 0.08, names[i] + ': finish pass looks blank off-center (lit ' + (100 * ol).toFixed(1) + '%)');
             const x = (i % cols) * S, y = Math.floor(i / cols) * (S + lab);
             gx.drawImage(c, x, y + lab); gx.fillText(names[i], x + 4, y + 11);
           }
@@ -136,7 +151,33 @@ app.whenReady().then(async () => {
           const pa = pixels(snap(a.scene, a.t).c), pb = pixels(snap(b.scene, b.t).c);
           let diff = 0; for (let i = 0; i < pa.length; i++) if (Math.abs(pa[i] - pb[i]) > 8) diff++;
           check(diff > pa.length * 0.005, 'idle frames t and t+0.5s barely differ: ' + diff);
-          return names.length + ' tiles ok; idle t vs t+0.5s differs in ' + diff + ' channels';
+          // Long sessions: shader phases are wrapped on the CPU and must match the unwrapped math.
+          const {sheenPhases} = await import('${url('finish.js')}');
+          const {wrapPhase} = await import('${url('gl.js')}');
+          const ph = new Float64Array(3), sh = {speed: 0.45, stepped: false};
+          for (const T of [1.25, 3600.7, 86400 * 3 + 0.31, 1e7 + 0.123]) {
+            sheenPhases(T, sh, ph);
+            check(ph[0] >= 0 && ph[0] < 2 * Math.PI && ph[2] >= 0 && ph[2] < 1.4, 'phase out of range at ' + T);
+            const f = Math.fround;
+            check(Math.abs(Math.sin(f(ph[0])) - Math.sin(23 * T)) < 1e-5, 'sin 23t mismatch at ' + T);
+            check(Math.abs(Math.sin(f(ph[1])) - Math.sin(3.1 * T)) < 1e-5, 'sin 3.1t mismatch at ' + T);
+            const pos = (T * 0.45) % 1.4;
+            check(Math.abs(f(ph[2]) - pos) < 1e-5 || Math.abs(Math.abs(f(ph[2]) - pos) - 1.4) < 1e-5, 'sheen pos mismatch at ' + T);
+            check(Math.abs(Math.sin(f(wrapPhase(3 * T, 2 * Math.PI))) - Math.sin(3 * T)) < 1e-5, 'sin 3t mismatch at ' + T);
+          }
+          // A frame 30 days in still draws cleanly, and shifting the ripple by whole
+          // turns (2pi*1e6) leaves the frame unchanged, so the wrap is seamless.
+          const far = await render('idle');
+          far.scene.globe.ripple += 2 * Math.PI * 1e6;
+          const fs = snap(far.scene, 86400 * 30 + far.t);
+          check(fs.err === G3.NO_ERROR && outerLit(fs.c) > 0.08 && centerAlpha(fs.c) > 40, 'far-future frame (t=30 days) broken');
+          const near = snap(far.scene, far.t);
+          const ripA = pixels(near.c);
+          far.scene.globe.ripple -= 2 * Math.PI * 1e6;
+          const ripB = pixels(snap(far.scene, far.t).c);
+          let rd = 0; for (let i = 0; i < ripA.length; i++) if (Math.abs(ripA[i] - ripB[i]) > 2) rd++;
+          check(rd < ripA.length * 0.001, 'ripple wrap by 2pi changed the frame: ' + rd + ' channels');
+          return names.length + ' tiles ok (min off-center lit ' + (100 * minOuter).toFixed(1) + '%); idle t vs t+0.5s differs in ' + diff + ' channels; phase wrap ok at t up to 1e7 s; ripple+2pi*1e6 frame matches';
         });
 
         // ---- section: perf (300 idle frames at s=150) ----
@@ -175,6 +216,13 @@ app.whenReady().then(async () => {
           R3.draw(scene, t);
           await lostEv;
           R3.draw(scene, t);
+          // A restore that fails (context still lost) keeps lost=true and logs once.
+          const errs = [], origErr = console.error;
+          console.error = (...a) => errs.push(a);
+          try { R3.onRestored(); R3.onRestored(); } finally { console.error = origErr; }
+          check(R3.lost, 'renderer not lost after a failed restore');
+          check(errs.length === 1, 'failed restore logged ' + errs.length + ' times, expected 1');
+          R3.warned = false;
           const back = wait('webglcontextrestored', 3000);
           ext.restoreContext();
           await back;

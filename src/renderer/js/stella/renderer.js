@@ -16,15 +16,24 @@ export class StellaRenderer {
     if (!this.gl) throw new Error('Stella: WebGL2 is not available');
     this.painter = new BodyPainter(Math.max(1, canvas.width || 1));
     this.onLost = e => { e.preventDefault(); this.#lost = true; this.finish = this.globe = null; };
-    this.onRestored = () => { this.#lost = false; this.#init(); };
+    this.onRestored = () => {
+      try {
+        this.#init();
+        this.#lost = false;
+      } catch (error) {
+        this.finish = this.globe = null;
+        if (!this.warned) { this.warned = true; console.error('Stella: WebGL restore failed', error); }
+      }
+    };
     canvas.addEventListener('webglcontextlost', this.onLost);
     canvas.addEventListener('webglcontextrestored', this.onRestored);
-    this.#init();
+    if (this.gl.isContextLost()) this.#lost = true;
+    else this.#init();
   }
 
   #init() {
     const gl = this.gl;
-    if (gl.isContextLost()) return;
+    if (gl.isContextLost()) throw new Error('context still lost');
     this.finish = new FinishPass(gl);
     this.globe = new GlobePass(gl);
   }

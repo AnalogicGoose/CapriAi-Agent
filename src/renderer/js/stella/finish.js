@@ -1,7 +1,7 @@
 // Pass 1 of Stella's WebGL finish: the painted body redrawn as fine round LEDs
 // sitting in a soft blurred glow, then the holo sheen, flicker and crisp edges
 // on the blades and sticks, read from the painter's shape mask.
-import {compile, makeTexture, upload, parseColor} from './gl.js';
+import {compile, makeTexture, upload, parseColor, wrapPhase} from './gl.js';
 import {P} from './params.js';
 
 const VS = `#version 300 es
@@ -17,7 +17,7 @@ uniform vec2 uSize, uCenter;
 uniform float uCell, uLim, uGlowA, uBlur, uLod, uLevels;
 uniform vec4 uUnlit, uEdge;
 uniform float uItem[8];
-uniform float uT, uSheen, uSpeed, uSeedStep, uFlick, uStepped, uBright, uWidth, uSheenA;
+uniform float uPh23, uPh31, uPos, uSheen, uSeedStep, uFlick, uWidth, uSheenA;
 uniform vec3 uCyan, uPink;
 out vec4 o;
 
@@ -64,10 +64,9 @@ void main() {
     }
     if (ok && m.a > 0.0) {
       int seed = clamp(int(floor(src.b * 8.0 + 0.5)), 0, 7);
-      float fs = float(seed), k = uBright * uItem[seed];
-      float fl = 1.0 + uFlick * sin(23.0 * uT + 7.0 * fs) * sin(3.1 * uT + fs);
-      float tt = uStepped > 0.5 ? floor(uT * 6.0) / 6.0 : uT;
-      float x = src.g - (mod(tt * uSpeed + fs * uSeedStep, 1.4) - 0.2);
+      float fs = float(seed), k = uItem[seed];   // item alpha already includes brightness
+      float fl = 1.0 + uFlick * sin(uPh23 + 7.0 * fs) * sin(uPh31 + fs);
+      float x = src.g - (mod(uPos + fs * uSeedStep, 1.4) - 0.2);
       // cyan -> pink band: ramps in over [-(w+0.02), -0.06], holds to 0.04, fades out by w.
       float a = uSheenA * smoothstep(-uWidth - 0.02, -0.06, x) * (1.0 - smoothstep(0.04, uWidth, x));
       vec3 c = mix(uCyan, uPink, smoothstep(-0.06, 0.04, x));
@@ -82,6 +81,18 @@ void main() {
 }`;
 
 const UNLIT = parseColor(P.led.unlit), EDGE = parseColor(P.sheen.edge);
+const TAU = Math.PI * 2;
+
+// Time-driven sheen phases, wrapped: [23t mod 2pi, 3.1t mod 2pi, (t'*speed) mod 1.4],
+// with t' stepped to 1/6 s while the sheen ticks. Writes into `out`.
+export function sheenPhases(t, sheen, out) {
+  const tt = sheen.stepped ? Math.floor(t * 6) / 6 : t;
+  out[0] = wrapPhase(23 * t, TAU);
+  out[1] = wrapPhase(3.1 * t, TAU);
+  out[2] = wrapPhase(tt * sheen.speed, 1.4);
+  return out;
+}
+
 const CYAN = P.sheen.cyan.map(v => v / 255), PINK = P.sheen.pink.map(v => v / 255);
 
 export class FinishPass {
@@ -91,6 +102,7 @@ export class FinishPass {
     this.body = makeTexture(gl, gl.LINEAR, true);
     this.mask = makeTexture(gl, gl.NEAREST);
     this.items = new Float32Array(8);
+    this.ph = new Float64Array(3);
   }
 
   draw(scene, t, body, mask) {
@@ -114,13 +126,11 @@ export class FinishPass {
     gl.uniform1fv(u.uItem, this.items);
     const sh = scene.sheen;
     const amount = typeof sh.flickerAmount === 'number' ? sh.flickerAmount : (sh.flicker ? 1 : 0);
-    gl.uniform1f(u.uT, t);
+    sheenPhases(t, sh, this.ph);
+    gl.uniform1f(u.uPh23, this.ph[0]); gl.uniform1f(u.uPh31, this.ph[1]); gl.uniform1f(u.uPos, this.ph[2]);
     gl.uniform1f(u.uSheen, sh.enabled ? 1 : 0);
-    gl.uniform1f(u.uSpeed, sh.speed);
     gl.uniform1f(u.uSeedStep, sh.seedStep);
     gl.uniform1f(u.uFlick, (0.27 + 0.4 * (sh.flickerBoost || 0)) * amount);
-    gl.uniform1f(u.uStepped, sh.stepped ? 1 : 0);
-    gl.uniform1f(u.uBright, scene.brightness);
     gl.uniform1f(u.uWidth, P.sheen.width);
     gl.uniform1f(u.uSheenA, P.sheen.alpha);
     gl.uniform3fv(u.uCyan, CYAN); gl.uniform3fv(u.uPink, PINK);

@@ -1,18 +1,18 @@
 // Pass 2 of Stella's WebGL finish: the see-through globe of dots (golden-spiral
 // points, rotated and rippled in the vertex shader) and the soft inner light.
-import {compile, parseColor} from './gl.js';
+import {compile, parseColor, wrapPhase} from './gl.js';
 import {P} from './params.js';
 
 const DOT_VS = `#version 300 es
 in vec3 aP;
 uniform vec2 uSize, uCenter;
-uniform float uR, uYaw, uPitch, uWavy, uRipple, uT, uScan, uSizeK, uMinR, uFade;
+uniform float uR, uYaw, uPitch, uWavy, uRipple, uPh3, uScan, uSizeK, uMinR, uFade;
 uniform vec3 uFront, uBack;
 out vec4 vCol;
 out float vRad, vBox;
 void main() {
   vec3 p = aP;
-  float band = 0.5 * sin(7.0 * p.y - uRipple) + 0.5 * sin(4.0 * atan(p.z, p.x) + 3.0 * uT);
+  float band = 0.5 * sin(7.0 * p.y - uRipple) + 0.5 * sin(4.0 * atan(p.z, p.x) + uPh3);
   float r = uR * (1.0 + uWavy * 0.13 * band);
   float cy = cos(uYaw), sy = sin(uYaw), cp = cos(uPitch), sp = sin(uPitch);
   float x = p.x * cy + p.z * sy, z = -p.x * sy + p.z * cy;
@@ -79,6 +79,7 @@ function spiral(n) {
   return out;
 }
 
+const TAU = Math.PI * 2;
 const POINTS = spiral(P.globePoints);
 const FRONT = parseColor(P.colors.globeFront).slice(0, 3), BACK = parseColor(P.colors.globeBack).slice(0, 3);
 const INNER = P.colors.inner.map(parseColor);
@@ -110,7 +111,8 @@ export class GlobePass {
       gl.uniform2f(u.uSize, W, H); gl.uniform2f(u.uCenter, cx, cy);
       gl.uniform1f(u.uR, g.r * k);
       gl.uniform1f(u.uYaw, g.yaw); gl.uniform1f(u.uPitch, g.pitch);
-      gl.uniform1f(u.uWavy, g.wavy); gl.uniform1f(u.uRipple, g.ripple); gl.uniform1f(u.uT, t);
+      gl.uniform1f(u.uWavy, g.wavy); // both phases enter sin() with coefficient 1, so wrapping by 2pi is seamless
+      gl.uniform1f(u.uRipple, wrapPhase(g.ripple, TAU)); gl.uniform1f(u.uPh3, wrapPhase(3 * t, TAU));
       gl.uniform1f(u.uScan, g.scan == null ? -1 : g.scan);
       gl.uniform1f(u.uSizeK, sc * 1.6 * k); gl.uniform1f(u.uMinR, dotMin * 0.8 * k);
       gl.uniform1f(u.uFade, Math.min(1, fade));

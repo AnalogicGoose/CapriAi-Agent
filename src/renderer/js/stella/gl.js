@@ -53,6 +53,10 @@ export function upload(gl, t, unit, source, premultiply) {
   if (t.mip) gl.generateMipmap(gl.TEXTURE_2D);
 }
 
+// x wrapped into [0, period). Shader phases are wrapped on the CPU (in doubles)
+// so float32 uniforms keep their precision however long Stella runs.
+export const wrapPhase = (x, period) => x - Math.floor(x / period) * period;
+
 // 'rgba(r,g,b,a)' or '#rrggbb' -> [r,g,b,a] in 0..1.
 export function parseColor(str) {
   const s = String(str).trim();
