@@ -8,8 +8,8 @@ function Wait-WindowsResult($operation, [Type]$type) {
 }
 
 try {
-    $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
     Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
     $engine = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]::TryCreateFromUserProfileLanguages()
     if (!$engine) { throw 'Windows OCR needs a text recognition language installed.' }
     $decoderType = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime]

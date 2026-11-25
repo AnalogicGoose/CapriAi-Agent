@@ -447,6 +447,14 @@ test('failed dynamic tool calls show the actual local error and preserve argumen
   assert.doesNotMatch(JSON.stringify(f.brain.lastDiagnostics), /arguments|query/);
 });
 
+test('a failed look at the screen does not tack a local tool error onto the answer', async () => {
+  const f = fixture('screen');
+  f.brain.tools.run = async () => { throw Error('No other app window is in front to inspect; explain from what you know instead.'); };
+  const result = await f.brain.chat('explain how to open settings in the Claude app');
+  assert.equal(f.brain.lastDiagnostics.errors[0].tool, 'capri_screen');
+  assert.doesNotMatch(result, /Local tool error/);
+});
+
 test('conversational song requests reach playback with the resolved track', async () => {
   const { ActionAgent } = require('../src/main/action-agent');
   const played = [], settings = () => ({ agentEnabled: true, desktopActions: true });

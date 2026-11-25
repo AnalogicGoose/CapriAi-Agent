@@ -15,9 +15,9 @@ const { DISPLAY_NAME } = require('./identity');
 // which zone ('ring' | 'card' | 'elsewhere') a press started in.
 const POLL_MS = 33;
 const RING_MARGIN = 8;
-const SETTLE_MS = 400;
+const SETTLE_MS = 150; // long enough for a menu or dialog to start opening; retries cover slower ones
 const RESOLVE_TIMEOUT_MS = 3000;
-const RESOLVE_RETRY_MS = 500;
+const RESOLVE_RETRY_MS = 250;
 const MAX_REPLANS = 2;
 const PAUSE_LIMIT_MS = 60000;
 const NEW_WINDOW_GRACE_MS = 2000;

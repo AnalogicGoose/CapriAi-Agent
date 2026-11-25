@@ -5,21 +5,56 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const helperCommands = new Map();
-function runWindowsHelper(script, request, signal) {
+const HELPER_TIMEOUT_MS = 6500;
+const SPARE_IDLE_MS = 60000;
+// Starting PowerShell and loading UI Automation costs ~350 ms. After each call one spare helper is started and left
+// waiting on stdin (it reads nothing until a request arrives), so back-to-back lookups such as walkthrough steps skip
+// that startup. An unused spare exits after a minute.
+const spares = new Map();
+
+function startHelper(script) {
   const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   if (!helperCommands.has(script)) helperCommands.set(script, Buffer.from(fs.readFileSync(path.join(__dirname, script), 'utf8'), 'utf16le').toString('base64'));
-  return new Promise((resolve, reject) => {
-    const child = execFile(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-MTA', '-EncodedCommand', helperCommands.get(script)],
-      { windowsHide: true, signal, timeout: 6500, maxBuffer: 256 * 1024, encoding: 'utf8' }, (error, stdout) => {
-        if (error) return reject(Error('The Windows desktop helper was interrupted or timed out. Inspect again to verify the current state.'));
-        try {
-          const result = JSON.parse(stdout);
-          if (result.error) throw Error(result.error);
-          resolve(result);
-        } catch (failure) { reject(failure); }
-      });
-    child.stdin.on('error', () => {});
-    child.stdin.end(JSON.stringify(request), 'utf8');
+  const helper = { exited: false, waiters: [] };
+  helper.done = new Promise(settle => {
+    helper.child = execFile(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-MTA', '-EncodedCommand', helperCommands.get(script)],
+      { windowsHide: true, maxBuffer: 256 * 1024, encoding: 'utf8' }, (error, stdout) => { helper.exited = true; settle({ error, stdout }); });
+  });
+  helper.child.stdin.on('error', () => {});
+  helper.child.on('error', () => {});
+  return helper;
+}
+
+function takeHelper(script) {
+  const spare = spares.get(script);
+  spares.delete(script);
+  if (spare) clearTimeout(spare.idle);
+  return spare && !spare.exited && spare.child.exitCode === null ? spare : (spare?.child.kill(), startHelper(script));
+}
+
+function keepSpare(script) {
+  if (spares.has(script)) return;
+  const spare = startHelper(script);
+  spare.idle = setTimeout(() => { if (spares.get(script) === spare) spares.delete(script); spare.child.kill(); }, SPARE_IDLE_MS);
+  spare.idle.unref?.();
+  spare.child.unref?.();
+  spares.set(script, spare);
+}
+
+function runWindowsHelper(script, request, signal) {
+  if (signal?.aborted) return Promise.reject(Error('The Windows desktop helper was interrupted or timed out. Inspect again to verify the current state.'));
+  const helper = takeHelper(script);
+  const timer = setTimeout(() => helper.child.kill(), HELPER_TIMEOUT_MS);
+  const abort = () => helper.child.kill();
+  signal?.addEventListener('abort', abort, { once: true });
+  helper.child.stdin.end(JSON.stringify(request), 'utf8');
+  try { keepSpare(script); } catch { /* the next call simply starts cold */ }
+  return helper.done.then(({ error, stdout }) => {
+    clearTimeout(timer); signal?.removeEventListener('abort', abort);
+    if (error) throw Error('The Windows desktop helper was interrupted or timed out. Inspect again to verify the current state.');
+    const result = JSON.parse(stdout);
+    if (result.error) throw Error(result.error);
+    return result;
   });
 }
 const runWindowsAccessibility = (request, signal) => runWindowsHelper('windows-accessibility.ps1', request, signal);
@@ -52,7 +87,7 @@ class WindowsAccessibility {
     check();
     if (!this.allowed(false, lifted)) throw Error('Screen awareness is paused.');
     const window = this.foreground();
-    if (!window?.id || !window.pid) throw Error('Bring the app you want me to inspect to the foreground.');
+    if (!window?.id || !window.pid) throw Error('No other app window is in front to inspect; explain from what you know instead.');
     this.observation = null;
     query = query.trim();
     const result = await this.run({ operation: 'inspect', windowId: window.id, pid: window.pid, query }, signal);

@@ -71,7 +71,7 @@ function fixture({ steps, cardBounds = null, replan, title = 'Save a file' } = {
 
 test('exports the timing constants', () => {
   assert.deepEqual({ POLL_MS, RING_MARGIN, SETTLE_MS, RESOLVE_TIMEOUT_MS, MAX_REPLANS, PAUSE_LIMIT_MS, NEW_WINDOW_GRACE_MS },
-    { POLL_MS: 33, RING_MARGIN: 8, SETTLE_MS: 400, RESOLVE_TIMEOUT_MS: 3000, MAX_REPLANS: 2, PAUSE_LIMIT_MS: 60000, NEW_WINDOW_GRACE_MS: 2000 });
+    { POLL_MS: 33, RING_MARGIN: 8, SETTLE_MS: 150, RESOLVE_TIMEOUT_MS: 3000, MAX_REPLANS: 2, PAUSE_LIMIT_MS: 60000, NEW_WINDOW_GRACE_MS: 2000 });
 });
 
 test('click inside the ring advances after SETTLE_MS and speaks the next line', async () => {
@@ -272,7 +272,7 @@ test('missing target re-plans at most twice, then ends with lost', async () => {
   assert.equal(replans.length, 0);
   assert.equal(f.walk.state, 'resolving');
   const tries = f.s.resolves.filter(n => n === 'Gone').length;
-  assert.ok(tries >= 4 && tries <= 6, `retries about every 500 ms (got ${tries})`);
+  assert.ok(tries >= 8 && tries <= 11, `retries about every 250 ms (got ${tries})`);
   await f.advance(1000);
   assert.equal(replans.length, 1);
   assert.deepEqual(replans[0], { request: 'Save a file', done: [step('Save', 'Click Save', 'look')], missing: name('Gone') });
