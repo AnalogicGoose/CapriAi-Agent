@@ -157,3 +157,20 @@ test('a drawing aims the trail at its rect; without one, toward the middle', asy
 
 const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
 const heldTrail = s => s.motions.update(s.now()).trail || 0;
+
+// ---------- 4. local "come here" with the real companion ----------
+
+test('a local "come here" brings Stella over instead of being refused', async () => {
+  const { Companion } = await loadRenderer('companion.js');
+  const t = await make({ anchor: { x: 1700, y: 900 } });
+  const companion = new Companion({ capri: t.stella, host: { cursor: async () => ({ inside: true, x: 300, y: 200 }) },
+    storage: null, reduced: () => false });
+  t.stella.companion = companion;
+  t.step(F, 2);
+  assert.equal(companion.available(), true);
+  const reply = await companion.request('come');
+  assert.equal(reply, 'Here I am.');
+  assert.ok(t.stella.travel?.reason === 'come', 'on her way');
+  msUntil(t, () => !t.stella.travel);
+  assert.ok(dist(t.stella.pos, { x: 300, y: 200 }) < dist({ x: 1700, y: 900 }, { x: 300, y: 200 }) - 500, 'came over');
+});

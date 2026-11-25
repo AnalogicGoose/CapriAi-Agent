@@ -65,7 +65,7 @@ export class Companion {
   available() {
     const c = this.capri;
     return !['hidden', 'stowed', 'dormant', 'fullscreen', 'gaming', 'busy', 'dragging', 'chatThinking', 'pointing', 'sky'].some(k => c[k])
-      && !c.act && !c.groundRest && c.mode === 'idle' && ['stand', 'sit'].includes(c.stance);
+      && !c.act && !c.groundRest && c.mode === 'idle' && ['stand', 'sit', 'float'].includes(c.stance); // float: Stella
   }
 
   idle() {
@@ -143,13 +143,19 @@ export class Companion {
       if (!this.available()) return 'Let me finish what I’m doing first, then ask again.';
       if (this.reduced()) return 'Come here is paused while reduced motion is enabled.';
       this.interact();
-      await c.summon(cursor);
-      return 'Here I am.';
+      if (typeof c.bodyAction !== 'function') { await c.summon(cursor); return 'Here I am.'; }
+      const result = await c.bodyAction('come', { cursor }); // Stella: her body action (it says when she can't)
+      return result === 'done' ? 'Here I am.' : result;
     }
     c.wake();
     this.interact();
     if (this.reduced()) return 'I’m keeping still while reduced motion is enabled.';
     c.perform({ wave: 'idleWave', dance: 'idleBounce', stretch: 'idleStretch' }[action], c.towardCenter());
-    return { wave: 'Hi! A little wave for you.', dance: 'A little ghost dance!', stretch: 'Stretching out.' }[action];
+    return this.reply(action);
+  }
+
+  // The words for a gesture (wave, dance, stretch); null for anything else.
+  reply(action) {
+    return { wave: 'Hi! A little wave for you.', dance: 'A little ghost dance!', stretch: 'Stretching out.' }[action] ?? null;
   }
 }

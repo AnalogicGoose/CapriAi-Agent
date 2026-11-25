@@ -127,3 +127,18 @@ test('drifting effects use sub-frame updates while impact-only effects retain he
     draws=0;fx.last=1000;fx.items=[{...items[2],born:1000}];fx.frame(1016);assert.equal(draws,0,'Impact-only frames remain held');
   } finally {global.requestAnimationFrame=raf;}
 });
+
+test('Stella floats: she is available, and a local "come here" goes to her body (not refused)',async()=>{
+  const f=await fixture();f.capri.stance='float';
+  assert.equal(f.companion.available(),true,'float counts as available');
+  f.advance(60001);assert.equal(f.companion.tick(),true,'daily routine gestures run (Stella maps them to a breath)');
+  const calls=[];f.capri.bodyAction=async(action,options)=>{calls.push([action,options]);return 'done';};
+  assert.equal(await f.companion.request('come'),'Here I am.');
+  assert.deepEqual(calls,[['come',{cursor:{inside:true,x:300,y:200}}]]);
+  assert.equal(f.capri.summoned,undefined,'not the old summon path');
+  f.capri.bodyAction=async()=>'I’m tucked away right now — bring me back first.';
+  assert.match(await f.companion.request('come'),/tucked away/,'her honest reply passes through');
+  const old=await fixture();old.capri.stance='float';delete old.capri.bodyAction;
+  assert.equal(await old.companion.request('come'),'Here I am.');assert.ok(old.capri.summoned,'summon without a body action');
+  assert.equal(f.companion.reply('wave'),'Hi! A little wave for you.');assert.equal(f.companion.reply('come'),null);
+});
