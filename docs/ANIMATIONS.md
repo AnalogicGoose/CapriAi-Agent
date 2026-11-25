@@ -1,6 +1,6 @@
 # Animation notes (retired Stella renderer)
 
-> **The character on screen is now Stella.** See [docs/STELLA.md](docs/STELLA.md) for how she
+> **The character on screen is now Stella.** See [docs/STELLA.md](STELLA.md) for how she
 > looks, moves and is tuned. Everything below documents the old sprite renderer "Stella"
 > (`stella.js`, `sprite*.js`, the cel art). Those modules are no longer used by the overlay and
 > are removed in the rename project; `npm run test:animations` still exercises them in isolation.
@@ -17,7 +17,7 @@ Original art is the default again following user feedback. Generated sprite
 candidates are saved for developer previews only. Future new frames should
 match the original art style; the opening remains unchanged.
 
-See [the actionable roadmap](docs/ANIMATION-OVERHAUL-2.0.md) for the new full-body
+See [the actionable roadmap](ANIMATION-OVERHAUL-2.0.md) for the new full-body
 raster slice, source provenance, authoring commands, implemented scope and backlog.
 The original opening and its assets remain unchanged. The notes below describe
 the earlier rig-based expansion, which remains the fallback for unsupported states.

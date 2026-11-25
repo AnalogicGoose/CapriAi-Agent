@@ -125,6 +125,6 @@ See [CODEX-CONNECTION.md](CODEX-CONNECTION.md) to activate the installed local C
 
 The project lives at [AnalogicGoose/Stella](https://github.com/AnalogicGoose/Stella); shared work integrates on `development`. The earlier prototype fork, [Chocoyito1/capri-desktop](https://github.com/Chocoyito1/capri-desktop) (branch `codex/stella-local`), is kept as history. The original project is [mochiiwuff/capri-desktop](https://github.com/mochiiwuff/capri-desktop).
 
-To run Stella on another PC, follow [Run from source](README.md#run-from-source) in the README.
+To run Stella on another PC, follow [Run from source](../README.md#run-from-source) in the README.
 
 The repository retains upstream attribution and rights notices. No installer or release has been published.

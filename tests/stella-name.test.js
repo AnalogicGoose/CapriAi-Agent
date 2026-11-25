@@ -43,7 +43,7 @@ test('chat UI strings drop the old persona in every language', () => {
 test('no Capri left anywhere in the repo (old versions live in git history)', () => {
   const { execSync } = require('node:child_process');
   const allowed = new Set(['LICENSE', 'src/main/profile-migration.js', 'tests/profile-migration.test.js', 'src/main/main.js', 'tests/stella-name.test.js',
-    'README.md', 'README.fr.md', 'ROADMAP.md', 'START-HERE.md', 'VALIDATION.md', 'docs/DEVELOPMENT.md']);
+    'README.md', 'README.fr.md', 'docs/ROADMAP.md', 'docs/START-HERE.md', 'docs/VALIDATION.md', 'docs/DEVELOPMENT.md']);
   const hits = execSync('git grep -Ili -e capri -e Капри', { cwd: path.join(__dirname, '..'), encoding: 'utf8' }).split('\n')
     .filter(f => f && !allowed.has(f) && !f.startsWith('docs/superpowers/'));
   assert.deepEqual(hits, []);

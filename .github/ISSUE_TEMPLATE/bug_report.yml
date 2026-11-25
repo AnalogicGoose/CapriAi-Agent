@@ -1,0 +1,34 @@
+name: Bug report
+description: Something Stella does wrong or not at all
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what Stella did, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Right-click Stella and open the Control room
+        2. ...
+  - type: input
+    id: version
+    attributes:
+      label: Stella version
+      description: Shown under Control room → App.
+      placeholder: v0.4.0
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Please remove anything personal first.
