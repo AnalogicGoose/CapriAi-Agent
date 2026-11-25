@@ -12,6 +12,9 @@ export const P = deepFreeze({
   speeds: {spin: 0.35, spinThink: 1.6, blades: 0.22, bladesThink: 1.5, bladesSpeak: 0.1, chase: 1.5, chaseThink: 3},
   ease: {state: 3, voiceAttack: 18, voiceRelease: 7},
   led: {cell: 3.5, cellMin: 2.5, glowAlpha: 0.55, glowBlur: 6, levels: 4, unlit: 'rgba(120,130,220,0.06)'},
+  // Midnight halo: a soft dark-violet glow behind her so her light reads on white/light backgrounds too.
+  // Radii are fractions of the LED disc radius (0.48·s): full strength inside `inner`, gone at `outer`.
+  halo: {color: [14, 10, 38], alpha: 0.82, inner: 0.62, outer: 1.04},
   sheen: {speed: 0.45, seedStep: 0.23, width: 0.16, cyan: [120, 240, 255], pink: [255, 170, 240],
     alpha: 0.35, edge: 'rgba(215,205,255,0.45)'},
   colors: {

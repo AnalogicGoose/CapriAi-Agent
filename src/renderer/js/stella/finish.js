@@ -19,6 +19,8 @@ uniform vec4 uUnlit, uEdge;
 uniform float uItem[8];
 uniform float uPh23, uPh31, uPos, uSheen, uSeedStep, uFlick, uWidth, uSheenA;
 uniform vec3 uCyan, uPink;
+uniform vec4 uHalo;      // rgb midnight color, a = strength (already faded with the fold)
+uniform vec2 uHaloR;     // inner, outer radius as fractions of uLim
 out vec4 o;
 
 vec4 maskAt(ivec2 q) { return texelFetch(uMask, clamp(q, ivec2(0), ivec2(uSize) - 1), 0); }
@@ -50,6 +52,10 @@ void main() {
     }
   }
   vec4 col = led + glow * (1.0 - led.a);
+  // Midnight halo underneath everything: soft dark disc, invisible on dark backgrounds, a frame on light ones.
+  float hr = length(p - uCenter) / uLim;
+  float ha = uHalo.a * (1.0 - smoothstep(uHaloR.x, uHaloR.y, hr));
+  col += vec4(uHalo.rgb * ha, ha) * (1.0 - col.a);
 
   // Holo sheen and crisp edge from the mask (u and seed decoded only on solid pixels).
   if (uSheen > 0.5) {
@@ -97,6 +103,7 @@ export function sheenPhases(t, sheen, out) {
 }
 
 const CYAN = P.sheen.cyan.map(v => v / 255), PINK = P.sheen.pink.map(v => v / 255);
+const HALO = P.halo.color.map(v => v / 255);
 
 export class FinishPass {
   constructor(gl) {
@@ -137,6 +144,9 @@ export class FinishPass {
     gl.uniform1f(u.uWidth, P.sheen.width);
     gl.uniform1f(u.uSheenA, P.sheen.alpha);
     gl.uniform3fv(u.uCyan, CYAN); gl.uniform3fv(u.uPink, PINK);
+    // The halo folds away with her (fold 0 shown … 1 gone).
+    gl.uniform4f(u.uHalo, HALO[0], HALO[1], HALO[2], P.halo.alpha * (1 - Math.min(1, Math.max(0, scene.fold || 0))));
+    gl.uniform2f(u.uHaloR, P.halo.inner, P.halo.outer);
     gl.disable(gl.BLEND);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }

@@ -199,13 +199,14 @@ app.whenReady().then(async () => {
             check(err === G3.NO_ERROR, 'gl error ' + err);
             return c;
           };
-          // Lit pixels (alpha > 40) in a wedge toward \`angle\`, 0.25..0.47 of her size from the center.
+          // Lit pixels (bright light, not the dark halo) in a wedge toward \`angle\`, 0.25..0.47 of her size from the center.
           const wedge = (c, angle) => {
             const d = pixels(c); let n = 0;
             for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
               const dx = x + 0.5 - S / 2, dy = y + 0.5 - S / 2, r = Math.hypot(dx, dy) / S;
               const off = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle)));
-              if (r >= 0.25 && r <= 0.47 && off < 0.3 && d[(y * S + x) * 4 + 3] > 40) n++;
+              const i = (y * S + x) * 4, light = Math.max(d[i], d[i + 1], d[i + 2]) * d[i + 3] / 255;
+              if (r >= 0.25 && r <= 0.47 && off < 0.3 && light > 60) n++;
             }
             return n;
           };
@@ -218,6 +219,33 @@ app.whenReady().then(async () => {
             if (angle === 0.3) files['trail.png'] = await png(trail);
           }
           return 'trail lit through the LED finish ' + notes.join('; ');
+        });
+
+        // ---- section: halo (midnight halo: dark frame behind her light, for light backgrounds) ----
+        await section('halo', async () => {
+          check(R3, 'renderer missing');
+          const {buildScene, SceneClock} = await import('${url('scene.js')}');
+          const {StateBlend} = await import('${url('blend.js')}');
+          const shot = fold => {
+            const clock = new SceneClock(), blend = new StateBlend();
+            for (let i = 0; i < 30; i++) { blend.step(1 / 60); clock.step(1 / 60, blend, null, {}); }
+            const {c, err} = snap(buildScene({s: S, t: 1.5, clock, blend, idle: null, motions: {}, fold}), 1.5);
+            check(err === G3.NO_ERROR, 'gl error ' + err);
+            return c;
+          };
+          const c = shot(0), d = pixels(c);
+          const at = (r, a) => { const x = Math.round(S / 2 + Math.cos(a) * r * S), y = Math.round(S / 2 + Math.sin(a) * r * S); return d.slice((y * S + x) * 4, (y * S + x) * 4 + 4); };
+          // In the gap between a blade and a stick, outside the ring: the halo alone, dark and fairly opaque.
+          const on = bg => { const k = document.createElement('canvas'); k.width = k.height = S; const x = k.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, S, S); x.drawImage(c, 0, 0); return k.toDataURL('image/png'); };
+          files['halo-on-white.png'] = on('#ffffff'); files['halo-on-light.png'] = on('#e8edf5'); files['halo-on-dark.png'] = on('#12101c');
+          const gap = at(0.3, Math.PI / 8);   // unpremultiplied (2D canvas readback)
+          check(gap[3] > 0.4 * 255, 'halo too faint in the gap: alpha ' + gap[3]);
+          check(Math.max(gap[0], gap[1], gap[2]) < 120, 'halo not dark in the gap: ' + Array.from(gap));
+          const corner = d.slice(0, 4);
+          check(corner[3] < 8, 'halo reaches the canvas corner: alpha ' + corner[3]);
+          const folded = pixels(shot(1)), gapFolded = folded[(Math.round(S / 2 + Math.sin(Math.PI / 8) * 0.3 * S) * S + Math.round(S / 2 + Math.cos(Math.PI / 8) * 0.3 * S)) * 4 + 3];
+          check(gapFolded < 10, 'halo stays when folded away: alpha ' + gapFolded);
+          return 'gap alpha ' + gap[3] + ' rgb ' + Array.from(gap.slice(0, 3)) + '; corner ' + corner[3] + '; folded ' + gapFolded;
         });
 
         // ---- section: perf (300 idle frames at s=150) ----
