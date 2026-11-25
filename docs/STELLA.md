@@ -82,3 +82,17 @@ Look constants (counts, widths, colors, speeds, LED size, sheen) are in `src/ren
 - `npm test` runs the unit tests (including `tests/stella-*.test.js`).
 - `npm run test:stella` runs `scripts/check-stella.js`: an isolated hidden-window check of the painter, renderer, performance, context loss and the real overlay page with a stub host. Output and a pose gallery go to `.caprigpt-local/stella-check`.
 - `npm run test:settings`, `npm run test:layout` and `node_modules/electron/dist/electron.exe scripts/smoke-electron.js --fullscreen-only` are isolated end-to-end checks (own test profile) that exercise her in the real overlay.
+
+## UI (project 2: Orbit)
+
+Every screen around her shares `src/renderer/styles/stella-theme.css`: midnight surfaces, a gold → rose → blue
+hairline, round icon buttons (30 / 34 / 46 px, icons centered by grid) and a warm gold primary button.
+
+- **Chat panel:** no portrait; header is her name, a status dot and ✕. Replies go through `js/rich-text.js`
+  (bold, italic, `code`, bullet lists, https links; built with DOM nodes, never HTML). Streaming text hides
+  half-typed markers; speech gets the same text without markers.
+- **Links:** `host.openLink` → `link:open` (main, `link-open.js`) → `publicUrl()` check → preferred browser.
+  The overlay window itself never navigates.
+- **Control room:** see `CONTROL-ROOM.md`.
+- **Name:** `DISPLAY_NAME` is Stella; "Hey Stella" wakes her. "Capri" still works quietly as an alias
+  (`NAME_ALIASES`, wake phrase) until the rename project.
