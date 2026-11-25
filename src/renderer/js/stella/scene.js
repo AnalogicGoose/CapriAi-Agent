@@ -7,6 +7,7 @@ import {MOTIONS} from './motions.js';
 const SPEED_EASE = 4;   // how fast angular speeds follow their targets (1/s)
 const ALIGN_EASE = 2;   // how fast drifted phases settle back into the reference layout (1/s)
 const AIM_EASE = 6;     // how fast the aimed angle follows a moving target (1/s)
+const AIM_SWING = 1.2;  // fastest the aimed blade swings toward/away from its target (rad/s)
 const BURSTS = ['celebrate', 'spinBurst'];
 const TIMED = ['chime', 'doublePulse'];   // motions shaped by time since they started
 const QUARTER = TAU / P.blades.count;
@@ -48,7 +49,7 @@ export class SceneClock {
     this.scan = 0; this.burst = 0;
     this.red = null;            // eased reduced-motion factor, 0..1
     this.since = {};            // seconds since a timed motion started, per name
-    this.aimIndex = null; this.aimAngle = null; this.aimDelta = 0;
+    this.aimIndex = null; this.aimAngle = null; this.aimDelta = 0; this.aimEnv = 0;
     this._rates = null; this._idleName = null; this._shiftSign = -1;
     this._burstOn = false; this._burstFrom = 0; this._burstTo = 0; this._burstT = 1; this._burstDur = 1;
   }
@@ -116,21 +117,25 @@ export class SceneClock {
     }
 
     // Aim: lock the nearest blade when aiming starts; the aimed angle glides.
-    if (env(motions, 'aim') > 0 && aim != null) {
-      if (this.aimIndex == null) {
-        let best = 0;
-        for (let k = 1; k < P.blades.count; k++) {
-          if (Math.abs(wrap(aim - this.bladeAngle(k))) < Math.abs(wrap(aim - this.bladeAngle(best)))) best = k;
-        }
-        this.aimIndex = best; this.aimAngle = aim;
-        this.aimDelta = wrap(aim - this.bladeAngle(best));
-      } else {
-        this.aimAngle += wrap(aim - this.aimAngle) * (1 - Math.exp(-AIM_EASE * dt));
+    // The blade is drawn at lerp(natural, aimAngle, aimEnv): aimEnv follows the
+    // motion envelope but is rate-limited so the blade never swings faster than
+    // AIM_SWING, and aimDelta is re-wrapped whenever that is invisible (env 0 or 1).
+    const ae = env(motions, 'aim');
+    if (ae > 0 && aim != null && this.aimIndex == null) {
+      let best = 0;
+      for (let k = 1; k < P.blades.count; k++) {
+        if (Math.abs(wrap(aim - this.bladeAngle(k))) < Math.abs(wrap(aim - this.bladeAngle(best)))) best = k;
       }
-      // Unwrapped, so it stays continuous as the locked blade keeps turning.
+      this.aimIndex = best; this.aimAngle = aim; this.aimEnv = 0;
+      this.aimDelta = wrap(aim - this.bladeAngle(best));
+    }
+    if (this.aimIndex != null) {
+      if (ae > 0 && aim != null) this.aimAngle += wrap(aim - this.aimAngle) * (1 - Math.exp(-AIM_EASE * dt));
       this.aimDelta += wrap(this.aimAngle - this.bladeAngle(this.aimIndex) - this.aimDelta);
-    } else if (env(motions, 'aim') === 0) {
-      this.aimIndex = null; this.aimAngle = null; this.aimDelta = 0;
+      const lim = AIM_SWING * dt / Math.max(Math.abs(this.aimDelta), 1e-3), diff = ae - this.aimEnv;
+      this.aimEnv = Math.abs(diff) <= lim ? ae : this.aimEnv + Math.sign(diff) * lim;
+      if (this.aimEnv === 1 || this.aimEnv === 0) this.aimDelta = wrap(this.aimDelta);
+      if (ae === 0 && this.aimEnv === 0) { this.aimIndex = null; this.aimAngle = null; this.aimDelta = 0; }
     }
   }
 }
@@ -159,7 +164,8 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
   const brightness = lerp(1, 0.45, rest);
   const body = 1 - smoothstep((f - 0.4) / 0.5);   // everything but the center point fades while folding
   const glitch = env(mo, 'glitch');
-  const jit = reduced ? 0 : 2 * glitch * (1 - red);
+  const live = 1 - red;   // flicker and jitter fade with the eased reduced-motion factor
+  const jit = 2 * glitch * live;
   const cx = s / 2 + jit * noise1(t * 41), cy = s / 2 + jit * noise1(t * 37 + 5);
 
   const swayOff = clock.swayOff || 0;
@@ -173,16 +179,16 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
     rIn: R * (B.rIn - listen * 0.04), rOut: R * B.rOut * reach,
     wIn: (B.wIn + E * 10) * sc, wOut: B.wOut * sc, seed: k, alpha: brightness * body,
   }));
-  const ae = env(mo, 'aim');
-  if (ae > 0 && (clock.aimIndex != null || aim != null)) {
-    let k = clock.aimIndex, delta = clock.aimDelta;
-    if (k == null) { // clock not stepped with aim yet: nearest blade, short way
-      k = 0;
-      for (let j = 1; j < blades.length; j++) {
-        if (Math.abs(wrap(aim - blades[j].angle)) < Math.abs(wrap(aim - blades[k].angle))) k = j;
-      }
-      delta = wrap(aim - blades[k].angle);
+  let ae = env(mo, 'aim'), k = clock.aimIndex, delta = clock.aimDelta;
+  if (k != null) ae = clock.aimEnv;
+  else if (ae > 0 && aim != null) { // clock not stepped with aim yet: nearest blade, short way
+    k = 0;
+    for (let j = 1; j < blades.length; j++) {
+      if (Math.abs(wrap(aim - blades[j].angle)) < Math.abs(wrap(aim - blades[k].angle))) k = j;
     }
+    delta = wrap(aim - blades[k].angle);
+  }
+  if (k != null && ae > 0) {
     blades[k].angle += delta * ae;
     blades[k].rOut *= 1 + 0.15 * ae;
   }
@@ -241,11 +247,12 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
   const ticks = env(mo, 'ticks'), wave = ie('shineWave');
   const sheen = {
     enabled: body > 0,
-    flicker: !reduced,
+    flicker: live > 0.01,
+    flickerAmount: live,
     stepped: ticks > 0,
     speed: P.sheen.speed * (1 + wave),
     seedStep: lerp(P.sheen.seedStep, 1.4 / (B.count + K.count), wave),
-    flickerBoost: reduced ? 0 : Math.max(ticks, glitch),
+    flickerBoost: Math.max(ticks, glitch) * live,
   };
 
   return {

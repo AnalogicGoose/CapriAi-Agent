@@ -248,3 +248,38 @@ test('toggling reduced motion at runtime does not snap', async () => {
   }
   assert.ok(clock.rippleSpeed < 0.5, 'ripple slowed x0.1');
 });
+
+test('releasing a long-held aim never whirls the blade', async () => {
+  const m = await load();
+  for (const think of [0, 1]) {
+    const clock = new m.SceneClock(), dt = 1 / 60, blend = blendOf({ think });
+    let prev = null, maxJump = 0;
+    for (let i = 0; i < 16 * 60; i++) {
+      const t = i * dt, ae = t < 10 ? ramp(t, 0, 0.3) : 1 - ramp(t, 10, 10.3); // hold 10 s, ease out over 0.3 s
+      const motions = { aim: ae };
+      clock.step(dt, blend, IDLE, motions, { aim: 1.0 });
+      const sc = m.buildScene({ s: 360, t, clock, blend, idle: IDLE, motions, aim: 1.0 });
+      if (prev) sc.blades.forEach((b, k) => { maxJump = Math.max(maxJump, Math.abs(wrap(b.angle - prev[k]))); });
+      prev = sc.blades.map(b => b.angle);
+    }
+    assert.ok(maxJump < 0.05, `think=${think}: max per-frame blade jump ${maxJump}`);
+    assert.equal(clock.aimIndex, null, 'aim lock released');
+    assert.ok(Math.abs(clock.aimDelta) <= Math.PI, 'delta bounded');
+  }
+});
+
+test('glitch jitter and flicker fade with the eased reduced factor', async () => {
+  const m = await load();
+  const clock = new m.SceneClock(), dt = 1 / 60, motions = { glitch: 1, ticks: 1 };
+  let prev = null;
+  for (let i = 0; i < 240; i++) {
+    const reduced = i >= 60;
+    clock.step(dt, blendOf(), IDLE, motions, { reduced });
+    const sc = m.buildScene({ s: 360, t: i * dt, clock, blend: blendOf(), idle: IDLE, motions, reduced });
+    if (prev && i > 60) assert.ok(sc.sheen.flickerBoost <= prev.sheen.flickerBoost + 1e-12, 'boost eases down');
+    if (i === 61) assert.ok(sc.sheen.flickerBoost > 0.5 && sc.sheen.flicker, 'no instant cut');
+    prev = sc;
+  }
+  assert.ok(prev.sheen.flickerBoost < 0.01 && !prev.sheen.flicker, 'off once reduced settles');
+  assert.ok(Math.hypot(prev.cx - 180, prev.cy - 180) < 0.02, 'jitter gone');
+});
