@@ -149,6 +149,7 @@ export const Fold = {
   // A fullscreen app came or went (FullscreenPresence keeps the timing): only a soft sound, no particles.
   presenceEffect(active) {
     if (this.stowed || this.folding.target === 1) return; // already away
-    this.voice?.play?.(active ? 'teleport-out' : 'teleport-in', { soft: true });
+    // Deferred: a cold audio context takes hundreds of ms to build and must never stall the fold's frames.
+    globalThis.setTimeout(() => this.voice?.play?.(active ? 'teleport-out' : 'teleport-in', { soft: true }), 0);
   },
 };

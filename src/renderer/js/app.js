@@ -50,6 +50,8 @@ async function boot() {
   const voice = new Voice();
   voice.configure(config);
   host.listSounds().then((list) => list.length && voice.loadCustom(list));
+// Build the audio context while idle (silent), so the first fold never waits on it.
+(globalThis.requestIdleCallback || ((fn) => setTimeout(fn, 1500)))(() => { try { voice.ensure(); } catch {} }, { timeout: 5000 });
 
   const panel = new Panel({
     panel: document.getElementById('panel'),

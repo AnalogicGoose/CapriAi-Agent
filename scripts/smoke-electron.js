@@ -936,9 +936,6 @@ app.whenReady().then(async () => {
       win.webContents.sendInputEvent({type:'mouseMove',...stationary});
       fullscreenProbe={...fullscreen,caption:true};await pause(100);
       assert.equal((await state()).active,false,'Maximized captioned window is not fullscreen');
-      // The first sound of a session builds the audio context (~400 ms here), outlasting main's 260 ms frozen-renderer
-      // fallback and hiding the overlay mid-fold; warm it so this measures the fold, not the audio start.
-      await js("window.fullscreenPet.voice?.play?.('teleport-in',{soft:true});true");await pause(600);
       const started=Date.now();fullscreenProbe=fullscreen;
       await until(async()=>(await state()).active,'native fullscreen probe');
       const detectionMs=Date.now()-started;

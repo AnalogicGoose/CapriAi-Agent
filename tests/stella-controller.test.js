@@ -985,6 +985,8 @@ test('presence effect uses no fx', async () => {
   stella.voice = { play: (name, o) => sounds.push([name, o]) };
   stella.presenceEffect(true);
   stella.presenceEffect(false);
+  assert.deepEqual(sounds, [], 'the sound is deferred so it cannot stall the fold frames');
+  await new Promise(resolve => setTimeout(resolve, 5));
   assert.deepEqual(sounds, [['teleport-out', { soft: true }], ['teleport-in', { soft: true }]]);
   assert.equal(stella.fx, null);
   stella.voice = null;
