@@ -913,35 +913,39 @@ app.whenReady().then(async () => {
         throw Error('Timed out: '+label);
       };
       const state=()=>js('host.fullscreenState()');
-      const shown=()=>js("document.querySelector('#capri').dataset.fullscreen === 'visible'");
-      const away=()=>js("document.querySelector('#capri').dataset.fullscreen === 'away'");
+      const shown=()=>js("document.querySelector('#stella').dataset.fullscreen === 'visible'");
+      const away=()=>js("document.querySelector('#stella').dataset.fullscreen === 'away'");
       let ignoresMouse=true;
       const applyIgnore=win.setIgnoreMouseEvents.bind(win);
       win.setIgnoreMouseEvents=(on,options)=>{ignoresMouse=on;return applyIgnore(on,options);};
       await js(`(async()=>{
-        const {Capri}=await import('./js/capri.js');const draw=Capri.prototype.drawFrame;
-        Capri.prototype.drawFrame=function(...args){window.fullscreenPet=this;return draw.apply(this,args);};
+        const {Stella}=await import('./js/stella/stella.js');const draw=Stella.prototype.drawFrame;
+        Stella.prototype.drawFrame=function(...args){window.fullscreenPet=this;return draw.apply(this,args);};
       })()`);
       await until(()=>js('Boolean(window.fullscreenPet)'),'pet input probe');
+      assert.equal(await js("document.querySelector('#stella-canvas').width>0&&document.querySelector('#stella-canvas').height>0"),true,'Stella canvas is sized and drawn');
       await js(`window.fullscreenPet.wander=false;window.fullscreenPet.nextMove=window.fullscreenPet.nextGaze=Infinity;
         window.petClicks=0;const click=window.fullscreenPet.onClick;
         window.fullscreenPet.onClick=()=>{window.petClicks++;click();};true;`);
-      const point=()=>js(`(()=>{const p=window.fullscreenPet,h=p.head();
-        for(let dy=-20;dy<80;dy+=4)for(let dx=-30;dx<=30;dx+=4){const x=Math.round(h.x+dx),y=Math.round(h.y+dy);if(p.hit(x,y))return{x,y};}
-        throw Error('No opaque pet hit target');})()`);
+      const point=()=>js(`(()=>{const p=window.fullscreenPet,c=p.pos;
+        for(let dy=-12;dy<=12;dy+=4)for(let dx=-12;dx<=12;dx+=4){const x=Math.round(c.x+dx),y=Math.round(c.y+dy);if(p.hit(x,y))return{x,y};}
+        throw Error('No hit target at her center');})()`);
       const stationary=await point(),overlayBounds=win.getBounds();
       // A stationary pointer has no new mousemove after showInactive().
       screen.getCursorScreenPoint=()=>({x:overlayBounds.x+stationary.x,y:overlayBounds.y+stationary.y});
       win.webContents.sendInputEvent({type:'mouseMove',...stationary});
       fullscreenProbe={...fullscreen,caption:true};await pause(100);
       assert.equal((await state()).active,false,'Maximized captioned window is not fullscreen');
+      // The first sound of a session builds the audio context (~400 ms here), outlasting main's 260 ms frozen-renderer
+      // fallback and hiding the overlay mid-fold; warm it so this measures the fold, not the audio start.
+      await js("window.fullscreenPet.voice?.play?.('teleport-in',{soft:true});true");await pause(600);
       const started=Date.now();fullscreenProbe=fullscreen;
       await until(async()=>(await state()).active,'native fullscreen probe');
       const detectionMs=Date.now()-started;
-      await until(async()=>await away()&&!win.isVisible(),'teleport-out and OS overlay hide');
+      await until(async()=>await away()&&!win.isVisible(),'fold-away and OS overlay hide');
       const oldRevision=(await state()).revision;
       fullscreenProbe=null;
-      await until(async()=>await shown()&&win.isVisible(),'teleport back');
+      await until(async()=>await shown()&&win.isVisible(),'unfold back');
       assert.equal(win.isFocusable(),true,'Returning from fullscreen must restore normal mouse activation without stealing focus');
       await until(()=>!ignoresMouse,'stationary-pointer hit target restored');
       // Simulate lost native activation/forwarding while renderer hit state is
@@ -974,7 +978,7 @@ app.whenReady().then(async () => {
       }
       assert.equal(await js("!document.querySelector('#talk-menu').hidden"),true,'Double click keeps the launcher open');
       assert.equal(win.isVisible(),true);
-      assert.equal(await js('window.fullscreenPet.p.alpha > 0.5 && !window.fullscreenPet.stowed'),true,'Double click keeps Capri visible');
+      assert.equal(await js('window.fullscreenPet.fold < 0.5 && !window.fullscreenPet.stowed'),true,'Double click keeps her visible');
       const dragAt=await point(),beforeDrag=await js('({...window.fullscreenPet.pos})');
       win.webContents.sendInputEvent({type:'mouseMove',...dragAt});await pause(30);
       win.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...dragAt});
@@ -994,9 +998,7 @@ app.whenReady().then(async () => {
       await clickAt(await buttonPoint('.panel__send'));
       try { await until(()=>js("document.querySelector('.panel__line').textContent==='Left click restored.'"),'Send button receives left click'); }
       catch(error){console.error('Returned chat:',await js("({line:document.querySelector('.panel__line').textContent,input:document.querySelector('.panel__input').value,busy:document.querySelector('.panel__input').disabled,chat:document.querySelector('#panel').className,petBusy:window.fullscreenPet.busy,stance:window.fullscreenPet.stance})"));throw error;}
-      await js(`window.closeTeleports=0;window.beforeClosePos={...window.fullscreenPet.pos};
-        const teleport=window.fullscreenPet.onTeleport;
-        window.fullscreenPet.onTeleport=phase=>{if(phase==='start')window.closeTeleports++;return teleport?.(phase);};true;`);
+      await js(`window.beforeClosePos={...window.fullscreenPet.pos};true;`);
       await clickAt(await buttonPoint('.panel__close'));
       await until(()=>js("!document.querySelector('#panel').classList.contains('is-chat')||document.querySelector('#panel').hidden"),'Close button receives left click');
       const closeRevision=(await state()).revision;
@@ -1005,23 +1007,18 @@ app.whenReady().then(async () => {
       fullscreenProbe=fullscreen;await pause(75);fullscreenProbe=null;
       await pause(350);
       assert.equal((await state()).revision,closeRevision,'Chat-close focus blip cannot trigger fullscreen animation');
-      assert.equal(await js('window.closeTeleports'),0,'Closing chat never initiates a teleport');
+      assert.equal(await js('window.fullscreenPet.folding.q'),0,'Closing chat never folds her');
       assert.equal(await js('window.fullscreenPet.fullscreenProgress || 0'),0);
-      assert.equal(await js('window.fullscreenPet.p.alpha > 0.5'),true);
+      assert.equal(await js('window.fullscreenPet.fold < 0.5'),true);
       assert.deepEqual(await js('({...window.fullscreenPet.pos})'),await js('window.beforeClosePos'));
-      // Existing teleport effects may still be running when fullscreen reverses.
+      // A glide may still be running when fullscreen reverses.
       win.webContents.send('capri:command',{name:'teleport'});
       fullscreenProbe=fullscreen;await pause(100);fullscreenProbe=null;
-      await until(async()=>await shown()&&win.isVisible(),'fullscreen while normal teleport is in progress');
+      await until(async()=>await shown()&&win.isVisible(),'fullscreen while a glide is in progress');
       await pause(800);
-      const paint=await js(`(() => {
-        const c=document.querySelector('#sprite');const gl=c.getContext('webgl');
-        const program=gl.getParameter(gl.CURRENT_PROGRAM);
-        return {hidden:document.querySelector('#capri').hidden,
-          opaque:gl.getUniform(program,gl.getUniformLocation(program,'uAlpha'))>0.5
-            && gl.getUniform(program,gl.getUniformLocation(program,'uCollapse'))===0};
-      })()`);
-      assert.equal(paint.hidden,false);assert.equal(paint.opaque,true,'Underlying teleport cannot leave her transparent');
+      const paint=await js(`(() => {const p=window.fullscreenPet,r=document.querySelector('#stella');
+        return {hidden:p.fold>=1||r.style.visibility==='hidden',opaque:p.fold===0&&Number(r.style.opacity||1)>0.5};})()`);
+      assert.equal(paint.hidden,false);assert.equal(paint.opaque,true,'An underlying glide cannot leave her folded or transparent');
       require('../src/main/ollama').unload=async()=>{};
       await js('host.openMenu()');
       let controls;
@@ -1040,16 +1037,16 @@ app.whenReady().then(async () => {
       await gaming(false);assert.equal(win.isVisible(),false);
       fullscreenProbe=null;await until(async()=>await shown()&&win.isVisible(),'gaming then fullscreen return');
       await pause(400);
-      assert.equal(await js(`(() => {const gl=document.querySelector('#sprite').getContext('webgl');const p=gl.getParameter(gl.CURRENT_PROGRAM);return gl.getUniform(p,gl.getUniformLocation(p,'uAlpha'))>0.5;})()`),true,'Combined gaming/fullscreen transitions leave her visible');
+      assert.equal(await js(`(() => {const p=window.fullscreenPet,r=document.querySelector('#stella');return p.fold===0&&Number(r.style.opacity||1)>0.5&&r.style.visibility!=='hidden';})()`),true,'Combined gaming/fullscreen transitions leave her visible');
       fullscreenProbe=fullscreen;await until(away,'second departure');
       await js('host.setConfig({visible:false})');
       win.webContents.send('capri:command',{name:'stow',on:true});
-      await until(()=>js("document.querySelector('#capri').hidden"),'manual stow while fullscreen');
+      await until(()=>js('window.fullscreenPet.stowed'),'manual stow while fullscreen');
       fullscreenProbe=null;
       await until(async()=>await shown()&&win.isVisible(),'fullscreen ends with manually stowed pet');
-      assert.equal(await js("document.querySelector('#capri').hidden && !document.querySelector('#chip').hidden"),true,'Fullscreen does not undo manual stowing');
+      assert.equal(await js("window.fullscreenPet.stowed && !document.querySelector('#chip').hidden"),true,'Fullscreen does not undo manual stowing');
       assert.equal((await js('host.getConfig()')).visible,false);
-      console.log(`PASS: fullscreen IPC/shader/OS visibility, restored native mouse activation, stationary-pointer routing, trusted left click/drag/Send/Close, repeat body clicks stay visible, chat-close focus blip stays still; detection ${detectionMs} ms, rapid reversals, stale acknowledgments, overlapping teleport, Gaming mode and manual stow. Native fullscreen geometry simulated; chat inference mocked.`);
+      console.log(`PASS: fullscreen IPC/shader/OS visibility, restored native mouse activation, stationary-pointer routing, trusted left click/drag/Send/Close, repeat body clicks stay visible, chat-close focus blip stays still; detection ${detectionMs} ms, rapid reversals, stale acknowledgments, overlapping glide, Gaming mode and manual stow. Native fullscreen geometry simulated; chat inference mocked.`);
       clearTimeout(limit);app.exit(0);return;
     }
     if(process.argv.includes('--foreground-priority')) {
@@ -1277,6 +1274,9 @@ app.whenReady().then(async () => {
       }
       assert.doesNotMatch(await run('document.body.innerText'), /Legacy Claude|Teleport|Play demo|Talk to her|Copy chat handoff|Allow app closing/);
       await run("document.querySelector('[data-page=home]').click()");
+      await js(`(async()=>{const {Stella}=await import('./js/stella/stella.js');const draw=Stella.prototype.drawFrame;
+        Stella.prototype.drawFrame=function(...args){window.settingsPet=this;return draw.apply(this,args);};})()`);
+      for (let i=0;i<40 && !await js('Boolean(window.settingsPet)');i++) await pause(50);
       let departures = 0;
       const departed = () => { departures++; };
       require('electron').ipcMain.on('gaming:animation-ready', departed);
@@ -1284,13 +1284,13 @@ app.whenReady().then(async () => {
       for (let i=0;i<30 && win.isVisible();i++) await pause(50);
       assert.equal((await js('host.getConfig()')).gamingMode,true); assert.equal(win.isVisible(),false);
       assert.equal(departures,1,'Renderer acknowledges the gaming departure before hiding');
-      assert.equal(await js("document.querySelector('#capri').dataset.gamingTeleport"),'away');
+      assert.equal(await js('window.settingsPet.gaming && window.settingsPet.fold >= 1'),true,'Gaming departure leaves her folded away');
       require('electron').ipcMain.removeListener('gaming:animation-ready', departed);
       assert.equal(controls.isVisible(),true,'Controls remain accessible while Capri is paused');
       await run("document.querySelector('[data-action-switch=gaming]').click()"); await pause(300);
       assert.equal((await js('host.getConfig()')).gamingMode,false); assert.equal(win.isVisible(),true);
-      for(let i=0;i<30 && await js("document.querySelector('#capri').dataset.gamingTeleport !== 'returned'");i++) await pause(50);
-      assert.equal(await js("document.querySelector('#capri').dataset.gamingTeleport"),'returned','Resume completes the teleport arrival');
+      for(let i=0;i<60 && await js('window.settingsPet.gaming || window.settingsPet.fold > 0');i++) await pause(50);
+      assert.equal(await js('!window.settingsPet.gaming && window.settingsPet.fold === 0'),true,'Resume completes the unfold');
       await run("document.querySelector('#close').click()"); await pause(100); assert.equal(controls.isVisible(),false);
       await js('host.openMenu()'); await pause(150); assert.equal(controls.isVisible(),true);
       win.webContents.send('capri:command',{name:'memory'});
@@ -1305,6 +1305,8 @@ app.whenReady().then(async () => {
       };
       await gesture('/actions','Try wave');
       await gesture('dance','ghost dance');
+      // Stella's dance is a held motion; she only takes the next request once it is over (the sprite's ended on its own).
+      for (let i=0;i<300 && await js('window.settingsPet.busy');i++) await pause(50);
       await gesture('take a nap','quiet little nap');
       await gesture('wake up','I’m here');
       await gesture('how are you feeling','Feeling');
@@ -1354,35 +1356,8 @@ app.whenReady().then(async () => {
       await js('window.pendingAgentTest');
       assert.equal(JSON.parse((await route('/agent status')).text).busy, false);
       assert.equal(JSON.parse((await route('/agent status')).text).pending, null);
-      // Observe the actual existing Capri instance through its shared prototype.
-      await js(`(async () => {
-        const { Capri } = await import('./js/capri.js');
-        const original = Capri.prototype.setStance;
-        Capri.prototype.setStance = function(...args) { const r=original.apply(this,args); window.sittingProbe={stance:this.stance,perch:this.perch}; return r; };
-      })()`);
-      await js('host.setConfig({windowTracking:true,agentEnabled:false,wander:false,possess:false})');
-      const b = win.getBounds();
-      const fixture = new BrowserWindow({ x: b.x+160, y:b.y+Math.round(b.height*0.55), width:720, height:300,
-        show:false, title:'Capri perching regression fixture', backgroundColor:'#282239' });
-      await fixture.loadURL('data:text/html,<body style="color:white;font:22px sans-serif">Capri window sitting test</body>');
-      fixture.showInactive();
-      await pause(700);
-      const handle = fixture.getNativeWindowHandle().readBigUInt64LE(0);
-      const rows = await js('host.windowsNow()');
-      const row = rows.wins.find(w => w.id === Number(handle));
-      assert.ok(row, 'Real native geometry watcher must find the test window');
-      assert.equal(win.isAlwaysOnTop(), true);
-      await js(`(async () => {const {Capri}=await import('./js/capri.js'); if(!Capri.prototype.canSit.call({scale:0.6,view:{h:innerHeight}},${JSON.stringify(row)})) throw Error('Test window not sittable');})()`);
-      win.webContents.send('capri:command', { name:'act', act:'sit', pile:0 });
-      await pause(2600);
-      assert.equal((await js('window.sittingProbe')).stance, 'sit');
-      const capture = path.resolve(__dirname,'..','captures','agent-window-sitting.png');
-      fs.mkdirSync(path.dirname(capture),{recursive:true}); fs.writeFileSync(capture,(await win.webContents.capturePage()).toPNG());
-      fixture.minimize(); await pause(1400);
-      assert.notEqual((await js('window.sittingProbe')).stance, 'sit', 'Capri must leave a minimized window');
-      fixture.destroy();
-      console.log('PASS: main-process agent route, fresh registry/world state, native approval cancel/accept, replay rejection, actual overlay sitting and minimized-window departure');
-      console.log('CAPTURE:',capture);
+      // Window sitting/perching was part of the retired sprite character; Stella floats and never sits (see docs/STELLA.md).
+      console.log('PASS: main-process agent route, fresh registry/world state, native approval cancel/accept, replay rejection');
       clearTimeout(limit); app.exit(0); return;
     }
     if (process.argv.includes('--release-only')) {
@@ -1555,7 +1530,7 @@ app.whenReady().then(async () => {
     if (process.argv.includes('--integration-only')) {
       await pause(700);
       const bounds = await js(`(() => {
-        const r = document.querySelector('#sprite').getBoundingClientRect();
+        const r = document.querySelector('#stella-canvas').getBoundingClientRect();
         const x = Math.max(0, Math.floor(r.x)), y = Math.max(0, Math.floor(r.y));
         return {x, y, width: Math.min(Math.ceil(r.width), innerWidth-x), height: Math.min(Math.ceil(r.height), innerHeight-y)};
       })()`);
