@@ -174,3 +174,66 @@ test('a local "come here" brings Stella over instead of being refused', async ()
   msUntil(t, () => !t.stella.travel);
   assert.ok(dist(t.stella.pos, { x: 300, y: 200 }) < dist({ x: 1700, y: 900 }, { x: 300, y: 200 }) - 500, 'came over');
 });
+
+// ---------- 5. a drag owns her position ----------
+
+test('moves asked for mid-drag are dropped; she stays under the pointer, and pointing keeps its aim', async () => {
+  const t = await make({ anchor: { x: 1700, y: 900 } });
+  const s = t.stella;
+  s.glideTo({ x: 200, y: 200 });
+  t.step(F, 10);
+  const at = { ...s.pos };
+  s.pointerDown(at.x, at.y);
+  s.pointerMove(at.x - 40, at.y - 20);
+  t.step(F);
+  assert.equal(s.travel, null, 'the drag took over');
+  const target = { x: at.x - 40, y: at.y - 20 };
+  let come = 'pending', point = 'pending';
+  s.summon({ x: 300, y: 300 }).then(v => { come = v; });
+  s.pointAt({ x: 100, y: 100, w: 200, h: 100 }).then(v => { point = v; });
+  for (let i = 0; i < 120; i++) {
+    t.step(F);
+    assert.equal(s.travel, null, 'no route while dragging');
+  }
+  await settle();
+  assert.ok(dist(s.pos, target) < 1, `under the pointer: ${JSON.stringify(s.pos)}`);
+  assert.equal(come, false);
+  assert.equal(point, false);
+  assert.ok(s.focus && s.aimAngle != null, 'pointing keeps its aim');
+  // the traveler itself never steps a route while dragging
+  s.traveler.current = { route: s.traveler.plan({ x: 300, y: 300 }, 'glide'), to: { x: 300, y: 300 }, elapsed: 0, duration: 1000, reason: 'glide', fn: true };
+  const held = { ...s.pos };
+  s.traveler.step(0.1, false);
+  assert.deepEqual(s.pos, held);
+  s.pointerUp(target.x, target.y);
+});
+
+// ---------- 6. re-plans don't restart from a standstill ----------
+
+test('the same destination again does not re-plan; a new one keeps her speed', async () => {
+  const t = await make({ anchor: { x: 1700, y: 900 } });
+  const s = t.stella;
+  const rect = { x: 200, y: 100, w: 300, h: 200 };
+  const first = s.guideFocus({ rect });
+  t.step(F, 20);
+  const travel = s.travel, elapsed = travel.elapsed;
+  const second = s.guideFocus({ rect }); // each walkthrough step sends its focus twice
+  assert.equal(s.travel, travel, 'same travel');
+  assert.equal(s.travel.elapsed, elapsed, 'not restarted');
+  msUntil(t, () => !s.travel);
+  assert.equal(await second, true);
+  await first;
+
+  // mid-glide, a different target: the new route starts at her current speed
+  const u = await make({ anchor: { x: 1700, y: 900 } });
+  u.stella.pointAt({ x: 200, y: 100, w: 300, h: 200 });
+  u.step(F, 40);
+  const speed = () => { const a = { ...u.stella.pos }; u.step(F); return dist(a, u.stella.pos) * 60; };
+  const before = speed();
+  assert.ok(before > 300, `gliding at ${before} px/s`);
+  u.stella.pointAt({ x: 200, y: 700, w: 300, h: 200 });
+  const after = speed();
+  assert.ok(after > 0.7 * before, `speed ${before} -> ${after} px/s`);
+  msUntil(u, () => !u.stella.travel);
+  assert.ok(Math.abs(Math.atan2(Math.sin(u.stella.aimAngle), Math.cos(u.stella.aimAngle))) < Math.PI, 'arrived');
+});

@@ -13,6 +13,8 @@ const HOME_REACH = 200;        // px: the anchor area
 const WANDER_SPEED = 40;       // px/s: a wander hop never averages faster than this
 const FN_SPEED = 500;          // px/s: a function's move (pointing, guiding, come, reminders, home) averages this
 const FN_MIN = 600, FN_MAX = 2500; // ms: and takes this long at least / at most
+const SAME_GOAL = 4;           // px: asked to go where she's already heading: the route isn't planned again
+const MAX_LAUNCH = 3;          // the carried-over speed's share of the profile (above 3 it would overshoot)
 const FADE = 150;              // ms: reduced motion fades out, is placed, fades in
 const CORNER = 200;            // px: how far before a waypoint a detour starts to curve
 const TABLE = 48;              // samples per leg for arc-length lookup
@@ -23,6 +25,9 @@ const CROSSING = new Set(['point', 'guide']); // the only travels that may cross
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const inside = (p, r, view) => p.x >= r && p.y >= r && p.x <= view.w - r && p.y <= view.h - r;
+// Progress along a route at time fraction `k`: eased in and out, or (launch > 0) leaving at a carried-over speed
+// (launch = start speed x duration / length) and easing out. Cubic Hermite; monotonic for launch in [0, 3].
+const profile = (k, launch = 0) => (launch > 0 ? easeInOut(k) + launch * k * (1 - k) * (1 - k) : easeInOut(k));
 
 export const straight = (from, to) => ({ from, to, control: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
   length: dist(from, to) });
@@ -142,11 +147,21 @@ export class Traveler {
     this.current = null; // { route?, to, elapsed, duration, reason, fn, settle?, fade?, done }
     this.bob = 0; this.bobAmp = 0; this.bobPhase = 0;
     this.opacity = 1;    // reduced motion fades function moves out and in
+    this.speed = 0;      // px/s along her current route
   }
 
-  // Glides to `to` along a planned route. Resolves true on arrival, false when replaced or stopped.
+  // Glides to `to` along a planned route. Resolves true on arrival, false when replaced or stopped. A drag owns
+  // her position: a move asked for meanwhile is dropped. Asked again for where she's already heading, the route
+  // carries on; a new destination mid-glide starts from her current speed, not from a standstill.
   go(to, { reason = 'glide', fn = true } = {}) {
-    return this.follow(this.plan(to, reason), { reason, fn });
+    const s = this.s, t = this.current;
+    if (s.dragging) return Promise.resolve(false);
+    const goal = clampToView(to, s.radius, s.view);
+    if (t && !t.settle && t.reason !== 'wander' && dist(goal, t.goal || t.to) < SAME_GOAL) {
+      t.fn = t.fn || fn;
+      return new Promise(done => { const prev = t.done; t.done = arrived => { prev?.(arrived); done(arrived); }; });
+    }
+    return this.follow(this.plan(goal, reason), { reason, fn, goal, speed: t?.route ? this.speed : 0 });
   }
 
   plan(to, reason) {
@@ -155,17 +170,20 @@ export class Traveler {
       radius: s.radius, band: s.bandRadius, view: s.view, random: s.random });
   }
 
-  follow(r, { reason, fn }) {
+  follow(r, { reason, fn, goal, speed = 0 }) {
     this.stop(false);
     if (r.length < 1) {
       this.arrived(reason);
       return Promise.resolve(true);
     }
     return new Promise(done => {
-      this.current = { route: r, to: r.legs[r.legs.length - 1].to, elapsed: 0, duration: this.duration(r, reason),
-        reason, fn, done };
+      const duration = this.duration(r, reason);
+      this.current = { route: r, to: r.legs[r.legs.length - 1].to, goal, elapsed: 0, duration,
+        launch: this.launch(speed, duration, r), reason, fn, done };
     });
   }
+
+  launch(speed, duration, r) { return r.length > 0 ? clamp(speed * duration / 1000 / r.length, 0, MAX_LAUNCH) : 0; }
 
   // Wandering is calm (30-40 px/s); every other travel is a function's quick, eased move.
   duration(r, reason) {
@@ -201,15 +219,18 @@ export class Traveler {
     if (!t.route || t.fade != null) return;
     if (!CROSSING.has(t.reason) && !inBand(t.to, s.bandRadius, s.view)) t.to = nearestBandPoint(t.to, s.bandRadius, s.view);
     t.route = this.plan(t.to, t.reason);
-    t.to = t.route.legs[t.route.legs.length - 1].to;
+    t.to = t.goal = t.route.legs[t.route.legs.length - 1].to;
     t.elapsed = 0;
     t.duration = this.duration(t.route, t.reason);
+    t.launch = this.launch(this.speed, t.duration, t.route);
   }
 
   step(dt, reduced) {
-    const s = this.s, t = this.current;
+    const s = this.s, t = this.current, from = s.pos;
     let fading = false;
-    if (t?.settle) {
+    if (s.dragging) {
+      // the drag owns her position: no route steps (dragging stops any travel; this is the guard)
+    } else if (t?.settle) {
       if (reduced) { this.stop(false); s.anchor = { ...s.pos }; } // she stops where she is, no snap
       else {
         s.pos = { x: damp(s.pos.x, t.to.x, SETTLE_RATE, dt), y: damp(s.pos.y, t.to.y, SETTLE_RATE, dt) };
@@ -232,9 +253,10 @@ export class Traveler {
     } else if (t) {
       t.elapsed += dt * 1000;
       const u = clamp(t.elapsed / t.duration, 0, 1);
-      s.pos = clampToView(pointOnRoute(t.route, easeInOut(u)), s.radius, s.view);
+      s.pos = clampToView(pointOnRoute(t.route, profile(u, t.launch)), s.radius, s.view);
       if (u >= 1) { this.stop(true); this.arrived(t.reason); }
     }
+    this.speed = this.current?.route && dt > 0 ? dist(from, s.pos) / dt : 0;
     if (!fading && this.opacity < 1) this.opacity = Math.min(1, this.opacity + dt * 1000 / FADE);
     const still = !this.current && !s.dragging && !reduced;
     this.bobAmp = damp(this.bobAmp, still ? 1 : 0, BOB_RATE, dt);
