@@ -283,3 +283,33 @@ test('glitch jitter and flicker fade with the eased reduced factor', async () =>
   assert.ok(prev.sheen.flickerBoost < 0.01 && !prev.sheen.flicker, 'off once reduced settles');
   assert.ok(Math.hypot(prev.cx - 180, prev.cy - 180) < 0.02, 'jitter gone');
 });
+
+test('sheen band phase stays continuous when shineWave changes its speed', async () => {
+  const m = await load();
+  const clock = new m.SceneClock(), dt = 1 / 60, wave = { name: 'shineWave', envelope: 1, energy: 0.5 };
+  // Distance on the 1.4 loop the band position travels.
+  const loop = d => Math.min(Math.abs(d), 1.4 - Math.abs(d));
+  let prev = null, prevSeeds = null, sawWrap = false, fast = 0, slow = 0;
+  for (let i = 0; i < 1200; i++) {
+    // Abrupt speed toggles every 0.5 s, then a smooth ramp in and out.
+    const ramp = i < 600 ? (Math.floor(i / 30) % 2) : 0.5 - 0.5 * Math.cos(TAU * (i - 600) / 300);
+    const idle = { ...wave, envelope: ramp };
+    clock.step(dt, blendOf(), idle, {});
+    const sc = m.buildScene({ s: 360, t: i * dt, clock, blend: blendOf(), idle, motions: {} });
+    const ph = sc.sheen.phase;
+    assert.ok(ph >= 0 && ph < 1.4, `phase in range: ${ph}`);
+    near(sc.sheen.speed, 0.45 * (1 + ramp), 1e-9, 'speed field kept');
+    if (prev != null) {
+      const step = loop(ph - prev);
+      if (ph < prev) sawWrap = true;
+      assert.ok(step <= 0.9 * dt + 1e-9, `phase jumped ${step} at frame ${i}`);
+      if (step > 0.6 * dt) fast++; else slow++;
+    }
+    // Per-seed band positions (phase + seed * seedStep) stay continuous on the smooth ramp.
+    const seeds = Array.from({ length: 8 }, (_, k) => (ph + k * sc.sheen.seedStep) % 1.4);
+    if (i > 600 && prevSeeds) seeds.forEach((v, k) => assert.ok(loop(v - prevSeeds[k]) < 0.02, `seed ${k} jumped`));
+    prev = ph; prevSeeds = seeds;
+  }
+  assert.ok(sawWrap, 'phase wraps at 1.4');
+  assert.ok(fast > 100 && slow > 100, `both speeds used (fast ${fast}, slow ${slow})`);
+});

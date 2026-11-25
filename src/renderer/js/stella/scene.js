@@ -47,6 +47,7 @@ export class SceneClock {
     this.sway = 0; this.swayOff = 0; this.tilt = 0;
     this.orbit = 0; this.radar = 0; this.ripple = 0; this.rippleSpeed = 3; this.music = 0;
     this.scan = 0; this.burst = 0;
+    this.sheen = 0;            // sheen band phase, accumulated and wrapped to [0, 1.4)
     this.red = null;            // eased reduced-motion factor, 0..1
     this.since = {};            // seconds since a timed motion started, per name
     this.aimIndex = null; this.aimAngle = null; this.aimDelta = 0; this.aimEnv = 0;
@@ -98,6 +99,8 @@ export class SceneClock {
     this.music += 8 * dt * slow;
     this.rippleSpeed = damp(this.rippleSpeed, (speak > 0.5 ? 9 : 3) * slow, SPEED_EASE, dt);
     this.ripple += this.rippleSpeed * dt;
+    // Accumulated so a speed change (shineWave) never makes the band jump.
+    this.sheen = (this.sheen + dt * P.sheen.speed * (1 + ie('shineWave'))) % 1.4;
     this.scan = env(motions, 'scan') > 0 ? this.scan + dt / (MOTIONS.scan.duration / 1000) : 0;
     for (const n of TIMED) {
       this.since[n] = env(motions, n) > 0 ? (this.since[n] == null ? 0 : this.since[n] + dt) : null;
@@ -251,6 +254,7 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
     flickerAmount: live,
     stepped: ticks > 0,
     speed: P.sheen.speed * (1 + wave),
+    phase: clock.sheen || 0,   // use this, not t*speed, for the band position
     seedStep: lerp(P.sheen.seedStep, 1.4 / (B.count + K.count), wave),
     flickerBoost: Math.max(ticks, glitch) * live,
   };

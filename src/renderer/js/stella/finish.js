@@ -83,13 +83,16 @@ void main() {
 const UNLIT = parseColor(P.led.unlit), EDGE = parseColor(P.sheen.edge);
 const TAU = Math.PI * 2;
 
-// Time-driven sheen phases, wrapped: [23t mod 2pi, 3.1t mod 2pi, (t'*speed) mod 1.4],
-// with t' stepped to 1/6 s while the sheen ticks. Writes into `out`.
+const STEP = 1.4 / 18;   // band position step while the sheen ticks
+
+// Sheen phases, wrapped: [23t mod 2pi, 3.1t mod 2pi, band position in [0, 1.4)].
+// The band position is the clock-accumulated sheen.phase (so speed changes never
+// make it jump), stepped while the sheen ticks. Writes into out.
 export function sheenPhases(t, sheen, out) {
-  const tt = sheen.stepped ? Math.floor(t * 6) / 6 : t;
+  const pos = typeof sheen.phase === 'number' ? sheen.phase : t * sheen.speed;
   out[0] = wrapPhase(23 * t, TAU);
   out[1] = wrapPhase(3.1 * t, TAU);
-  out[2] = wrapPhase(tt * sheen.speed, 1.4);
+  out[2] = wrapPhase(sheen.stepped ? Math.floor(pos / STEP) * STEP : pos, 1.4);
   return out;
 }
 
