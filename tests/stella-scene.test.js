@@ -81,6 +81,8 @@ test('speaking widens and extends', async () => {
   assert.ok(loud.blades[0].rOut > quiet.blades[0].rOut);
   assert.ok(loud.globe.heart.r > quiet.globe.heart.r);
   assert.ok(loud.globe.wavy > quiet.globe.wavy);
+  near(quiet.ring.glow, 0.14, 1e-9, 'quiet ring glow');
+  near(loud.ring.glow, 0.29, 1e-9, 'loud ring glow');
 });
 
 test('aim turns the nearest blade the short way', async () => {

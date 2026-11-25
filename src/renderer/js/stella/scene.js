@@ -209,6 +209,7 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
   ringAlpha = lerp(ringAlpha, 1, env(mo, 'approval'));
   const ring = {
     r: ringR, turn: clock.ringTurn, alpha: ringAlpha * brightness * body,
+    glow: (0.14 + E * 0.15) * brightness * body,
     chase: {angle: clock.chase, strength: think},
   };
 
