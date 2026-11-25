@@ -1,0 +1,135 @@
+/* Stella "Orbit" theme: shared tokens and primitives for every renderer page.
+   Round shapes echo her ring; warm colors stay in small accents. */
+:root {
+  --st-bg-0: #08071c;
+  --st-bg-1: #1d1850;
+  --st-panel-a: rgba(36, 30, 86, .92);
+  --st-panel-b: rgba(16, 14, 44, .94);
+  --st-text: #ece9ff;
+  --st-muted: #a9a3d6;
+  --st-muted-2: #8f89c0;
+  --st-lavender: #b9a4f5;
+  --st-violet: #8b5cf6;
+  --st-blue: #5b8cff;
+  --st-link: #7ea6ff;
+  --st-gold: #f6dc9c;
+  --st-rose: #f2b8c6;
+  --st-warm: #fff1d6;
+  --st-ok: #8ee6b0;
+  --st-ink: #1b1745;
+  --st-line: rgba(185, 164, 245, .18);
+  --st-hairline: linear-gradient(120deg, rgba(246, 220, 156, .7), rgba(242, 184, 198, .45) 30%, rgba(139, 92, 246, .25) 60%, rgba(91, 140, 255, .5));
+  --st-font: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --st-mono: "JetBrains Mono", Consolas, monospace;
+  --st-radius-panel: 22px;
+  --st-radius-tile: 16px;
+  --st-shadow: 0 12px 34px rgba(5, 4, 20, .65);
+}
+
+/* Rounded midnight surface with the gold→rose→blue hairline. */
+.orbit-surface {
+  position: relative;
+  color: var(--st-text);
+  font-family: var(--st-font);
+  background: linear-gradient(180deg, var(--st-panel-a), var(--st-panel-b));
+  border-radius: var(--st-radius-panel);
+  box-shadow: var(--st-shadow);
+}
+.orbit-surface::before,
+.orbit-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--st-hairline);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.orbit-pill {
+  position: relative;
+  border-radius: 999px;
+  color: var(--st-text);
+  font-family: var(--st-font);
+  background: linear-gradient(180deg, var(--st-panel-a), var(--st-panel-b));
+  box-shadow: var(--st-shadow);
+}
+
+/* Icon buttons: fixed circles, icon centered by grid, never by padding. */
+.orbit-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(185, 164, 245, .3);
+  background: rgba(20, 18, 60, .6);
+  color: var(--st-lavender);
+  line-height: 0;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.orbit-icon > svg { display: block; }
+.orbit-icon:hover { border-color: rgba(246, 220, 156, .55); color: var(--st-warm); }
+.orbit-icon:focus-visible { outline: 2px solid var(--st-gold); outline-offset: 2px; }
+.orbit-icon--30 { width: 30px; height: 30px; }
+.orbit-icon--34 { width: 34px; height: 34px; }
+.orbit-icon--46 {
+  width: 46px; height: 46px;
+  background: radial-gradient(circle at 50% 35%, rgba(139, 92, 246, .45), rgba(20, 18, 60, .95) 70%);
+  border-color: rgba(246, 220, 156, .55);
+  color: var(--st-warm);
+  box-shadow: 0 0 14px rgba(139, 92, 246, .45);
+}
+
+/* Primary action: warm gold circle or pill. */
+.orbit-primary {
+  background: radial-gradient(circle at 40% 35%, var(--st-warm), var(--st-gold) 42%, #d9a86a);
+  border-color: transparent;
+  color: var(--st-ink);
+}
+.orbit-primary:hover { color: var(--st-ink); filter: brightness(1.06); }
+
+/* Optical offsets: these icons are visually unbalanced inside a circle. */
+.icon-chat > svg { transform: translate(0, -.5px); }
+.icon-mic > svg { transform: translate(0, .5px); }
+.icon-send > svg { transform: translate(0, -.5px); }
+
+/* Switch */
+.orbit-switch { position: relative; display: inline-block; flex: none; width: 34px; height: 20px; }
+.orbit-switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.orbit-switch span {
+  position: absolute; inset: 0; border-radius: 999px; pointer-events: none;
+  background: rgba(10, 9, 30, .7); border: 1px solid rgba(185, 164, 245, .3);
+  transition: background .18s ease;
+}
+.orbit-switch span::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--st-muted-2); transition: transform .18s ease, background .18s ease;
+}
+.orbit-switch input:checked + span { background: linear-gradient(90deg, var(--st-violet), var(--st-blue)); border-color: transparent; }
+.orbit-switch input:checked + span::after { transform: translateX(14px); background: var(--st-warm); }
+.orbit-switch input:focus-visible + span { outline: 2px solid var(--st-gold); outline-offset: 2px; }
+
+/* Segmented round choices (S / M / L) */
+.orbit-segment {
+  display: inline-flex; gap: 4px; padding: 3px; flex: none;
+  border-radius: 999px; background: rgba(10, 9, 30, .6); border: 1px solid var(--st-line);
+}
+.orbit-segment button {
+  display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--st-muted); font: 600 11px/1 var(--st-font); cursor: pointer;
+}
+.orbit-segment button[aria-pressed="true"] {
+  background: radial-gradient(circle at 40% 35%, var(--st-warm), var(--st-gold) 45%, #d9a86a); color: var(--st-ink);
+}
+.orbit-segment button:focus-visible { outline: 2px solid var(--st-gold); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit-icon, .orbit-switch span, .orbit-switch span::after { transition: none; }
+}
