@@ -2,8 +2,6 @@
 
 <img src="docs/media/stella.gif" alt="Stella, un globe de lumière entouré de lames violettes qui tournent, au repos, à l’écoute, en réflexion puis en train de parler" width="900">
 
-<h3>Une compagne IA vivante pour votre bureau Windows.</h3>
-
 <p>Elle flotte à côté de votre travail, discute avec vous, retient ce que vous choisissez<br>et vous aide sur votre PC quand vous le demandez.</p>
 
 [![CI](https://github.com/AnalogicGoose/Stella/actions/workflows/ci.yml/badge.svg?branch=development)](https://github.com/AnalogicGoose/Stella/actions/workflows/ci.yml)
@@ -24,7 +22,7 @@ Cliquez sur elle pour discuter par écrit ou à voix haute, ou dites simplement 
 
 <table>
 <tr>
-<td width="55%" valign="top"><img src="docs/media/chat.png" alt="Stella à côté de sa fenêtre de discussion"></td>
+<td width="55%" valign="middle"><img src="docs/media/chat.png" alt="Stella à côté de sa fenêtre de discussion"></td>
 <td width="45%" valign="top"><img src="docs/media/control-room.png" alt="Le salon de contrôle de Stella"></td>
 </tr>
 </table>

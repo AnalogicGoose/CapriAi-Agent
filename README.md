@@ -2,8 +2,6 @@
 
 <img src="docs/media/stella.gif" alt="Stella, a glowing globe of light with turning purple blades, moving through idle, listening, thinking and speaking" width="900">
 
-<h3>A living AI companion for your Windows desktop.</h3>
-
 <p>She floats beside your work, talks with you, remembers what you choose,<br>and helps on your PC when you ask.</p>
 
 [![CI](https://github.com/AnalogicGoose/Stella/actions/workflows/ci.yml/badge.svg?branch=development)](https://github.com/AnalogicGoose/Stella/actions/workflows/ci.yml)
@@ -26,7 +24,7 @@ Click her to talk by text or voice, or just say **"Hey Stella"**. She uses [Code
 
 <table>
 <tr>
-<td width="55%" valign="top"><img src="docs/media/chat.png" alt="Stella beside her chat panel, answering a request to plan the week"></td>
+<td width="55%" valign="middle"><img src="docs/media/chat.png" alt="Stella beside her chat panel, answering a request to plan the week"></td>
 <td width="45%" valign="top"><img src="docs/media/control-room.png" alt="Stella's Control room with Gaming mode, size, Put away and folding settings sections"></td>
 </tr>
 <tr>
@@ -37,11 +35,11 @@ Click her to talk by text or voice, or just say **"Hey Stella"**. She uses [Code
 
 ## What she can do
 
-| | |
-|---|---|
-| **Talk and listen**<br>Text or voice chat, a "Hey Stella" wake word, and optional expressive speech. You can interrupt her mid-sentence. | **Help on your PC**<br>On request she opens apps and sites, searches the web, reads a screen snapshot, uses desktop controls and works inside a project you pick. |
-| **Remember, if you want**<br>Save goals, decisions and resume points, and teach her routines she can run later. Memory is off until you turn it on. | **Start a conversation**<br>She can bring up an interest she chose or come back to a question when there is something new to say. |
-| **Reminders**<br>Ask her to remind you, and she comes over when it's time. | **Stay out of the way**<br>Gaming mode, fullscreen apps and <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> fold her into a point of light until you need her. |
+<table>
+<tr><td width="50%" valign="top"><b>Talk and listen</b><br>Text or voice chat, a "Hey Stella" wake word, and optional expressive speech. You can interrupt her mid-sentence.</td><td width="50%" valign="top"><b>Help on your PC</b><br>On request she opens apps and sites, searches the web, reads a screen snapshot, uses desktop controls and works inside a project you pick.</td></tr>
+<tr><td width="50%" valign="top"><b>Remember, if you want</b><br>Save goals, decisions and resume points, and teach her routines she can run later. Memory is off until you turn it on.</td><td width="50%" valign="top"><b>Start a conversation</b><br>She can bring up an interest she chose or come back to a question when there is something new to say.</td></tr>
+<tr><td width="50%" valign="top"><b>Reminders</b><br>Ask her to remind you, and she comes over when it's time.</td><td width="50%" valign="top"><b>Stay out of the way</b><br>Gaming mode, fullscreen apps and <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd> fold her into a point of light until you need her.</td></tr>
+</table>
 
 ### She shows what she's doing
 
