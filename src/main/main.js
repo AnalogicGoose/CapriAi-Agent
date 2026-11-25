@@ -397,9 +397,11 @@ const currentContext = text => {
 };
 const brainTools = new CodexTools({ settings: agentConfig, resolveLanguage: resolveLang, context: pcContext,
   screen: screenAccess, accessibility, guide, walkthroughs, highlight: process.platform === 'win32' ? highlight.show : null, closeApp: closeRequestedApp,
-  body: bodyAction, activity: event => overlay?.webContents.send('agent:activity', event),
+  body: bodyAction, activity: event => sendAgentActivity(event),
   actions, store: memory, goals, curiosity: () => curiosity, state: settingsState, patch: updateConfig, confirm: confirmMemory });
-const brain = new CodexBrain({ settings: agentConfig, recentConversation,
+// Stella animates what her agent does: Capri's tools (above) and the AI's own built-in ones (below).
+function sendAgentActivity(event) { if (overlay && !overlay.isDestroyed()) overlay.webContents.send('agent:activity', event); }
+const brain = new CodexBrain({ settings: agentConfig, recentConversation, activity: sendAgentActivity,
   warmIdleMs: 3 * 60 * 1000, canKeepWarm: () => !config.load().gamingMode && sessionAvailable,
   cwd: path.join(app.getPath('temp'), 'caprigpt-codex-brain'), tools: brainTools,
   systemTools: () => config.load().systemAccess === true, workspace: () => goals().projects.workspace() || app.getPath('home'), context: currentContext,

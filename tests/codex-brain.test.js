@@ -48,7 +48,7 @@ test('system-mode CLI enables command, file/image and web capability without for
   assert.ok(!args.includes('features.apps=false')); assert.ok(args.includes('features.hooks=false'));
   c.close();
 });
-function fixture(mode = 'reply') {
+function fixture(mode = 'reply', brainOptions = {}) {
   let client; let threadNumber = 0; const calls = []; const toolRuns = [];
   const tools = { specs: () => [], instructions: () => '', run: async (...args) => { toolRuns.push(args); return { completed: true }; }, cancel: () => {} };
   const factory = () => client = {
@@ -98,6 +98,17 @@ function fixture(mode = 'reply') {
             await this.onRequest({ id: 90, method: mode === 'approval' ? 'item/commandExecution/requestApproval' : 'item/permissions/requestApproval',
               params: { threadId: 'thread', turnId: 'turn', itemId: 'command', command: 'echo safe', permissions: { fileSystem: { write: ['C:\\Requested'] } } } });
           }
+          if (mode === 'native') {
+            const context = { threadId: 'thread', turnId: 'turn' };
+            const search = { id: 'ws', type: 'webSearch', query: 'blox fruits news', status: 'completed' };
+            const launch = { id: 'cmd', type: 'commandExecution', command: 'Start-Process spotify', status: 'completed', exitCode: 0 };
+            const failed = { id: 'bad', type: 'commandExecution', command: 'git status', status: 'failed', exitCode: 1 };
+            for (const item of [search, launch, failed]) {
+              this.onNotification('item/started', { ...context, item: { ...item, status: 'inProgress' } });
+              this.onNotification('item/completed', { ...context, item });
+            }
+            this.onNotification('item/completed', { ...context, item: { id: 'never-started', type: 'webSearch' } });
+          }
           if (mode === 'screen') await this.onRequest({ id: 33, method: 'item/tool/call', params: { threadId: 'thread', turnId: 'turn', callId: 'screen', tool: 'capri_screen', arguments: { displayId: '' } } });
           if (mode === 'tool' || mode === 'launch' || mode === 'music') {
             const request = { id: 30, method: 'item/tool/call', params: { threadId: 'thread', turnId: 'turn', callId: 'one', tool: 'capri_context', arguments: {} } };
@@ -121,9 +132,22 @@ function fixture(mode = 'reply') {
       }
     },
   };
-  const brain = new CodexBrain({ settings: () => ({}), cwd: path.join(os.tmpdir(), 'capri-brain-unit'), tools, clientFactory: factory, locate: () => 'codex' });
+  const brain = new CodexBrain({ settings: () => ({}), cwd: path.join(os.tmpdir(), 'capri-brain-unit'), tools, clientFactory: factory, locate: () => 'codex', ...brainOptions });
   return { brain, calls, toolRuns, client: () => client };
 }
+test('the AI\'s own built-in tools report activity for Stella (start, end, never the query or command)', async () => {
+  const events = [];
+  const f = fixture('native', { systemTools: () => true, activity: event => events.push(event) });
+  assert.equal(await f.brain.chat('search blox fruits news and open spotify', () => {}), 'Hello');
+  assert.deepEqual(events, [
+    { tool: 'native_web_search', op: 'search', phase: 'start' }, { tool: 'native_web_search', op: 'search', phase: 'end', ok: true },
+    { tool: 'native_command', op: 'launch', phase: 'start' }, { tool: 'native_command', op: 'launch', phase: 'end', ok: true },
+    { tool: 'native_command', op: 'run', phase: 'start' }, { tool: 'native_command', op: 'run', phase: 'end', ok: false },
+  ]);
+  // A throwing listener never breaks the conversation.
+  const g = fixture('native', { systemTools: () => true, activity: () => { throw Error('boom'); } });
+  assert.equal(await g.brain.chat('search', () => {}), 'Hello');
+});
 test('warm foreground requests reuse the process, isolate threads and release the process in gaming mode', async () => {
   const f = fixture('warm');
   f.brain.warmIdleMs = 180000;

@@ -28,8 +28,15 @@ const AGENT = {
   capri_settings_change: 'pulse', capri_routines_delete: 'pulse', capri_body: 'pulse',
 };
 
+// The AI's own built-in tools (src/main/native-activity.js).
+const NATIVE = { native_web_search: 'radar', native_file_change: 'ticks', native_image_view: 'scan', native_tool: 'think' };
+
 export function motionForAgentTool(tool, op) {
   if (tool === 'capri_apps') return APP_RADAR.has(op) ? 'radar' : 'flare';
+  // Desktop steps that open or look something up are the same as capri_apps; the rest are clicks and typing.
+  if (tool === 'capri_desktop_step' && (APP_RADAR.has(op) || APP_FLARE.has(op))) return APP_RADAR.has(op) ? 'radar' : 'flare';
+  if (tool === 'native_command') return op === 'launch' ? 'flare' : 'ticks';
+  if (Object.hasOwn(NATIVE, tool)) return NATIVE[tool];
   return Object.hasOwn(AGENT, tool) ? AGENT[tool] : 'think';
 }
 

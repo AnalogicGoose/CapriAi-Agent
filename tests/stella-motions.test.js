@@ -29,6 +29,26 @@ test('apps operations split between flare and radar', async () => {
   assert.equal(f('capri_apps', 'nope'), 'flare');
 });
 
+test('desktop steps that open or search use the app motions, other steps tick', async () => {
+  const { motionForAgentTool: f } = await loadRenderer('stella/motions.js');
+  for (const op of ['open_app', 'open_url', 'open_workspace', 'open_media', 'play_music', 'play_video', 'youtube_latest', 'open_result'])
+    assert.equal(f('capri_desktop_step', op), 'flare', op);
+  for (const op of ['search_web', 'search_news', 'steam_deals']) assert.equal(f('capri_desktop_step', op), 'radar', op);
+  for (const op of [null, undefined, 'click', 'type_text']) assert.equal(f('capri_desktop_step', op), 'ticks', String(op));
+});
+
+test('the AI\'s own built-in tools get motions too', async () => {
+  const { MOTIONS, motionForAgentTool: f } = await loadRenderer('stella/motions.js');
+  assert.equal(f('native_web_search', 'search'), 'radar');
+  assert.equal(f('native_command', 'launch'), 'flare');
+  assert.equal(f('native_command', 'run'), 'ticks');
+  assert.equal(f('native_file_change'), 'ticks');
+  assert.equal(f('native_image_view'), 'scan');
+  assert.equal(f('native_tool'), 'think');
+  for (const t of ['native_web_search', 'native_command', 'native_file_change', 'native_image_view'])
+    assert.ok(Object.hasOwn(MOTIONS, f(t, 'run')), t);
+});
+
 test('codex tool names follow the old action rules', async () => {
   const { motionForCodexTool: f } = await loadRenderer('stella/motions.js');
   assert.equal(f('WebSearch'), 'radar');

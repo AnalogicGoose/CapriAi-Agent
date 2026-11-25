@@ -4,6 +4,7 @@ const { CodexClient } = require('./codex-client');
 const { executable } = require('./codex-runtime');
 const { PERSONA } = require('./personality');
 const { readDeliveryPrefix, INSTRUCTIONS: VOICE_DELIVERY } = require('./voice-delivery');
+const { nativeActivity } = require('./native-activity');
 
 const MAX_WARM_TURNS = 24;
 const THREAD_RELEASE_TIMEOUT = 400;
@@ -34,8 +35,8 @@ function routineReply(receipt) {
 
 class CodexBrain {
   constructor({ settings, cwd, tools, recentConversation, systemTools = () => false, workspace, context = () => ({}), approve = async () => false, onOutcome = () => {},
-    clientFactory = options => new CodexClient(options), locate = executable, warmIdleMs = 0, canKeepWarm = () => true }) {
-    Object.assign(this, { settings, cwd, tools, recentConversation, clientFactory, locate, systemTools, workspace, context, approve, onOutcome, warmIdleMs, canKeepWarm });
+    clientFactory = options => new CodexClient(options), locate = executable, warmIdleMs = 0, canKeepWarm = () => true, activity = () => {} }) {
+    Object.assign(this, { settings, cwd, tools, recentConversation, clientFactory, locate, systemTools, workspace, context, approve, onOutcome, warmIdleMs, canKeepWarm, activity });
     this.history = []; this.epoch = 0; this.busy = false; this.lastStatus = null;
   }
   createClient(nativeTools = this.systemTools(), warmThreads = false) {
@@ -134,6 +135,9 @@ class CodexBrain {
     this.client = client;
     const diagnostics = this.lastDiagnostics = { calls: 0, completed: 0, errors: [], rejectedMethods: [] };
     const nativeItems = new Map();
+    // Built-in tool items Stella was told about (start sent, end not yet): only these get an end.
+    const reported = new Map();
+    const report = event => { try { this.activity(event); } catch {} };
     const completedCommands = new Map();
     const commentaryItems = new Set();
     let finish, fail, textOut = '', completedText = '', streamItemId, toolQueue = Promise.resolve(), calls = 0, routineTurn = false;
@@ -178,6 +182,15 @@ class CodexBrain {
       if (method === 'turn/started') { this.turnId = params.turn.id; return; }
       if (params.turnId && params.turnId !== this.turnId) return;
       if (nativeTools && params.item?.id && (method === 'item/started' || method === 'item/completed')) nativeItems.set(params.item.id, params.item);
+      if (nativeTools && params.item?.id && method === 'item/started' && !reported.has(params.item.id)) {
+        const a = nativeActivity(params.item);
+        if (a) { reported.set(params.item.id, a); report({ ...a, phase: 'start' }); }
+      }
+      if (nativeTools && params.item?.id && method === 'item/completed' && reported.has(params.item.id)) {
+        const a = reported.get(params.item.id), item = params.item;
+        reported.delete(item.id);
+        report({ ...a, phase: 'end', ok: item.status !== 'failed' && item.status !== 'declined' && (item.exitCode == null || item.exitCode === 0) });
+      }
       if (nativeTools && method === 'item/completed' && params.item?.id && params.item.type === 'commandExecution') completedCommands.set(params.item.id, params.item);
       if (nativeTools && method === 'item/completed' && params.item?.id && ['commandExecution', 'fileChange', 'mcpToolCall', 'webSearch', 'imageView'].includes(params.item.type)) {
         try {
