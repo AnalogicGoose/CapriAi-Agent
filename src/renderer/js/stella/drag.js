@@ -82,8 +82,9 @@ export const Drag = {
       if (this.reduced()) { this.pos = { ...drop }; this.traveler.stop(true); } // she followed 1:1: nothing to settle
       else this.traveler.settle(drop);
       this.nextMove = this.now() + restDuration(this.random); // the wander timer restarts from the drop
-    } else if (!cancelled && this.stowed) {
-      if (!d.moved) this.onBudClick?.(); // a click (not a drag attempt) on her resting in the corner brings her back
+    } else if (!cancelled && this.restActive) {
+      // a click (not a drag attempt) on her resting in the corner brings her back; mid-glide it does nothing
+      if (this.stowed && !d.moved) this.onBudClick?.();
     } else if (!cancelled) {
       this.resting = false; // a click ends a nap
       this.onClick?.();

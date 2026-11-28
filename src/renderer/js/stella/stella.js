@@ -152,6 +152,7 @@ export class Stella {
   // Keeps her (and where she's heading) fully inside the view.
   reclamp() {
     const fit = p => clampToView(p, this.radius, this.view);
+    if (this.rest.from) this.rest.from = fit(this.rest.from); // where she comes back to, put away
     this.pos = this.restActive ? this.restPath(this.rest.q) : fit(this.pos);
     if (this.anchor) this.anchor = fit(this.anchor);
     this.traveler.reclamp(fit);

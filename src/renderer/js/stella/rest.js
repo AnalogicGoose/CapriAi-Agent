@@ -81,6 +81,8 @@ export const Rest = {
   stowNow() {
     const r = this.rest;
     this.stowing = null;
+    settle(r.back, false); // a return that was under way is over
+    settle(r.away, true);
     this.letGoAll();
     this.traveler.stop(false);
     r.from = isPoint(this.anchor) ? { ...this.anchor } : { ...this.pos };

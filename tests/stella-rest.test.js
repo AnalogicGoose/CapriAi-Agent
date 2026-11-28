@@ -208,3 +208,35 @@ test('a finished big job while she rests: no glide, no victory pose, the summary
   assert.ok(near(stella.pos.x, p.x, 1e-6) && near(stella.pos.y, p.y, 1e-6));
   assert.equal(spoke, 1);
 });
+
+test('review: a new view refits where she will come back to', async () => {
+  const { stella, run } = await make({ view: { w: 2560, h: 1440 }, anchor: { x: 2300, y: 700 } });
+  stella.stow(); run(1600);
+  stella.setView(1920, 1080);
+  stella.unstow(); run(1600);
+  const r = stella.radius;
+  assert.ok(stella.pos.x <= 1920 - r + 1e-6 && stella.pos.y <= 1080 - r + 1e-6, JSON.stringify(stella.pos));
+});
+
+test('review: stowNow settles a pending unstow', async () => {
+  const { stella, run } = await make();
+  stella.stowNow();
+  let settled = false;
+  stella.unstow().then(() => { settled = true; });
+  run(500);
+  stella.stowNow();
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(settled, true);
+});
+
+test('review: a click while she is gliding away does not open her awake menu', async () => {
+  const { stella, step } = await make({ anchor: { x: 900, y: 500 } });
+  let clicked = 0;
+  stella.onClick = () => clicked++;
+  stella.stow();
+  step(1000 / 60, 40);
+  const p = { ...stella.pos };
+  assert.ok(stella.restActive && !stella.stowed);
+  if (stella.pointerDown(p.x, p.y, 3)) stella.pointerUp(p.x, p.y, 3);
+  assert.equal(clicked, 0);
+});
