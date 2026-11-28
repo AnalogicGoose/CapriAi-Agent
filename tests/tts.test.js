@@ -151,3 +151,69 @@ test('a TTS grant speaks once while the overlay is hidden and never when muted',
   const old = timed.grant('guide', 'Late'); clock += 60001;
   assert.equal((await timed.speak({ text: 'Late', grant: old })).ok, false, 'grants expire after 60 s');
 });
+
+test('streamed speech keeps a head start so slow chunks and the next sentence do not leave gaps', async () => {
+  const source = await fs.readFile(require.resolve('../src/renderer/js/speech-output.js'), 'utf8');
+  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(withRichText(source)).toString('base64'));
+  const old = { window: global.window, document: global.document, cancelAnimationFrame: global.cancelAnimationFrame,
+    requestAnimationFrame: global.requestAnimationFrame };
+  global.window = global.document = { addEventListener() {} };
+  global.cancelAnimationFrame = () => {}; global.requestAnimationFrame = () => 0;
+  try {
+    const starts = [];
+    const ctx = { currentTime: 10, state: 'running',
+      createAnalyser: () => ({ connect() {}, disconnect() {}, getFloatTimeDomainData() {} }),
+      createBufferSource: () => ({ connect() {}, disconnect() {}, start: at => starts.push(at), context: ctx }) };
+    const player = new SpeechPlayer({ host: { ttsCancel() {} }, voice: { master: { gain: { value: 1 } }, muted: false } });
+    player.configure({ ttsEnabled: true });
+    const chunk = seconds => ({ duration: seconds, sampleRate: 24000, getChannelData: () => new Float32Array(100) });
+    player.schedule(ctx, chunk(0.3));                 // first audio: starts 0.6 s from now
+    assert.ok(Math.abs(starts[0] - 10.6) < 1e-9, `first chunk at ${starts[0]}`);
+    ctx.currentTime = 10.5; player.schedule(ctx, chunk(0.3));
+    assert.ok(Math.abs(starts[1] - (starts[0] + 0.3)) < 1e-9, 'the next chunk follows straight on');
+    ctx.currentTime = 20; player.schedule(ctx, chunk(0.3)); // the queue ran dry mid-reply: a short head start
+    assert.ok(Math.abs(starts[2] - 20.3) < 1e-9, `restart at ${starts[2]}`);
+    player.stop(false); ctx.currentTime = 30; player.schedule(ctx, chunk(0.3)); // a new line: the full one again
+    assert.ok(Math.abs(starts[3] - 30.6) < 1e-9, `new line at ${starts[3]}`);
+  } finally { Object.assign(global, old); }
+});
+
+test('a streamed reply sends every sentence queued so far in one request, so each sentence does not pay the voice start-up', async () => {
+  const source = await fs.readFile(require.resolve('../src/renderer/js/speech-output.js'), 'utf8');
+  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(withRichText(source)).toString('base64'));
+  const old = { window: global.window, document: global.document, cancelAnimationFrame: global.cancelAnimationFrame };
+  global.window = global.document = { addEventListener() {} }; global.cancelAnimationFrame = () => {};
+  try {
+    const sent = [], finish = [];
+    const player = new SpeechPlayer({ host: { ttsCancel() {}, ttsSpeak: request => { sent.push(request.text); return new Promise(r => finish.push(r)); } },
+      voice: { ensure() {} } });
+    player.configure({ ttsEnabled: true, ttsEngine: 'qwen' });
+    player.beginResponse('neutral');
+    player.updateResponse('Here is the plan. ');
+    await Promise.resolve();
+    player.updateResponse('Here is the plan. First the login page. Then the tests. Sound good?', true);
+    finish[0]({ ok: true, streamed: true });
+    for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0));
+    assert.deepEqual(sent, ['Here is the plan.', 'First the login page. Then the tests. Sound good?']);
+  } finally { Object.assign(global, old); }
+});
+
+test('a batch stays well under what the voice can say in one request', async () => {
+  const source = await fs.readFile(require.resolve('../src/renderer/js/speech-output.js'), 'utf8');
+  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(withRichText(source)).toString('base64'));
+  const old = { window: global.window, document: global.document, cancelAnimationFrame: global.cancelAnimationFrame };
+  global.window = global.document = { addEventListener() {} }; global.cancelAnimationFrame = () => {};
+  try {
+    const sent = [];
+    const player = new SpeechPlayer({ host: { ttsCancel() {}, ttsSpeak: async request => { sent.push(request.text); return { ok: true, streamed: true }; } },
+      voice: { ensure() {} } });
+    player.configure({ ttsEnabled: true, ttsEngine: 'qwen' });
+    player.beginResponse('neutral');
+    const sentence = 'This is one fairly long sentence that keeps going for a while so it adds up quickly. ';
+    player.updateResponse(sentence.repeat(14), true);
+    for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0));
+    assert.ok(sent.length > 2, `${sent.length} requests`);
+    for (const text of sent) assert.ok(text.length <= 400, `${text.length} chars in one request`);
+    assert.equal(sent.join(' '), sentence.repeat(14).trim());
+  } finally { Object.assign(global, old); }
+});

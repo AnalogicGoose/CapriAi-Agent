@@ -1,6 +1,12 @@
 // Audio stays in the overlay; the local worker streams signed 16-bit PCM.
 // Change the silence between phrases while playing each generated sample as-is.
 const PHRASE_PAUSES = { neutral: 0.06, playful: 0.02, comforting: 0.19, pleased: 0.12, curious: 0.04 };
+// The local voice generates only a little faster than real time, in chunks that sometimes arrive late.
+// Starting a line, play this far ahead so that jitter is absorbed instead of heard as pauses; if the queue
+// still runs dry mid-line, pick up again with a shorter one (measured on the RTX laptop: no gaps with both).
+const START_LEAD = 0.6, RESTART_LEAD = 0.3;
+// Most text sent in one request: the worker stops after 600 tokens (~48 s, ~800 characters at her pace).
+const BATCH_CHARS = 400;
 const SENTENCE_PUNCTUATION = /([.!?]+)["'\u2019\u201d)\]]*(?=\s|$)/g;
 // Only letters/digits are speech; a lone "..." or emoji makes the local voice model babble noise.
 const SPEAKABLE = /[\p{L}\p{N}]/u;
@@ -108,7 +114,9 @@ export class SpeechPlayer {
     source.buffer = buffer; source.connect(this.analyser);
     const pause = utterance && !utterance.started && this.nextTime
       ? (Object.hasOwn(PHRASE_PAUSES, utterance.mood) ? PHRASE_PAUSES[utterance.mood] : PHRASE_PAUSES.neutral) : 0;
-    const at = Math.max(this.nextTime + pause, ctx.currentTime + 0.06);
+    // Nothing queued: the first audio of a line gets the full head start, a queue that ran dry a short one.
+    const queued = this.nextTime + pause >= ctx.currentTime + 0.06;
+    const at = queued ? this.nextTime + pause : ctx.currentTime + (this.nextTime ? RESTART_LEAD : START_LEAD);
     // A chunk that starts after a gap (first one, or late from a busy GPU) would pop: ramp it in over 4 ms.
     if (!this.nextTime || at > this.nextTime + 0.002) fadeIn(buffer);
     if (utterance) utterance.started = true;
@@ -209,9 +217,18 @@ export class SpeechPlayer {
   async drain(response) {
     if (response.busy) return;
     response.busy = true;
-    while (this.response === response && response.queue.length) await this.play(response.queue.shift(), this.responseMood);
+    // Everything queued so far goes in one request: each request costs the voice ~0.8 s before its first
+    // audio, so one sentence per request left a pause between every sentence.
+    while (this.response === response && response.queue.length) await this.play(nextBatch(response.queue), this.responseMood);
     response.busy = false; this.finishIfIdle();
   }
+}
+
+// Takes whole sentences off the queue up to BATCH_CHARS (always at least one).
+function nextBatch(queue) {
+  let text = queue.shift();
+  while (queue.length && text.length + 1 + queue[0].length <= BATCH_CHARS) text += ' ' + queue.shift();
+  return text;
 }
 
 function fadeIn(buffer) {
