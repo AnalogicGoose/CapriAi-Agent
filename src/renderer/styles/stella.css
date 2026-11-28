@@ -128,19 +128,6 @@ body {
   pointer-events: none;
 }
 
-/* her small forms (chip.js): her biochip in the corner, her mask floating while she sleeps */
-.chip {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.chip[hidden] {
-  display: none;
-}
-
 /* ---------- her panel (Orbit) ---------- */
 
 .panel {
@@ -541,10 +528,9 @@ body {
 .ticker[data-thinking='true'] .ticker__verb::after { content: '…'; }
 .ticker[data-thinking='true'] .ticker__target { font-variant-numeric: tabular-nums; }
 
-/* Keep panels and chips out of fullscreen while the character teleports away/back. */
+/* Keep panels out of fullscreen while she folds away/back. */
 .fullscreen-presence .panel,
-.fullscreen-presence .ticker,
-.fullscreen-presence .chip {
+.fullscreen-presence .ticker {
   visibility: hidden !important;
   pointer-events: none !important;
 }

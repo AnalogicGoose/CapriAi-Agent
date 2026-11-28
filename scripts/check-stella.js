@@ -90,7 +90,7 @@ app.whenReady().then(async () => {
         let R3 = null, G3 = null;
         const MODES3 = ['listen', 'think', 'speak', 'rest'];
         // Steps a fresh clock for N frames in the given state/motion, then draws.
-        const render = async (name, frames = 40, size = S) => {
+        const render = async (name, frames = 40, size = S, pose = {}) => {
           const {buildScene, SceneClock} = await import('${url('scene.js')}');
           const {StateBlend} = await import('${url('blend.js')}');
           const {MOTIONS} = await import('${url('motions.js')}');
@@ -101,7 +101,7 @@ app.whenReady().then(async () => {
           const trailAngle = name === 'trail' ? 0.3 : null;
           let t = 1;
           for (let i = 0; i < frames; i++) { blend.step(1 / 60); clock.step(1 / 60, blend, null, motions, {aim}); t += 1 / 60; }
-          return {scene: buildScene({s: size, t, clock, blend, idle: null, motions, aim, trailAngle}), t};
+          return {scene: buildScene({s: size, t, clock, blend, idle: null, motions, aim, trailAngle, ...pose}), t};
         };
         // Draws and copies the WebGL canvas synchronously (no await between).
         const snap = (scene, t) => {
@@ -152,6 +152,12 @@ app.whenReady().then(async () => {
           files['gallery.png'] = await png(gal);
           R3.setSize(360, 1);
           for (const n of ['idle', 'speak']) { const big = await render(n, 40, 360); files['finish-360-' + n + '.png'] = await png(snap(big.scene, big.t).c); }
+          // away mode: curling up, curled, her stretch, waiting on a permission
+          const poses = [{curl: 0}, {curl: 0.5}, {curl: 1}, {curl: 1, stretch: 1}, {curl: 1, warm: 1}];
+          const strip = document.createElement('canvas'); strip.width = 360 * poses.length; strip.height = 360;
+          const sx = strip.getContext('2d'); sx.fillStyle = '#2b3a55'; sx.fillRect(0, 0, strip.width, 360);
+          for (let i = 0; i < poses.length; i++) { const r = await render('idle', 40, 360, poses[i]); sx.drawImage(snap(r.scene, r.t).c, 360 * i, 0); }
+          files['rest-360.png'] = await png(strip);
           R3.setSize(S, 1);
           const a = await render('idle', 40), b = await render('idle', 70);
           const pa = pixels(snap(a.scene, a.t).c), pb = pixels(snap(b.scene, b.t).c);
@@ -452,11 +458,29 @@ window.host = new Proxy({}, { get(_, key) {
       check(panelEl.offsetHeight > heightBefore + 10, 'panel did not grow (' + heightBefore + ' -> ' + panelEl.offsetHeight + ')');
       check(Math.abs(edge() - before) <= 2, 'panel edge next to her moved ' + (edge() - before).toFixed(1) + ' px when its text grew');
       notes.push('chat panel grows away from her (' + heightBefore + ' -> ' + panelEl.offsetHeight + ' px)');
-      return { notes: notes.join('; '), png: full.k.toDataURL('image/png') };
+      // Put away: she rests curled up in the bottom-left corner, drawn, and a click on her brings her back.
+      panelEl.querySelector('.panel__close').click();
+      await until(() => panelEl.hidden || !panelEl.classList.contains('is-chat'), 3000, 'chat panel closes before stow');
+      const awake = { ...c.pos };
+      for (const f of S.listeners.onCommand || []) f({ name: 'stow', on: true });
+      await until(() => c.stowed && c.curl === 1, 4000, 'curled up in the corner');
+      const corner = c.cornerSpot();
+      check(Math.hypot(c.pos.x - corner.x, c.pos.y - corner.y) < 1, 'resting at ' + Math.round(c.pos.x) + ',' + Math.round(c.pos.y) + ' not the corner');
+      check(!document.getElementById('chip'), 'the old corner canvas is still in the page');
+      await wait(300); c.drawnAt = null; c.drawFrame(performance.now());
+      const resting = copy();
+      check(resting.lit > 200, 'resting bud not drawn (' + resting.lit + ' lit px)');
+      notes.push('resting bud ' + resting.lit + ' px at ' + Math.round(c.pos.x) + ',' + Math.round(c.pos.y));
+      ev('pointerdown', c.pos.x, c.pos.y); ev('pointerup', c.pos.x, c.pos.y);
+      await until(() => !c.stowed && c.curl === 0 && !c.restActive, 4000, 'back out after a click');
+      check(Math.hypot(c.pos.x - awake.x, c.pos.y - awake.y) < 2, 'came back to ' + Math.round(c.pos.x) + ',' + Math.round(c.pos.y) + ' not where she was');
+      notes.push('click brings her back');
+      return { notes: notes.join('; '), png: full.k.toDataURL('image/png'), rest: resting.k.toDataURL('image/png') };
     })()`); } catch (error) {
       throw Error(String(error && error.message || error) + (errors.length ? ' [console errors: ' + errors.join(' | ') + ']' : ''));
     }
     files['app-boot.png'] = r.png;
+    if (r.rest) files['app-rest.png'] = r.rest;
     if (errors.length) throw Error('console errors: ' + errors.join(' | '));
     return { name, ok: true, notes: r.notes + '; no console errors' };
   } catch (error) {

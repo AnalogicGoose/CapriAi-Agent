@@ -193,3 +193,18 @@ test('a game while she rests: folded for the game, back in her corner after', as
   assert.equal(stella.stowed, true);
   assert.ok(near(stella.pos.x, c.x, 1e-6) && near(stella.pos.y, c.y, 1e-6));
 });
+
+test('a finished big job while she rests: no glide, no victory pose, the summary still comes', async () => {
+  const { stella, run } = await make();
+  stella.stow(); run(1600);
+  const p = { ...stella.pos };
+  let spoke = 0;
+  const glide = stella.teleport({ x: 900, y: 500 });
+  stella.celebrate({ onSpeak: () => spoke++ });
+  run(1000);
+  await glide;
+  assert.equal(stella.travel, null);
+  assert.equal(stella.act, null);
+  assert.ok(near(stella.pos.x, p.x, 1e-6) && near(stella.pos.y, p.y, 1e-6));
+  assert.equal(spoke, 1);
+});

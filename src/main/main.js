@@ -707,7 +707,7 @@ function createOverlay() {
   overlay.webContents.session.setPermissionCheckHandler((contents, permission, origin, details) => microphonePermission(contents,permission,details));
   overlay.on('show', () => { const ignore = overlayIgnore ?? true; overlayIgnore = null; setOverlayIgnore(ignore); });
   overlay.loadURL('stella://app/src/renderer/index.html');
-  // always shown: put away, she's still there as her biochip in the corner
+  // always shown: put away, she's still there, resting in the bottom-left corner
   overlay.once('ready-to-show', () => {
     if (!config.load().gamingMode && !fullscreenState.active) {
       overlay.showInactive(); if (config.load().visible !== false) tts.warm();
@@ -851,10 +851,10 @@ function onFullscreen(active) {
   if (!active) reminders?.flush(); // held reminder cards appear once fullscreen ends
 }
 
-// Ctrl+Alt+C: she folds herself away into her biochip in the corner, or comes back out of it.
+// Ctrl+Alt+C: she goes off to rest, curled up in the bottom-left corner, or comes back out. Put away she is
+// quiet (no check-ins or initiatives: the visible === false gates), but a line she is saying is not cut off.
 function toggleVisible(force) {
   const visible = typeof force === 'boolean' ? force : !config.load().visible;
-  if (!visible) { if (!['wake', 'commands'].includes(speech.current?.mode)) speech.cancel(); tts.cancel(); }
   config.save({ visible });
   sendCommand('stow', { on: !visible });
   rebuildTray();
@@ -926,8 +926,8 @@ function updateConfig(patch) {
     brain.reset({ keepRecent: !revokedRecall && !['systemAccess', 'screenAwareness', 'codexExecutable'].some(changes) });
   }
   if (patch.gamingMode === true || patch.screenAwareness === false) { walkthroughs.stop(); guide.clear('paused'); }
-  if ((patch.gamingMode === true || patch.visible === false) && !['wake', 'commands'].includes(speech.current?.mode)) speech.cancel();
-  if (patch.gamingMode === true || patch.visible === false
+  if (patch.gamingMode === true && !['wake', 'commands'].includes(speech.current?.mode)) speech.cancel();
+  if (patch.gamingMode === true
       || ['muted', 'volume', 'ttsEnabled', 'speakTypedReplies', 'proactiveVoice', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText', 'ttsDevice'].some(changes)) tts.cancel();
   if (['ttsEnabled', 'ttsEngine', 'ttsPython', 'ttsModel', 'ttsReference', 'ttsReferenceText'].some(changes) || patch.muted === true) tts.close();
   if (patch.privacy) patch = { ...patch, privacy: nextPrivacy };

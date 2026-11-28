@@ -152,7 +152,8 @@ function applySettings(patch) {
 test('cosmetic settings preserve Codex turns and memory reviews; policy changes revoke affected work', () => {
   for (const patch of [{ scale: 0.8 }, { visible: true }, { idleAnimations: false }, { displayId: 7 }]) assert.deepEqual(applySettings(patch), []);
   assert.deepEqual(applySettings({ volume: 0.3 }), ['tts']);
-  assert.deepEqual(applySettings({ visible: false }), ['speech', 'tts', 'collaboration']);
+  // Put away she rests quietly in her corner: her initiatives stop, but a line she is saying is not cut off.
+  assert.deepEqual(applySettings({ visible: false }), ['collaboration']);
   assert.ok(applySettings({ interestsEnabled: false }).includes('collaboration'));
   for (const patch of [{ privacy: { memoryRecall: false } }, { gamingMode: true }, { codexModel: 'new-model' }]) {
     const calls = applySettings(patch);

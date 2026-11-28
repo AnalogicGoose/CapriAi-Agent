@@ -1044,7 +1044,7 @@ app.whenReady().then(async () => {
       await until(()=>js('window.fullscreenPet.stowed'),'manual stow while fullscreen');
       fullscreenProbe=null;
       await until(async()=>await shown()&&win.isVisible(),'fullscreen ends with manually stowed pet');
-      assert.equal(await js("window.fullscreenPet.stowed && !document.querySelector('#chip').hidden"),true,'Fullscreen does not undo manual stowing');
+      assert.equal(await js("window.fullscreenPet.stowed && window.fullscreenPet.curl === 1"),true,'Fullscreen does not undo manual stowing');
       assert.equal((await js('host.getConfig()')).visible,false);
       console.log(`PASS: fullscreen IPC/shader/OS visibility, restored native mouse activation, stationary-pointer routing, trusted left click/drag/Send/Close, repeat body clicks stay visible, chat-close focus blip stays still; detection ${detectionMs} ms, rapid reversals, stale acknowledgments, overlapping glide, Gaming mode and manual stow. Native fullscreen geometry simulated; chat inference mocked.`);
       clearTimeout(limit);app.exit(0);return;
