@@ -91,6 +91,6 @@ export class IntegrationCompanion {
     if (!['waiting', 'tool_failed', 'completed'].includes(event.stage)) return;
     const kind = event.stage === 'waiting' ? 'alert' : event.stage === 'tool_failed' ? 'error' : event.stage === 'completed' ? 'done' : event.stage === 'working' ? 'work' : 'info';
     if (this.brain.generatedDialogue && event.stage !== 'waiting') { this.host.companionEvent?.('external-task'); return; }
-    this.panel.say({ kind, badge: label, tag: event.project, line: this.brain.generatedDialogue ? 'Approval required in Codex' : lines[event.stage], hold: event.stage === 'waiting' ? null : 6500 });
+    this.panel.say({ kind, badge: label, tag: event.project, line: lines[event.stage], hold: event.stage === 'waiting' ? null : 6500 });
   }
 }

@@ -89,23 +89,35 @@ async function boot() {
   let interactive = false;
   let mouse = null;
   let pointerRevision = 0;
-  const setInteractive = (on, force = false) => {
-    if (!force && on === interactive) return;
-    interactive = on;
-    host.setInteractive(on);
+  let near = true;
+  // near: whether Windows should forward mouse moves to her. Only close to something of hers: a forwarded move
+  // makes her click-through window set its arrow cursor over the app underneath (the control room's hand
+  // cursor, a browser's text cursor...), which flickered while moving. Farther away, pointer recovery's
+  // cursor polling (no forwarded moves arrive there) notices the pointer coming close.
+  const setInteractive = (on, force = false, isNear = true) => {
+    if (!force && on === interactive && isNear === near) return;
+    interactive = on; near = isNear;
+    host.setInteractive(on, isNear);
   };
+  const NEAR = 90;
+  const within = (r, pad) => Boolean(r && mouse.x >= r.left - pad && mouse.x <= r.right + pad && mouse.y >= r.top - pad && mouse.y <= r.bottom + pad);
+  const nearHer = () => Boolean(mouse && (
+    (!stella.hidden && stella.pos && Math.hypot(mouse.x - stella.pos.x, mouse.y - stella.pos.y) <= 0.45 * stella.size + NEAR * 1.5)
+    || within(panel.rect(), NEAR) || (talkMenu?.visible && within(talkMenu.el?.getBoundingClientRect(), NEAR))
+    || (chip.visible && chip.contains(mouse.x, mouse.y, NEAR)) || (mask.visible && mask.contains(mouse.x, mouse.y, NEAR))
+    || (!document.getElementById('voice-indicator').hidden && within(document.getElementById('voice-indicator').getBoundingClientRect(), NEAR))));
   const onChip = () => Boolean(chip.visible && mouse && chip.contains(mouse.x, mouse.y, 0));
   const refreshHit = (force = false) => {
     if (stella.fullscreen && !wakeListener?.session) return setInteractive(false, force);
     if (stella.pointerHeld || stella.dragging) return setInteractive(true, force);
-    if (!mouse) return setInteractive(false, force);
+    if (!mouse) return setInteractive(false, force, false);
     const r = panel.rect();
     const onPanel = r && mouse.x >= r.left && mouse.x <= r.right && mouse.y >= r.top && mouse.y <= r.bottom;
     const indicator = document.getElementById('voice-indicator');
     const ir = !indicator.hidden && indicator.getBoundingClientRect();
     const onWakeIndicator = ir && mouse.x >= ir.left && mouse.x <= ir.right && mouse.y >= ir.top && mouse.y <= ir.bottom;
     document.body.style.cursor = onChip() ? 'pointer' : '';
-    return setInteractive(Boolean(onPanel || onWakeIndicator || talkMenu?.contains(mouse.x, mouse.y) || stella.hit(mouse.x, mouse.y) || onChip()), force);
+    return setInteractive(Boolean(onPanel || onWakeIndicator || talkMenu?.contains(mouse.x, mouse.y) || stella.hit(mouse.x, mouse.y) || onChip()), force, nearHer());
   };
   // Her biochip: her eyes on it follow the pointer over it, and she comes out when you click it
   // (only then, so the pointer passing through that corner doesn't call her back).
@@ -171,6 +183,9 @@ async function boot() {
     // she may have moved out from under a still pointer: never leave a dead click zone behind
     refreshHit();
   };
+  // Her first frame may already have reported its position before onMove was set: if she has not moved since,
+  // the chat panel never got an anchor and opened in the top-left corner. Report it again on her next frame.
+  stella.moved = null;
   stella.onTeleport = (phase) => { if (wakeListener?.session) return; if (phase === 'start') talkMenu?.hide(); return phase === 'start' ? panel.suspend() : panel.resume(); };
   stella.chipAt = () => chip.center();
   stella.onStow = () => {
@@ -204,8 +219,11 @@ async function boot() {
     talkMenu?.show();
   };
   panel.onChar = (kind) => {
-    const spoken = voice.spoken?.enabled && (chat.speaksReplies || panel.current?.voiceUntil > Date.now());
-    if (!spoken) voice.play('blip', { mood: kind });
+    const speech = voice.spoken;
+    // Never chirp over her real voice: reminders, guide lines and proactive lines show text while she speaks.
+    const talking = Boolean(speech && (speech.playing || speech.pending || speech.response));
+    const spoken = speech?.enabled && (chat.speaksReplies || panel.current?.voiceUntil > Date.now());
+    if (!spoken && !talking) voice.play('blip', { mood: kind });
   };
   panel.onTalk = (talking) => talking && stella.mode !== 'sleep'
     && !stella.act?.player.name.startsWith('idle') && stella.perform('talk');

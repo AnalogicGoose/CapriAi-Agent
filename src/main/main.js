@@ -19,6 +19,7 @@ const { SettingsAgent } = require('./settings-agent');
 const { createBridge } = require('./bridge');
 const { startWindowWatch } = require('./windows');
 const { startFullscreenWatch } = require('./fullscreen');
+const { createTopmostGuard } = require('./topmost-guard');
 const { SpeechInput } = require('./speech');
 const { SpeechOutput } = require('./tts');
 const { CodexBrain } = require('./codex-brain');
@@ -580,7 +581,7 @@ function endVoiceSession() {
   voiceSession = false;
   if (speech.current?.wakeActivated) speech.cancel();
   if (overlay && !overlay.isDestroyed() && (fullscreenState.active || config.load().gamingMode)) {
-    overlay.setIgnoreMouseEvents(true, { forward: true }); overlay.setFocusable(false); overlay.hide();
+    setOverlayIgnore(true); setOverlayFocusable(false); overlay.hide();
   }
 }
 
@@ -630,6 +631,29 @@ function sendStellaDraw(target) {
   overlay.webContents.send('stella:draw', overlayTarget(target));
 }
 
+// On Windows, Electron's setFocusable() also re-adds the window to the taskbar (when focusable) and
+// re-applies its extended styles. She is a click-through overlay: keep her out of the taskbar and
+// above other apps after every change.
+function setOverlayFocusable(on) {
+  if (!overlay || overlay.isDestroyed()) return;
+  overlay.setFocusable(on);
+  overlay.setSkipTaskbar(true);
+  overlay.setAlwaysOnTop(true, 'screen-saver');
+}
+
+// Click-through only when it changes: re-applying it rewrites the overlay's native window styles, and Windows
+// then resets the cursor of whatever is under her (the control room's hand cursor flickered to an arrow every
+// 150 ms while her pointer recovery re-sent the same state). Forgotten on show, in case Windows reset it.
+// forward: mouse moves are forwarded to her only while the pointer is near her. Each forwarded move makes her
+// window set its own (arrow) cursor over whatever app is under it, so forwarding everywhere made every other
+// cursor flicker while moving; away from her, her renderer's cursor polling notices the pointer coming close.
+let overlayIgnore = null, overlayForward = true;
+function setOverlayIgnore(ignore, forward = overlayForward) {
+  if (!overlay || overlay.isDestroyed() || (ignore === overlayIgnore && forward === overlayForward)) return;
+  overlayIgnore = ignore; overlayForward = forward;
+  overlay.setIgnoreMouseEvents(ignore, ignore ? { forward } : undefined);
+}
+
 function fitOverlay() {
   if (!overlay) return;
   const { workArea } = targetDisplay();
@@ -638,6 +662,7 @@ function fitOverlay() {
 }
 
 function createOverlay() {
+  overlayIgnore = null; overlayForward = true; // a new window starts with no click-through applied
   const { workArea } = targetDisplay();
   overlay = new BrowserWindow({
     ...workArea,
@@ -673,13 +698,14 @@ function createOverlay() {
   overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlay.webContents.on('will-navigate', e => e.preventDefault());
   overlay.setAlwaysOnTop(true, 'screen-saver');
-  overlay.setIgnoreMouseEvents(true, { forward: true });
+  setOverlayIgnore(true);
   const microphonePermission = (contents, permission, details={}) =>
     contents === overlay?.webContents && permission === 'media' && Boolean(speech.current)
       && speech.permitted(speech.current) && (!details.mediaTypes || details.mediaTypes.every(type=>type==='audio'))
       && (!details.mediaType || details.mediaType==='audio');
   overlay.webContents.session.setPermissionRequestHandler((contents, permission, callback, details) => callback(microphonePermission(contents,permission,details)));
   overlay.webContents.session.setPermissionCheckHandler((contents, permission, origin, details) => microphonePermission(contents,permission,details));
+  overlay.on('show', () => { const ignore = overlayIgnore ?? true; overlayIgnore = null; setOverlayIgnore(ignore); });
   overlay.loadURL('stella://app/src/renderer/index.html');
   // always shown: put away, she's still there as her biochip in the corner
   overlay.once('ready-to-show', () => {
@@ -761,7 +787,7 @@ async function setGamingMode(on) {
       brain.cancel(); decisionBrain.cancel();
       const pending = [...chats.values()];
       pending.forEach(({ abort }) => abort.abort());
-      overlay?.setFocusable(false);
+      setOverlayFocusable(false);
       pcContext.lastEvent = null;
       windowWatch?.stop();
       windowWatch = null;
@@ -805,8 +831,8 @@ function onFullscreen(active) {
   if (!overlay || overlay.isDestroyed()) return;
   overlay.webContents.setBackgroundThrottling(false);
   if (active) {
-    overlay.setIgnoreMouseEvents(true, { forward: true });
-    if (!voiceSession) overlay.setFocusable(false);
+    setOverlayIgnore(true);
+    if (!voiceSession) setOverlayFocusable(false);
     // Renderer normally acknowledges in 160 ms. This also handles a frozen renderer.
     fullscreenHideTimer = setTimeout(() => {
       if (!voiceSession && fullscreenState.active && fullscreenState.revision === revision && !overlay?.isDestroyed()) {
@@ -817,8 +843,8 @@ function onFullscreen(active) {
   } else if (!config.load().gamingMode) {
     // setFocusable(false) on departure changes native mouse activation too.
     // Restore it without activating or focusing over the user's foreground app.
-    overlay.setFocusable(true);
-    overlay.setIgnoreMouseEvents(true, { forward: true });
+    setOverlayFocusable(true);
+    setOverlayIgnore(true);
     overlay.showInactive();
   }
   overlay.webContents.send('fullscreen:state', fullscreenState);
@@ -1249,11 +1275,11 @@ function registerIpc() {
     catch(error) { return {ok:false,error:error.message}; }
   });
   ipcMain.handle('integration:status', () => codexEvents.snapshot());
-  ipcMain.on('overlay:interactive', (event, on) => {
+  ipcMain.on('overlay:interactive', (event, on, near = true) => {
     if (!speechCaller(event) || typeof on !== 'boolean' || !overlay || overlay.isDestroyed()) return;
     const ignore = ((fullscreenState.active || config.load().gamingMode) && !voiceSession) || !on;
-    if (!ignore && !overlay.isFocusable()) overlay.setFocusable(true);
-    overlay.setIgnoreMouseEvents(ignore, { forward: true });
+    if (!ignore && !overlay.isFocusable()) setOverlayFocusable(true);
+    setOverlayIgnore(ignore, near !== false);
   });
   ipcMain.handle('overlay:cursor', () => {
     const p = screen.getCursorScreenPoint();
@@ -1335,7 +1361,7 @@ function registerIpc() {
     autonomy.touch();
     if (!overlay) return;
     if ((fullscreenState.active || config.load().gamingMode) && !voiceSession) return;
-    if (on === true) { overlay.setFocusable(true); overlay.focus(); }
+    if (on === true) { setOverlayFocusable(true); overlay.focus(); }
     else if (on === false) overlay.blur();
   });
   // her report card's copy button: a picture of that part of the overlay, on the clipboard
@@ -1450,9 +1476,20 @@ function main() {
     registerIpc();
     createOverlay();
     createTray();
+    const topmostGuard = createTopmostGuard({
+      shouldBeOnTop: () => Boolean(overlay && !overlay.isDestroyed() && overlay.isVisible() && !fullscreenState.active),
+      isTopmost: () => require('./native-windows').isTopmost(overlay.getNativeWindowHandle()),
+      // Toggle so Windows really re-applies HWND_TOPMOST; neither call activates her.
+      restore: () => { overlay.setAlwaysOnTop(false); overlay.setAlwaysOnTop(true, 'screen-saver'); overlay.moveTop(); },
+      raise: () => overlay.moveTop(),
+    });
     if (process.platform === 'win32') fullscreenWatch = startFullscreenWatch({
-      read: () => smokeTest && !process.argv.includes('--fullscreen-only') && !process.argv.includes('--speech-only')
-        ? null : require('./native-windows').foregroundBounds(),
+      read: () => {
+        if (smokeTest && !process.argv.includes('--fullscreen-only') && !process.argv.includes('--speech-only')) return null;
+        const window = require('./native-windows').foregroundBounds();
+        try { topmostGuard.check(window); } catch { /* never let the guard break fullscreen detection */ }
+        return window;
+      },
       display: () => screen.dipToScreenRect(null, targetDisplay().bounds),
       onChange: onFullscreen,
     });
