@@ -1,4 +1,4 @@
-// Stella's sound palette: every motion sound is a real cue, and none of Capri's old sounds are left.
+// Stella's sound palette: every motion sound is a real cue, and none of the old pre-Stella sounds are left.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -15,7 +15,7 @@ test('every motion sound names a cue the voice can play', async () => {
   }
 });
 
-test('Capri’s old sounds and harsh waveforms are gone', () => {
+test('the old pre-Stella sounds and harsh waveforms are gone', () => {
   for (const old of ['bolt', 'charge', 'possess', 'star', 'land', 'rise']) assert.ok(!cues.includes(old), old);
   assert.doesNotMatch(source, /'sawtooth'|'square'/);
 });
