@@ -2,6 +2,8 @@
 // Change the silence between phrases while playing each generated sample as-is.
 const PHRASE_PAUSES = { neutral: 0.06, playful: 0.02, comforting: 0.19, pleased: 0.12, curious: 0.04 };
 const SENTENCE_PUNCTUATION = /([.!?]+)["'\u2019\u201d)\]]*(?=\s|$)/g;
+// Only letters/digits are speech; a lone "..." or emoji makes the local voice model babble noise.
+const SPEAKABLE = /[\p{L}\p{N}]/u;
 const ABBREVIATION = /(?:\b(?:mr|mrs|ms|dr|prof|sr|sra|jr|st|vs|etc|fig|no|e\.g|i\.e)\.|\b(?:[a-z]\.){2,})$/i;
 
 function sentenceEnd(text) {
@@ -107,6 +109,8 @@ export class SpeechPlayer {
     const pause = utterance && !utterance.started && this.nextTime
       ? (Object.hasOwn(PHRASE_PAUSES, utterance.mood) ? PHRASE_PAUSES[utterance.mood] : PHRASE_PAUSES.neutral) : 0;
     const at = Math.max(this.nextTime + pause, ctx.currentTime + 0.06);
+    // A chunk that starts after a gap (first one, or late from a busy GPU) would pop: ramp it in over 4 ms.
+    if (!this.nextTime || at > this.nextTime + 0.002) fadeIn(buffer);
     if (utterance) utterance.started = true;
     this.nextTime = at + buffer.duration;
     const text = utterance?.text || '';
@@ -134,7 +138,7 @@ export class SpeechPlayer {
     }
   }
   // grant: main's one-time token for a guide line or reminder (lets it speak while she is hidden; never when muted).
-  async speak(text, mood, grant) { this.stop(); if (this.enabled) await this.play(text, mood, grant); }
+  async speak(text, mood, grant) { this.stop(); if (this.enabled && SPEAKABLE.test(speechText(text))) await this.play(text, mood, grant); }
   speakProactive(text, deadline, available, mood) {
     if (!this.enabled || this.config.proactiveVoice !== true || this.pending || this.playing || this.response) return false;
     const canStart = () => this.enabled && this.config.proactiveVoice === true && Date.now() < deadline && available();
@@ -196,7 +200,8 @@ export class SpeechPlayer {
       const end = sentenceEnd(remaining) || (done ? remaining.length : 0);
       if (!end) break;
       const part = remaining.slice(0, end);
-      response.consumed += part; response.queue.push(part.trim());
+      response.consumed += part;
+      if (SPEAKABLE.test(part)) response.queue.push(part.trim());
       remaining = remaining.slice(end);
     }
     response.done = done; this.drain(response);
@@ -209,8 +214,13 @@ export class SpeechPlayer {
   }
 }
 
+function fadeIn(buffer) {
+  const data = buffer.getChannelData(0), n = Math.min(data.length, Math.round(buffer.sampleRate * 0.004));
+  for (let i = 0; i < n; i++) data[i] *= i / n;
+}
+
 export function speechText(text) {
-  return String(text || '').replace(/```[\s\S]*?(?:```|$)/g, ' ').replace(/\[\[[\s\S]*?(?:\]\]|$)/g, '')
+  return String(text || '').replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '').replace(/```[\s\S]*?(?:```|$)/g, ' ').replace(/\[\[[\s\S]*?(?:\]\]|$)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/https?:\/\/\S+/g, '')
     .replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 1500);
 }

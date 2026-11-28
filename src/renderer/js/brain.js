@@ -332,13 +332,14 @@ export class Brain {
 
   // What she says when you click her. Nothing going on: she offers to talk (chat.js).
   status() {
-    if (this.generatedDialogue) { this.onTalk?.(); return; }
+    // Codex work and approvals come first: a click must always show them, even with generated dialogue on.
     const integration = this.integrationStatusMessage?.();
     if (integration) {
       this.panel.say(integration);
       return;
     }
     const busy = this.busySessions;
+    if (!busy.length && this.generatedDialogue && this.onTalk) { this.onTalk(); return; }
     if (!busy.length) {
       const talk = this.onTalk && { actions: [{ id: 'talk', label: this.t.chat.talk }], onAction: () => this.onTalk(), hold: 6000 };
       this.say('idle', pick(this.t.idle), null, { face: pick(['calm', 'smug', 'aside']), hold: 4000, ...talk });

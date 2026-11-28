@@ -19,6 +19,7 @@ const { SettingsAgent } = require('./settings-agent');
 const { createBridge } = require('./bridge');
 const { startWindowWatch } = require('./windows');
 const { startFullscreenWatch } = require('./fullscreen');
+const { createTopmostGuard } = require('./topmost-guard');
 const { SpeechInput } = require('./speech');
 const { SpeechOutput } = require('./tts');
 const { CodexBrain } = require('./codex-brain');
@@ -580,7 +581,7 @@ function endVoiceSession() {
   voiceSession = false;
   if (speech.current?.wakeActivated) speech.cancel();
   if (overlay && !overlay.isDestroyed() && (fullscreenState.active || config.load().gamingMode)) {
-    overlay.setIgnoreMouseEvents(true, { forward: true }); overlay.setFocusable(false); overlay.hide();
+    overlay.setIgnoreMouseEvents(true, { forward: true }); setOverlayFocusable(false); overlay.hide();
   }
 }
 
@@ -628,6 +629,16 @@ function sendGuideFocus(focus) {
 function sendStellaDraw(target) {
   if (!overlay || overlay.isDestroyed()) return;
   overlay.webContents.send('stella:draw', overlayTarget(target));
+}
+
+// On Windows, Electron's setFocusable() also re-adds the window to the taskbar (when focusable) and
+// re-applies its extended styles. She is a click-through overlay: keep her out of the taskbar and
+// above other apps after every change.
+function setOverlayFocusable(on) {
+  if (!overlay || overlay.isDestroyed()) return;
+  overlay.setFocusable(on);
+  overlay.setSkipTaskbar(true);
+  overlay.setAlwaysOnTop(true, 'screen-saver');
 }
 
 function fitOverlay() {
@@ -761,7 +772,7 @@ async function setGamingMode(on) {
       brain.cancel(); decisionBrain.cancel();
       const pending = [...chats.values()];
       pending.forEach(({ abort }) => abort.abort());
-      overlay?.setFocusable(false);
+      setOverlayFocusable(false);
       pcContext.lastEvent = null;
       windowWatch?.stop();
       windowWatch = null;
@@ -806,7 +817,7 @@ function onFullscreen(active) {
   overlay.webContents.setBackgroundThrottling(false);
   if (active) {
     overlay.setIgnoreMouseEvents(true, { forward: true });
-    if (!voiceSession) overlay.setFocusable(false);
+    if (!voiceSession) setOverlayFocusable(false);
     // Renderer normally acknowledges in 160 ms. This also handles a frozen renderer.
     fullscreenHideTimer = setTimeout(() => {
       if (!voiceSession && fullscreenState.active && fullscreenState.revision === revision && !overlay?.isDestroyed()) {
@@ -817,7 +828,7 @@ function onFullscreen(active) {
   } else if (!config.load().gamingMode) {
     // setFocusable(false) on departure changes native mouse activation too.
     // Restore it without activating or focusing over the user's foreground app.
-    overlay.setFocusable(true);
+    setOverlayFocusable(true);
     overlay.setIgnoreMouseEvents(true, { forward: true });
     overlay.showInactive();
   }
@@ -1252,7 +1263,7 @@ function registerIpc() {
   ipcMain.on('overlay:interactive', (event, on) => {
     if (!speechCaller(event) || typeof on !== 'boolean' || !overlay || overlay.isDestroyed()) return;
     const ignore = ((fullscreenState.active || config.load().gamingMode) && !voiceSession) || !on;
-    if (!ignore && !overlay.isFocusable()) overlay.setFocusable(true);
+    if (!ignore && !overlay.isFocusable()) setOverlayFocusable(true);
     overlay.setIgnoreMouseEvents(ignore, { forward: true });
   });
   ipcMain.handle('overlay:cursor', () => {
@@ -1335,7 +1346,7 @@ function registerIpc() {
     autonomy.touch();
     if (!overlay) return;
     if ((fullscreenState.active || config.load().gamingMode) && !voiceSession) return;
-    if (on === true) { overlay.setFocusable(true); overlay.focus(); }
+    if (on === true) { setOverlayFocusable(true); overlay.focus(); }
     else if (on === false) overlay.blur();
   });
   // her report card's copy button: a picture of that part of the overlay, on the clipboard
@@ -1450,9 +1461,20 @@ function main() {
     registerIpc();
     createOverlay();
     createTray();
+    const topmostGuard = createTopmostGuard({
+      shouldBeOnTop: () => Boolean(overlay && !overlay.isDestroyed() && overlay.isVisible() && !fullscreenState.active),
+      isTopmost: () => require('./native-windows').isTopmost(overlay.getNativeWindowHandle()),
+      // Toggle so Windows really re-applies HWND_TOPMOST; neither call activates her.
+      restore: () => { overlay.setAlwaysOnTop(false); overlay.setAlwaysOnTop(true, 'screen-saver'); overlay.moveTop(); },
+      raise: () => overlay.moveTop(),
+    });
     if (process.platform === 'win32') fullscreenWatch = startFullscreenWatch({
-      read: () => smokeTest && !process.argv.includes('--fullscreen-only') && !process.argv.includes('--speech-only')
-        ? null : require('./native-windows').foregroundBounds(),
+      read: () => {
+        if (smokeTest && !process.argv.includes('--fullscreen-only') && !process.argv.includes('--speech-only')) return null;
+        const window = require('./native-windows').foregroundBounds();
+        try { topmostGuard.check(window); } catch { /* never let the guard break fullscreen detection */ }
+        return window;
+      },
       display: () => screen.dipToScreenRect(null, targetDisplay().bounds),
       onChange: onFullscreen,
     });

@@ -204,8 +204,11 @@ async function boot() {
     talkMenu?.show();
   };
   panel.onChar = (kind) => {
-    const spoken = voice.spoken?.enabled && (chat.speaksReplies || panel.current?.voiceUntil > Date.now());
-    if (!spoken) voice.play('blip', { mood: kind });
+    const speech = voice.spoken;
+    // Never chirp over her real voice: reminders, guide lines and proactive lines show text while she speaks.
+    const talking = Boolean(speech && (speech.playing || speech.pending || speech.response));
+    const spoken = speech?.enabled && (chat.speaksReplies || panel.current?.voiceUntil > Date.now());
+    if (!spoken && !talking) voice.play('blip', { mood: kind });
   };
   panel.onTalk = (talking) => talking && stella.mode !== 'sleep'
     && !stella.act?.player.name.startsWith('idle') && stella.perform('talk');

@@ -367,7 +367,7 @@ export class Chat {
     const answer = clean(this.answer);
     this.panel.stream(answer);
     if (this.speaksReplies) this.voice.spoken?.updateResponse?.(answer);
-    else this.voice.play('blip');
+    else if (!this.voice.spoken?.playing && !this.voice.spoken?.pending) this.voice.play('blip');
   }
 
   // Who she is, how she talks, and what's going on right now.

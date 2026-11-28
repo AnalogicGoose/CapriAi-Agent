@@ -158,8 +158,15 @@ function foregroundBounds() {
   const rect = Buffer.alloc(16);
   if (a.attribute(hwnd, 9, rect, 16) !== 0) return null;
   return { id: Number(hwnd), pid: windowPid(hwnd), caption: Boolean(a.style(hwnd, -16) & 0x00c00000),
+    topmost: Boolean(a.style(hwnd, -20) & 0x8),
     x: rect.readInt32LE(0), y: rect.readInt32LE(4),
     width: rect.readInt32LE(8) - rect.readInt32LE(0), height: rect.readInt32LE(12) - rect.readInt32LE(4) };
+}
+
+// WS_EX_TOPMOST of one of our own windows (handle from BrowserWindow.getNativeWindowHandle()).
+function isTopmost(handle) {
+  const hwnd = handle.length >= 8 ? Number(handle.readBigUInt64LE(0)) : handle.readUInt32LE(0);
+  return Boolean(api().style(hwnd, -20) & 0x8);
 }
 
 // Explicit troubleshooting only: window class/PID, never terminal text or titles.
@@ -199,4 +206,4 @@ function forceClose(ids, expectedName) {
   }
 }
 
-module.exports = { context, desktopApps, processRows, geometry, foregroundBounds, consoleWindows, requestClose, forceClose, pointerState, _setApiForTests };
+module.exports = { context, desktopApps, processRows, geometry, foregroundBounds, isTopmost, consoleWindows, requestClose, forceClose, pointerState, _setApiForTests };

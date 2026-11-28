@@ -1580,9 +1580,9 @@ app.whenReady().then(async () => {
     await js("document.querySelector('.panel__actions [data-id=\"talk\"]').click()");
     await pause(2000);
     assert.equal(await js("document.querySelector('#panel').classList.contains('is-chat')"), true);
-    assert.match(await js("document.querySelector('.panel__activity').textContent"), /Codex is working|Codex está trabajando/);
+    // The Orbit chat panel no longer shows a Codex activity line; Codex state stays in her click status.
+    assert.equal(await js("document.querySelector('.panel__activity').hidden"), true);
     await hook('Stop', { turn_id: 'chat-live' });
-    assert.match(await js("document.querySelector('.panel__activity').textContent"), /no activity received|sin actividad recibida/, 'Test-only activity must not claim a real connection');
     assert.equal(await js("document.querySelector('#panel').classList.contains('is-chat')"), true, 'Completion must preserve the open chat');
     await js(`document.querySelector('.panel__input').value = 'Who are you working with now, and can you see their tasks yet?';
       document.querySelector('.panel__chat').requestSubmit();`);
@@ -1612,11 +1612,9 @@ app.whenReady().then(async () => {
     assert.equal(cancelled.ok, false);
     assert.equal(cancelled.error, 'stopped');
     assert.equal(win.isVisible(), false);
-    assert.equal((await js('host.startOllama()')).ok, false, 'Gaming mode must block starting Ollama');
+    // Her brain is Codex now (no local Ollama to start or unload); Gaming mode must still refuse new chats.
     const paused = await js('host.chatSend({id: 99, messages: [{role:"user",content:"hi"}]})');
     assert.match(paused.error, /Gaming mode/);
-    const loaded = await (await fetch(`${require('../src/main/ollama').base()}/api/ps`)).json();
-    assert.equal(loaded.models.some((m) => m.name === status.model), false, 'Model still loaded');
     await hook('PermissionRequest', { turn_id: 'paused-turn', tool_name: 'Bash' });
     assert.equal(win.isVisible(), false, 'Notification must not reveal Stella during gaming');
     await gaming.click({ checked: false });
