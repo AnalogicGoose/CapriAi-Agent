@@ -152,10 +152,10 @@ export class Traveler {
 
   // Glides to `to` along a planned route. Resolves true on arrival, false when replaced or stopped. A drag owns
   // her position: a move asked for meanwhile is dropped. Asked again for where she's already heading, the route
-  // carries on; a new destination mid-glide starts from her current speed, not from a standstill.
+  // carries on; resting in her corner (put away) she doesn't move either. A new destination mid-glide starts from her current speed, not from a standstill.
   go(to, { reason = 'glide', fn = true } = {}) {
     const s = this.s, t = this.current;
-    if (s.dragging) return Promise.resolve(false);
+    if (s.dragging || s.restActive) return Promise.resolve(false); // resting in her corner, she stays put (rest.js)
     const goal = clampToView(to, s.radius, s.view);
     if (t && !t.settle && t.reason !== 'wander' && dist(goal, t.goal || t.to) < SAME_GOAL) {
       t.fn = t.fn || fn;

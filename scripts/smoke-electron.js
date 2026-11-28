@@ -214,7 +214,7 @@ if(process.argv.includes('--requests-only')) {
         steps:[input.availableResults?{tool:'open_result',query:'',index:0}:{tool:'search_web',query:'Netflix official website',index:0}]});
       return JSON.stringify({intent:'chat',message:'',goals:[],steps:[]});
     }
-    delta('Hello, choom.');return 'Hello, choom.';
+    delta('Hello there.');return 'Hello there.';
   };
 }
 if (process.argv.includes('--conversation-only')) {
@@ -804,7 +804,7 @@ app.whenReady().then(async () => {
       await until(()=>js("document.querySelector('.panel__line').textContent.includes('Sent https://www.netflix.com/ to Firefox.')"),'website task receipt');
       assert.deepEqual(requestEffects,[{url:'https://www.netflix.com/',browser:'Firefox'}]);
       await submit('Hello');
-      await until(()=>js("document.querySelector('.panel__line').textContent==='Hello, choom.'"),'ordinary conversation');
+      await until(()=>js("document.querySelector('.panel__line').textContent==='Hello there.'"),'ordinary conversation');
       assert.equal(requestEffects.length,1);
       console.log('PASS: actual chat form → main semantic interpreter → search observation → browser constraint propagation → website executor → receipt; ordinary chat still answers. Isolated profile, model/search/launch effects mocked.');
       clearTimeout(limit);app.exit(0);return;
@@ -1044,7 +1044,7 @@ app.whenReady().then(async () => {
       await until(()=>js('window.fullscreenPet.stowed'),'manual stow while fullscreen');
       fullscreenProbe=null;
       await until(async()=>await shown()&&win.isVisible(),'fullscreen ends with manually stowed pet');
-      assert.equal(await js("window.fullscreenPet.stowed && !document.querySelector('#chip').hidden"),true,'Fullscreen does not undo manual stowing');
+      assert.equal(await js("window.fullscreenPet.stowed && window.fullscreenPet.curl === 1"),true,'Fullscreen does not undo manual stowing');
       assert.equal((await js('host.getConfig()')).visible,false);
       console.log(`PASS: fullscreen IPC/shader/OS visibility, restored native mouse activation, stationary-pointer routing, trusted left click/drag/Send/Close, repeat body clicks stay visible, chat-close focus blip stays still; detection ${detectionMs} ms, rapid reversals, stale acknowledgments, overlapping glide, Gaming mode and manual stow. Native fullscreen geometry simulated; chat inference mocked.`);
       clearTimeout(limit);app.exit(0);return;

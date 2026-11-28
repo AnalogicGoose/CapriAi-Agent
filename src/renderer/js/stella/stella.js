@@ -16,6 +16,7 @@ import { Drag } from './drag.js';
 import { Acts } from './acts.js';
 import { Focus, isPoint, live } from './focus.js';
 import { Fold, foldState } from './fold.js';
+import { Rest, restState } from './rest.js';
 
 const MAX_DT = 0.05;        // s
 const SPEAK_LEVEL = 0.015, SPEAK_HOLD = 400;
@@ -57,12 +58,12 @@ export class Stella {
     this.dormant = false;
     this.hidden = false;
     this.stowed = false; this.stowing = null; this.gaming = false; this.fx = null;
+    this.rest = restState(); // put away: resting curled up in the corner (rest.js)
     this.fullscreen = false; this.fullscreenProgress = 0; // FullscreenPresence drives these
     this.folding = foldState(reduced());
     this.chatThinking = false;
     this.companion = null;
     this.windows = { fg: 0, wins: [] };
-    this.possessWindows = true; // ignored: she doesn't possess windows anymore
     this.wander = wander !== false;
     this.resting = false;     // napping (body action): no wandering until woken
     this.approvalOn = false;
@@ -92,8 +93,8 @@ export class Stella {
 
     // callbacks
     this.onMove = null; this.onMode = null; this.onTeleport = null; this.onClick = null; this.onMenu = null;
-    this.onPointerHold = null; this.onStow = null; this.onUnstow = null; this.chipAt = null;
-    this.onGaze = null; this.onDoze = null; this.onIdleWave = null; // never called
+    this.onPointerHold = null; this.onStow = null; this.onUnstow = null; this.onBudClick = null;
+    this.onGaze = null; this.onIdleWave = null; // never called
 
     // animation
     this.blend = new StateBlend();
@@ -151,14 +152,15 @@ export class Stella {
   // Keeps her (and where she's heading) fully inside the view.
   reclamp() {
     const fit = p => clampToView(p, this.radius, this.view);
-    this.pos = fit(this.pos);
+    if (this.rest.from) this.rest.from = fit(this.rest.from); // where she comes back to, put away
+    this.pos = this.restActive ? this.restPath(this.rest.q) : fit(this.pos);
     if (this.anchor) this.anchor = fit(this.anchor);
     this.traveler.reclamp(fit);
     if (this.dragTo) this.dragTo = fit(this.dragTo);
     this.place();
   }
 
-  head() { return { x: this.pos.x, y: this.pos.y - this.size * 0.25, top: this.pos.y - this.radius }; }
+  head() { const k = this.compact; return { x: this.pos.x, y: this.pos.y - this.size * 0.25 * k, top: this.pos.y - this.radius * k }; }
 
   towardCenter() { return this.pos.x < this.view.w / 2 ? 1 : -1; }
 
@@ -166,6 +168,7 @@ export class Stella {
   hit(x, y) {
     if (this.hidden || this.fold > 0.5 || !this.renderer) return false;
     if (this.lostSince != null && this.now() - this.lostSince >= LOST_MS) return false;
+    if (this.restActive) return this.restHit(x, y);
     return Math.hypot(x - this.pos.x, y - this.pos.y) <= 0.45 * this.size;
   }
 
@@ -238,8 +241,6 @@ export class Stella {
   // ---------- removed pet behaviors: safe no-ops ----------
 
   sitOn() { return resolved(); }
-  possess() { return resolved(); }
-  doze() { return resolved(); }
   unpeek() { return resolved(); }
   intro(spot) { return this.materialize(spot); }
   canSit() { return false; }
@@ -277,13 +278,15 @@ export class Stella {
     this.stepMusic(now);
     this.stepHolds(now);
     this.stepPosition(dt, reduced);
+    this.stepRest(dt, now, reduced);
 
     const mode = this.blendMode(now);
     if (PAUSES.has(this.lastBlend) && !PAUSES.has(mode)) this.nextMove = Math.max(this.nextMove, now + GRACE_MS);
     this.lastBlend = mode;
     this.blend.setMode(mode);
     this.blend.step(dt);
-    const calm = mode === 'idle' && this.mode === 'idle' && !this.dragging && !this.travel?.fn && !reduced && !this.fold;
+    const calm = mode === 'idle' && this.mode === 'idle' && !this.dragging && !this.travel?.fn && !reduced && !this.fold
+      && !this.restActive;
     this.traveler.wander(now, calm && this.wander && !this.down && !this.focus && !this.approvalOn && !this.chatThinking
       && !this.hidden && !this.dormant && !this.fullscreen && !this.gaming);
     const idle = this.idle.update(now, { allowed: calm && this.companion?.options?.idleAnimations !== false });
@@ -291,8 +294,8 @@ export class Stella {
     this.stepAim(dt, motions);
     this.stepTrail(dt, motions);
     const aim = this.aimAngle, trailAngle = this.trailAngle;
-    this.clock.step(dt, this.blend, idle, motions, { reduced, aim });
-    this.drawn = { idle, motions, aim, reduced, trailAngle };
+    this.clock.step(dt, this.blend, idle, motions, { reduced, aim, slow: this.curl });
+    this.drawn = { idle, motions, aim, reduced, trailAngle, curl: this.curl, stretch: this.rest.stretch, warm: this.rest.warm };
     this.drawFrame(now);
   }
 
@@ -300,7 +303,7 @@ export class Stella {
   drawFrame(now = this.now()) {
     const d = this.drawn;
     if (d && now !== this.drawnAt && !this.hidden && this.fold < 1 && !globalThis.document?.hidden && this.renderer
-      && !this.renderer.lost) {
+      && !this.renderer.lost && !this.restSkipsDraw(now)) {
       this.drawnAt = now;
       const t = now / 1000;
       const scene = buildScene({ s: this.size, t, clock: this.clock, blend: this.blend, ...d, fold: this.sceneFold });
@@ -311,13 +314,14 @@ export class Stella {
 
   // Positions the canvas on screen (with the resting bob, kept inside the view) and reports her head when she moved.
   place() {
-    const half = this.size / 2;
-    const y = clamp(this.pos.y + this.traveler.bob, half, Math.max(half, this.view.h - half));
+    const half = this.size / 2, k = this.compact, hv = half * k;
+    const y = this.restActive ? this.pos.y : clamp(this.pos.y + this.traveler.bob, hv, Math.max(hv, this.view.h - hv));
     if (this.root?.style) {
-      this.root.style.transform = `translate3d(${(this.pos.x - half).toFixed(1)}px, ${(y - half).toFixed(1)}px, 0)`;
+      this.root.style.transform = `translate3d(${(this.pos.x - half).toFixed(1)}px, ${(y - half).toFixed(1)}px, 0)`
+        + (k !== 1 ? ` scale(${k.toFixed(4)})` : '');
     }
     if (this.canvas?.style) this.canvas.style.transform = `rotate(${this.lean.toFixed(4)}rad)`;
-    const o = this.traveler.opacity * this.foldOpacity, away = this.fold >= 1;
+    const o = this.traveler.opacity * this.foldOpacity * this.restOpacity, away = this.fold >= 1;
     if (this.root?.style && o !== this.shownOpacity) { this.root.style.opacity = String(Number(o.toFixed(3))); this.shownOpacity = o; }
     if (this.root?.style && away !== this.shownAway) { this.root.style.visibility = away ? 'hidden' : ''; this.shownAway = away; }
     const m = this.moved;
@@ -328,4 +332,4 @@ export class Stella {
   }
 }
 
-for (const part of [Acts, Drag, Focus, Fold]) Object.defineProperties(Stella.prototype, Object.getOwnPropertyDescriptors(part));
+for (const part of [Acts, Drag, Focus, Fold, Rest]) Object.defineProperties(Stella.prototype, Object.getOwnPropertyDescriptors(part));

@@ -3,7 +3,6 @@ import { Stella } from './stella/stella.js';
 import { isPoint } from './stella/focus.js';
 import { clampToView } from './stella/wander.js';
 import { Companion } from './companion.js';
-import { Chip, Mask } from './chip.js';
 import { Panel } from './panel.js';
 import { Voice } from './voice.js';
 import { Brain } from './brain.js';
@@ -43,9 +42,6 @@ async function boot() {
   ]);
   document.documentElement.lang = config.lang;
 
-  const chip = new Chip(document.getElementById('chip'));
-  chip.place(innerWidth, innerHeight);
-  const mask = new Mask(document.getElementById('mask'));
 
   const voice = new Voice();
   voice.configure(config);
@@ -84,7 +80,7 @@ async function boot() {
   const brain = new Brain({ stella, panel, voice, host, mission, lang: config.lang, generatedDialogue: config.generatedDialogue !== false });
   new IntegrationCompanion({ stella, panel, voice, host, brain });
 
-  // Click-through everywhere except on her body, the panel and her biochip.
+  // Click-through everywhere except on her body (resting in her corner too) and the panel.
   let talkMenu, wakeListener, voiceCall, commandListener;
   let interactive = false;
   let mouse = null;
@@ -102,11 +98,10 @@ async function boot() {
   const NEAR = 90;
   const within = (r, pad) => Boolean(r && mouse.x >= r.left - pad && mouse.x <= r.right + pad && mouse.y >= r.top - pad && mouse.y <= r.bottom + pad);
   const nearHer = () => Boolean(mouse && (
-    (!stella.hidden && stella.pos && Math.hypot(mouse.x - stella.pos.x, mouse.y - stella.pos.y) <= 0.45 * stella.size + NEAR * 1.5)
+    (!stella.hidden && stella.pos && Math.hypot(mouse.x - stella.pos.x, mouse.y - stella.pos.y) <= 0.45 * stella.size * stella.compact + NEAR * 1.5)
     || within(panel.rect(), NEAR) || (talkMenu?.visible && within(talkMenu.el?.getBoundingClientRect(), NEAR))
-    || (chip.visible && chip.contains(mouse.x, mouse.y, NEAR)) || (mask.visible && mask.contains(mouse.x, mouse.y, NEAR))
     || (!document.getElementById('voice-indicator').hidden && within(document.getElementById('voice-indicator').getBoundingClientRect(), NEAR))));
-  const onChip = () => Boolean(chip.visible && mouse && chip.contains(mouse.x, mouse.y, 0));
+  const onBud = () => Boolean(stella.putAway && mouse && stella.restHit(mouse.x, mouse.y));
   const refreshHit = (force = false) => {
     if (stella.fullscreen && !wakeListener?.session) return setInteractive(false, force);
     if (stella.pointerHeld || stella.dragging) return setInteractive(true, force);
@@ -116,35 +111,19 @@ async function boot() {
     const indicator = document.getElementById('voice-indicator');
     const ir = !indicator.hidden && indicator.getBoundingClientRect();
     const onWakeIndicator = ir && mouse.x >= ir.left && mouse.x <= ir.right && mouse.y >= ir.top && mouse.y <= ir.bottom;
-    document.body.style.cursor = onChip() ? 'pointer' : '';
-    return setInteractive(Boolean(onPanel || onWakeIndicator || talkMenu?.contains(mouse.x, mouse.y) || stella.hit(mouse.x, mouse.y) || onChip()), force, nearHer());
+    document.body.style.cursor = onBud() ? 'pointer' : '';
+    return setInteractive(Boolean(onPanel || onWakeIndicator || talkMenu?.contains(mouse.x, mouse.y) || stella.hit(mouse.x, mouse.y)), force, nearHer());
   };
-  // Her biochip: her eyes on it follow the pointer over it, and she comes out when you click it
-  // (only then, so the pointer passing through that corner doesn't call her back).
-  // Her mask, asleep: the pointer coming over it stirs her, and a moment of that wakes her up.
-  let wakeTimer = 0;
-  const comeOut = () => {
-    if (stella.stowed) host.setConfig({ visible: true }); // the tray and Ctrl+Alt+C follow
+  // Resting in her corner (put away): a click on her brings her back (drag.js → onBudClick); hovering does nothing,
+  // so the pointer passing through that corner never calls her back. Right-click opens her menu (onMenu).
+  stella.onBudClick = () => {
+    host.setConfig({ visible: true }); // the tray and Ctrl+Alt+C follow
     stella.unstow();
-  };
-  const hoverChip = () => {
-    chip.pointer = chip.visible && mouse && chip.contains(mouse.x, mouse.y) ? mouse : null;
-    const near = mask.visible && mouse && mask.contains(mouse.x, mouse.y, 30);
-    mask.pointer = near ? mouse : null;
-    if (!near) {
-      clearTimeout(wakeTimer);
-      wakeTimer = 0;
-    } else if (!wakeTimer) {
-      wakeTimer = setTimeout(() => {
-        wakeTimer = 0;
-        if (stella.dormant) stella.wake();
-      }, 400);
-    }
   };
   const pointerRecovery = new PointerRecovery({ host,
     eligible: () => !document.hidden && !stella.gaming && (!stella.fullscreen || Boolean(wakeListener?.session)),
     held: () => stella.pointerHeld || stella.dragging, revision: () => pointerRevision,
-    update: point => { mouse = point; refreshHit(true); hoverChip(); },
+    update: point => { mouse = point; refreshHit(true); },
   });
   window.addEventListener('beforeunload', () => pointerRecovery.close());
   window.addEventListener('mousemove', (e) => {
@@ -152,22 +131,16 @@ async function boot() {
     pointerRevision++;
     mouse = { x: e.clientX, y: e.clientY };
     refreshHit();
-    hoverChip();
   });
   document.addEventListener('mouseleave', () => {
     pointerRevision++;
     mouse = null;
     refreshHit();
-    hoverChip();
   });
   window.addEventListener('contextmenu', (e) => {
     // Let Chromium reach the main-process spelling/edit menu for the composer.
     if (e.target.closest?.('.panel__input')) return;
     e.preventDefault();
-    if (chip.visible && chip.contains(e.clientX, e.clientY, 0)) host.openMenu();
-  });
-  window.addEventListener('click', (e) => {
-    if (chip.visible && chip.contains(e.clientX, e.clientY, 0)) comeOut();
   });
 
   // wiring
@@ -187,27 +160,10 @@ async function boot() {
   // the chat panel never got an anchor and opened in the top-left corner. Report it again on her next frame.
   stella.moved = null;
   stella.onTeleport = (phase) => { if (wakeListener?.session) return; if (phase === 'start') talkMenu?.hide(); return phase === 'start' ? panel.suspend() : panel.resume(); };
-  stella.chipAt = () => chip.center();
-  stella.onStow = () => {
-    talkMenu?.hide();
-    chip.setMode(stella.mode);
-    chip.show();
-  };
-  stella.onUnstow = () => chip.hide();
-  stella.onDoze = (phase, face) => {
-    if (phase === 'start') {
-      mask.place(face.x, face.y, stella.scale * 1.1);
-      mask.show();
-    } else if (phase === 'waking') {
-      mask.wake();
-    } else {
-      mask.hide();
-    }
-  };
+  stella.onStow = () => talkMenu?.hide();
   // Waiting on a permission (integration.js / brain.js set 'alert'): her approval ring holds and she comes a
   // little closer; leaving alert lets it go. approval() ignores a repeat, so this is safe to call on every change.
   stella.onMode = (mode, prev) => {
-    chip.setMode(mode, prev);
     if (mode === 'alert' || prev === 'alert') stella.approval(mode === 'alert');
   };
   host.onAgentActivity?.(e => stella.agentActivity(e));
@@ -287,7 +243,6 @@ async function boot() {
   const dictation = new Dictation({ panel, host, language: () => brain.lang,
     canListen: () => chat.open && (!stella.gaming && !stella.fullscreen || wakeListener?.session),
     beforeStart: async () => { voiceCall?.end(); voice.spoken.stop(); wakeListener?.pause(); commandListener?.pause(); } });
-  let restoreStowed = false;
   voiceCall = new VoiceCall({ host, speaker: voice.spoken, history: chat,
     indicator: document.getElementById('voice-indicator'),
     onThinking: on => stella.setChatThinking(on),
@@ -301,7 +256,6 @@ async function boot() {
       }
       dictation.cancel(); chat.close(); panel.hide(); panel.setTicker(null); talkMenu?.hide();
       wakeListener.session = true; document.body.classList.add('voice-session');
-      restoreStowed = stella.stowed; if (stella.stowed) await stella.unstow();
       stella.wake(); stella.nextMove = stella.nextGaze = performance.now() + 60000;
       voiceCall.place(stella.head(), stella.view); publishCompanionState(); refreshHit(true);
     },
@@ -311,7 +265,6 @@ async function boot() {
     },
     onEnd: () => {
       wakeListener.session = false; document.body.classList.remove('voice-session');
-      if (restoreStowed) stella.stowNow(); restoreStowed = false;
       publishCompanionState(); refreshHit(true);
     } });
   chat.onStart = () => voiceCall.end();
@@ -368,7 +321,7 @@ async function boot() {
     const t = brain.t.showcase, s = SHOWCASE[brain.lang] || SHOWCASE.en;
     const caption = (line) => panel.say({ kind: 'info', line, hold: 2200 });
     stella.nextMove = stella.nextGaze = performance.now() + 120000; // nothing of her own in between
-    if (stella.stowed) await stella.unstow();
+    if (stella.putAway) await stella.unstow();
     if (stella.dormant) stella.wake();
     await until(free);
     panel.hide();
@@ -456,11 +409,9 @@ async function boot() {
   host.windowsNow().then((data) => data && stella.setWindows(data));
 
   host.onResize(({ width, height }) => {
-    chip.place(width, height);
     stella.setView(width, height);
   });
   window.addEventListener('resize', () => {
-    chip.place(innerWidth, innerHeight);
     stella.setView(innerWidth, innerHeight);
   });
 
@@ -546,7 +497,7 @@ async function boot() {
         await chat.send('/routines list');
         break;
       case 'report': // "Mission report" in her menu
-        if (stella.stowed) {
+        if (stella.putAway) {
           host.setConfig({ visible: true });
           await stella.unstow();
         }
@@ -561,19 +512,11 @@ async function boot() {
         }
         break;
       }
-      case 'stow': // Ctrl+Alt+C: into her biochip, or back out
+      case 'stow': // Ctrl+Alt+C: off to rest in her corner, or back out
         if (cmd.on) voiceCall.end();
         if (cmd.on) dictation.cancel();
         if (cmd.on) stella.stow();
         else stella.unstow();
-        break;
-      case 'satellite': // tray: out of her biochip if put away, awake, a curious pulse
-        if (stella.stowed) {
-          host.setConfig({ visible: true });
-          await stella.unstow();
-        }
-        stella.wake();
-        stella.perform('curious');
         break;
       // --dev helpers
       case 'intro': // her entrance again, as when she starts
@@ -610,7 +553,7 @@ async function boot() {
     }
   });
 
-  // entrance: she unfolds where she was left (first run: her post); put away last time, she starts in her biochip
+  // entrance: she unfolds where she was left (first run: her post); put away last time, she starts resting in her corner
   if (config.visible === false) stella.stowNow();
   else await stella.materialize(knownAnchor ? stella.anchor : stella.spot('post'));
   if (!config.welcomed) host.setConfig({ welcomed: true });

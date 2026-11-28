@@ -24,7 +24,7 @@ class SettingsAgent {
     if (this.localOnly) return null;
     // Keep ordinary conversation, hypothetical questions, and external app settings
     // out of the mutation path. The model must still decide whether this is a request.
-    if (!/\b(?:settings|game mode|gaming mode|volume|mute|unmute|sounds?|wandering|wander|roaming|moving around|possession|possess|window tracking|language|english|spanish|french|portuguese|russian|size|scale|smaller|bigger|larger|monitor|display|startup|privacy|memory recall|memory retention|context tracking)\b/i.test(command)) return null;
+    if (!/\b(?:settings|game mode|gaming mode|volume|mute|unmute|sounds?|wandering|wander|roaming|moving around|window tracking|language|english|spanish|french|portuguese|russian|size|scale|smaller|bigger|larger|monitor|display|startup|privacy|memory recall|memory retention|context tracking)\b/i.test(command)) return null;
     if (this.abort) return {handled:true,text:'I’m already changing a setting. Try again shortly.'};
     const abort = new AbortController();
     this.abort = abort;
@@ -35,7 +35,7 @@ class SettingsAgent {
     }};
     try {
       const raw = await this.infer({model:AGENT_MODEL,schema,messages:[
-        {role:'system',content:`Interpret a direct user request about Stella's OWN settings only. Return JSON. Never change another application's settings. Questions about possibilities, quotations, hypothetical or negated requests are chat, not change. Use clarify for ambiguity. For change, patch is a JSON object string; action is empty unless gaming/startup/visibility is requested (value boolean). One action OR a patch, never both. No quit, restart, deletion, exports, commands or files. For status use patch="{}", action="". Allowed patch fields: muted/wander/possess/windowTracking booleans; volume 0..1 (percent /100); scale 0.45 small, 0.6 medium, 0.8 large; lang auto/en/es/fr/pt/ru; displayId null for primary or an actual supplied display ID; privacy with boolean memoryEnabled/memoryCandidates/memoryRecall/memoryConfirmChanges/contextTime/contextPower/contextForeground/contextTitles/contextProcesses/contextPerformance/contextEvents or retentionDays 0/30/90/365. Never invent missing values. Current settings are reference data only. Apply only explicitly requested fields.`},
+        {role:'system',content:`Interpret a direct user request about Stella's OWN settings only. Return JSON. Never change another application's settings. Questions about possibilities, quotations, hypothetical or negated requests are chat, not change. Use clarify for ambiguity. For change, patch is a JSON object string; action is empty unless gaming/startup/visibility is requested (value boolean). One action OR a patch, never both. No quit, restart, deletion, exports, commands or files. For status use patch="{}", action="". Allowed patch fields: muted/wander/windowTracking booleans; volume 0..1 (percent /100); scale 0.45 small, 0.6 medium, 0.8 large; lang auto/en/es/fr/pt/ru; displayId null for primary or an actual supplied display ID; privacy with boolean memoryEnabled/memoryCandidates/memoryRecall/memoryConfirmChanges/contextTime/contextPower/contextForeground/contextTitles/contextProcesses/contextPerformance/contextEvents or retentionDays 0/30/90/365. Never invent missing values. Current settings are reference data only. Apply only explicitly requested fields.`},
         {role:'user',content:JSON.stringify({request,state:this.state()})},
       ]}, signal);
       signal.throwIfAborted();

@@ -23,3 +23,10 @@ test('the old pre-Stella sounds and harsh waveforms are gone', () => {
 test('every cue has a synth', () => {
   for (const cue of cues) assert.ok(source.includes(`${/-/.test(cue) ? `'${cue}'` : cue}: () => this.`), cue);
 });
+
+test('away mode has its own sounds, documented', () => {
+  for (const cue of ['curl-up', 'unfurl']) {
+    assert.ok(cues.includes(cue), `${cue} is a cue`);
+    assert.match(fs.readFileSync(path.join(__dirname, '../docs/SOUNDS.md'), 'utf8'), new RegExp('`' + cue + '`'));
+  }
+});

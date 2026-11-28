@@ -16,9 +16,9 @@ const { packConversation, cost } = require('../src/main/conversation-context');
   const cases = [
     { name: 'practical answer without recurring lore', history: [
       { role: 'user', content: 'Can you help plan a small portfolio website?' },
-      { role: 'assistant', content: 'Sure, choom. Maybe someday we will reach that satellite.' },
+      { role: 'assistant', content: 'Sure. Maybe someday we will count every star together.' },
       { role: 'user', content: 'Give me three concrete first steps for building the portfolio. Keep it practical.' },
-    ], check: answer => { assert.doesNotMatch(answer, /satellite|orbit|stellacorn/i); assert.ok(answer.length > 120); } },
+    ], check: answer => { assert.doesNotMatch(answer, /count every star|stellacorn/i); assert.ok(answer.length > 120); } },
     { name: 'older constraints and newer correction', history: (() => {
       const history = [
         { role: 'user', content: 'Our project is Orchid. The budget is 430 quetzales. We need it offline, with no subscription.' },

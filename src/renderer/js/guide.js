@@ -55,7 +55,7 @@ export class Guide {
     const id = ++this.sceneId;
     this.answer(null);
     stella.stopPointing(); // whatever the last scene was showing
-    if (stella.stowed) {
+    if (stella.putAway) {
       this.host.setConfig({ visible: true });
       await stella.unstow();
     }

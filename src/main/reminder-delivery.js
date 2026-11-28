@@ -4,7 +4,7 @@
 // Quiet trial and paused check-ins are deliberately not inputs here: a reminder is a promise the user
 // asked for, so only fullscreen, Gaming mode, voice and overlay availability matter.
 
-// `overlayAvailable` means the overlay exists and is not destroyed (she may be stowed in her biochip).
+// `overlayAvailable` means the overlay exists and is not destroyed (she may be resting in her corner).
 // `locked`: the Windows session is locked or suspended; nobody is there, so the card (and its voice) waits for unlock.
 function deliveryPlan({ fullscreen, gaming, overlayAvailable, voiceOn, locked = false }) {
   if (fullscreen || gaming || locked) return { speak: Boolean(voiceOn), card: 'held' };

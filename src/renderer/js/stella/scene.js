@@ -63,12 +63,12 @@ export class SceneClock {
     return this.blades + this.swayOff + this.burst + P.blades.offset + k * QUARTER;
   }
 
-  step(dt, blend, idle, motions = {}, {reduced = false, aim = null} = {}) {
+  step(dt, blend, idle, motions = {}, {reduced = false, aim = null, slow: drowse = 0} = {}) {
     const S = P.speeds, b = blend || {};
     const think = b.think || 0, speak = b.speak || 0, rest = b.rest || 0;
     this.red = this.red == null ? (reduced ? 1 : 0) : damp(this.red, reduced ? 1 : 0, SPEED_EASE, dt);
     const red = this.red, slow = lerp(1, 0.1, red);
-    const mul = lerp(1, 0.3, rest) * slow;
+    const mul = lerp(1, 0.3, rest) * slow * lerp(1, 0.1, clamp(drowse, 0, 1)); // resting in the corner: a crawl
     const name = idle ? idle.name : null;
     if (name === 'speedShift' && this._idleName !== 'speedShift') this._shiftSign = -this._shiftSign;
     this._idleName = name;
@@ -156,19 +156,26 @@ const radarLight = (angle, sweep) => smoothstep(1 - Math.abs(wrap(angle - sweep)
 const progress = (clock, name) =>
   (clock.since && clock.since[name] != null ? clamp(clock.since[name] / (MOTIONS[name].duration / 1000), 0, 1) : null);
 
-export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, reduced = false, fold = 0, trailAngle = null}) {
+// Away mode (put away, resting in the corner): `curl` 0 awake … 1 a closed bud, `stretch` 0..1 her sleepy
+// stretch (half-opens the bud), `warm` 0..1 waiting on a permission (gold ring, quicker breath).
+export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, reduced = false, fold = 0, trailAngle = null,
+  curl = 0, stretch = 0, warm = 0}) {
   const b = blend || {}, mo = motions || {};
   const listen = b.listen || 0, think = b.think || 0, rest = b.rest || 0;
   const E = (b.speak || 0) * (b.level || 0);
   const sc = s / 360, f = clamp(fold || 0, 0, 1);
   const red = clock.red == null ? (reduced ? 1 : 0) : clock.red;
   const ie = name => idleEnv(idle, name, red);
+  const cu = clamp(curl || 0, 0, 1), st = clamp(stretch || 0, 0, 1), wm = clamp(warm || 0, 0, 1);
+  const bp = 0.5 + 0.5 * Math.sin(TAU * t / lerp(5.5, 3.5, wm));   // the resting breath, 0..1
+  const inner = cu > 0 ? lerp(1, 0.55 + 0.4 * bp, cu) : 1;
+  const sweep = cu * (1 - 0.55 * st);
 
   // Overall scale: idle breath pulse and the pulse-like motions.
   const dp = progress(clock, 'doublePulse');
   const twoHumps = dp == null ? 0 : Math.abs(Math.sin(TAU * dp));
   const scale = 1 + 0.06 * ie('breathPulse') + 0.08 * env(mo, 'pulse') + 0.08 * env(mo, 'doublePulse') * twoHumps
-    + 0.05 * env(mo, 'breath') + 0.1 * env(mo, 'wake');
+    + 0.05 * env(mo, 'breath') + 0.1 * env(mo, 'wake') + 0.03 * bp * cu;
   const R = P.R * s * scale;
   const breath = 1 + 0.02 * Math.sin(t * 1.3);
   const brightness = lerp(1, 0.45, rest);
@@ -187,8 +194,9 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
   const blades = Array.from({length: B.count}, (_, k) => ({
     angle: clock.blades + swayOff + clock.burst + B.offset + k * QUARTER,
     rIn: R * (B.rIn - listen * 0.04), rOut: R * B.rOut * reach,
-    wIn: (B.wIn + E * 10) * sc, wOut: B.wOut * sc, seed: k, alpha: brightness * body,
+    wIn: (B.wIn + E * 10) * sc, wOut: B.wOut * sc, seed: k, alpha: brightness * body, sweep,
   }));
+  if (cu > 0) for (const b of blades) b.rOut *= lerp(1, 0.68, cu) + 0.16 * st * cu;
   let ae = env(mo, 'aim'), k = clock.aimIndex, delta = clock.aimDelta;
   if (k != null) ae = clock.aimEnv;
   else if (ae > 0 && aim != null) { // clock not stepped with aim yet: nearest blade, short way
@@ -212,9 +220,10 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
       angle, rIn: R * (K.rIn - listen * 0.04),
       rOut: R * (K.rOut + E * 0.08 - listen * 0.05) * (1 + 0.18 * fl) * (1 - 0.35 * fo) * music,
       wIn: (K.wIn + E * 6) * sc * (1 + 0.6 * h), wOut: K.wOut * sc, seed: k + B.count,
-      alpha: Math.min(1, brightness * body * (1 + 0.6 * h)),
+      alpha: Math.min(1, brightness * body * (1 + 0.6 * h)), sweep: 0.7 * sweep,
     };
   });
+  if (cu > 0) for (const x of sticks) x.rOut *= lerp(1, 0.7, cu);
   for (const x of [...blades, ...sticks]) x.rOut = lerp(x.rOut, x.rIn, f);
 
   // Ring: three chime pulses over the chime, steady while approval holds.
@@ -232,15 +241,15 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
   // Dot swarms in the gaps between the blades.
   const base = clock.blades + swayOff + clock.burst;
   const swirl = 1 - 0.5 * env(mo, 'swirlIn') + 0.5 * env(mo, 'swirlOut');
-  const dots = SWARM.map(d => {
+  const dots = SWARM.map((d, i) => {
     const a = base + clock.orbit + d.gap * QUARTER + d.da * (1 - listen * 0.35) + 0.07 * Math.sin(t * d.sp + d.ph);
     const r0 = R * (d.r + 0.05 * Math.sin(t * d.sp * 1.3 + d.ph)
       + E * 0.12 * (0.5 + 0.5 * Math.sin(d.ph + t * 6)) - listen * 0.08) * swirl;
-    const r = lerp(r0, ringR, f);
+    const r = lerp(cu > 0 ? lerp(r0, R * (0.5 + 0.25 * d.r) * swirl, cu) : r0, ringR, f);
     const tw = 0.55 + 0.45 * Math.sin(t * 2 + d.ph * 3);
     return {
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, r: d.sz * 2.1 * sc,
-      alpha: clamp(0.35 + 0.55 * tw, 0, 1) * brightness * body,
+      alpha: clamp(0.35 + 0.55 * tw, 0, 1) * brightness * body * (i % 2 ? 1 - cu : 1),
       color: P.colors.dots[d.gap % 2 ? 0 : 1],
     };
   });
@@ -266,7 +275,7 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
   const globe = {
     r: gr * breath, yaw: turn(clock.spin), pitch: lerp(P.globePitch, 0.25, clock.tilt),
     wavy: 0.08 + E * 0.9 + listen * 0.25, rippleSpeed: clock.rippleSpeed, ripple: clock.ripple,
-    heart: {r: gr * (0.42 + E * 0.25 + listen * 0.08 + 0.03 * Math.sin(t * 1.3)), alpha: brightness * body},
+    heart: {r: gr * (0.42 + E * 0.25 + listen * 0.08 + 0.03 * Math.sin(t * 1.3)), alpha: brightness * body * inner},
     scan: env(mo, 'scan') > 0 ? Math.min(clock.scan, 1) : null,
   };
 
@@ -283,7 +292,7 @@ export function buildScene({s, t, clock, blend, idle, motions = {}, aim = null, 
   };
 
   return {
-    s, R, cx, cy, scale, brightness, fold: f,
+    s, R, cx, cy, scale, brightness, fold: f, curl: cu, inner, ringWarm: wm,
     ring, blades, sticks, dots, trail, globe,
     ambient: (0.16 + E * 0.15 + listen * 0.06 + 0.1 * env(mo, 'trail')) * brightness * body,
     sheen,

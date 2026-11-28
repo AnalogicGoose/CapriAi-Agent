@@ -338,3 +338,49 @@ test('sheen band phase stays continuous when shineWave changes its speed', async
   assert.ok(sawWrap, 'phase wraps at 1.4');
   assert.ok(fast > 100 && slow > 100, `both speeds used (fast ${fast}, slow ${slow})`);
 });
+
+// ---------- away mode: the closed bud ----------
+const bud = (m, o = {}) => m.buildScene({ s: 360, t: o.t ?? 0, clock: o.clock || new m.SceneClock(), blend: blendOf(o.blend),
+  idle: IDLE, motions: {}, curl: o.curl, stretch: o.stretch, warm: o.warm });
+
+test('curl pulls blades and sticks in and sweeps the blades', async () => {
+  const m = await load();
+  const open = bud(m, { curl: 0 }), closed = bud(m, { curl: 1 });
+  closed.blades.forEach((b, k) => {
+    assert.ok(b.rOut <= 0.70 * open.blades[k].rOut + 1e-9, `blade ${k} pulled in`);
+    near(b.sweep, 1.0, 1e-9, `blade ${k} sweep`);
+    near(open.blades[k].sweep, 0, 1e-9, `blade ${k} open sweep`);
+  });
+  closed.sticks.forEach((b, k) => assert.ok(b.rOut <= 0.72 * open.sticks[k].rOut + 1e-9, `stick ${k} pulled in`));
+});
+
+test('a stretch half-opens the bud', async () => {
+  const m = await load();
+  const still = bud(m, { curl: 1, stretch: 0 }), stretched = bud(m, { curl: 1, stretch: 1 });
+  stretched.blades.forEach((b, k) => {
+    assert.ok(b.rOut > still.blades[k].rOut, `blade ${k} reaches out`);
+    assert.ok(b.sweep < 0.6, `blade ${k} uncurls`);
+  });
+});
+
+test('the resting light breathes', async () => {
+  const m = await load();
+  assert.notEqual(bud(m, { curl: 1, t: 0 }).inner, bud(m, { curl: 1, t: 1.375 }).inner);
+  assert.equal(bud(m, { curl: 0, t: 0 }).inner, 1);
+  assert.equal(bud(m, { curl: 0, t: 1.375 }).inner, 1);
+});
+
+test('warm turns the ring gold', async () => {
+  const m = await load();
+  assert.equal(bud(m, { curl: 1, warm: 1 }).ringWarm, 1);
+  assert.equal(bud(m, { curl: 1, warm: 0 }).ringWarm, 0);
+});
+
+test('slow clocks crawl', async () => {
+  const m = await load();
+  const fast = new m.SceneClock(), slow = new m.SceneClock();
+  fast.step(1, blendOf(), IDLE, {}, { slow: 0 });
+  slow.step(1, blendOf(), IDLE, {}, { slow: 1 });
+  near(slow.spin, 0.1 * fast.spin, 1e-6, 'spin');
+  near(slow.blades, 0.1 * fast.blades, 1e-6, 'blades');
+});

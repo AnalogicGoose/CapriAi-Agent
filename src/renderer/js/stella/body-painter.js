@@ -32,6 +32,39 @@ function taper(ctx, x0, y0, x1, y1, w0, w1) {
   ctx.fill();
 }
 
+// A blade or stick around (cx, cy) at `angle`, from rIn to rOut. Straight unless `sweep` (rad): curled
+// (away mode's closed bud), the tip turns by `sweep` and the sides bow along the curve. Returns the
+// inner end and the tip for gradients.
+function blade(ctx, cx, cy, angle, rIn, rOut, w0, w1, sweep = 0) {
+  const ca = Math.cos(angle), sa = Math.sin(angle);
+  const x0 = cx + ca * rIn, y0 = cy + sa * rIn;
+  if (Math.abs(sweep) < 1e-3) {
+    const x1 = cx + ca * rOut, y1 = cy + sa * rOut;
+    taper(ctx, x0, y0, x1, y1, w0, w1);
+    return [x0, y0, x1, y1];
+  }
+  const ta = angle + sweep, x1 = cx + Math.cos(ta) * rOut, y1 = cy + Math.sin(ta) * rOut;
+  const ma = angle + sweep * 0.5, rm = (rIn + rOut) / 2 + Math.abs(sweep) * 0.12 * rOut;
+  const mx = cx + Math.cos(ma) * rm, my = cy + Math.sin(ma) * rm;
+  // widths are measured across the curve: at the base along its first direction, at the tip along its last
+  const unit = (x, y) => { const d = Math.hypot(x, y) || 1; return [x / d, y / d]; };
+  const [ux0, uy0] = unit(mx - x0, my - y0), [ux1, uy1] = unit(x1 - mx, y1 - my), [uxm, uym] = unit(x1 - x0, y1 - y0);
+  const a = w0 / 2, b = w1 / 2, m = 0.55 * a + 0.45 * b;
+  ctx.beginPath();
+  ctx.moveTo(x0 - uy0 * a, y0 + ux0 * a);
+  ctx.quadraticCurveTo(mx - uym * m, my + uxm * m, x1 - uy1 * b, y1 + ux1 * b);
+  ctx.lineTo(x1 + uy1 * b, y1 - ux1 * b);
+  ctx.quadraticCurveTo(mx + uym * m, my - uxm * m, x0 + uy0 * a, y0 - ux0 * a);
+  ctx.closePath();
+  ctx.fill();
+  return [x0, y0, x1, y1];
+}
+
+// The ring's colours, warmed toward moonlight gold by `w` (0..1: waiting on a permission while resting).
+const GOLD = [246, 220, 156];
+const hex = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+const warmed = (c, w) => w > 0 ? `rgb(${hex(c).map((v, i) => Math.round(v + (GOLD[i] - v) * w)).join(',')})` : c;
+
 export class BodyPainter {
   constructor(size) {
     this.resize(size);
@@ -75,13 +108,12 @@ export class BodyPainter {
     const draw = (list, stops, mid) => {
       for (const b of list) {
         if (b.alpha <= 0 || b.rOut <= b.rIn) continue;
-        const ca = Math.cos(b.angle), sa = Math.sin(b.angle);
         const rIn = b.rIn * k, rOut = b.rOut * k;
         const g = ctx.createRadialGradient(cx, cy, rIn, cx, cy, rOut);
         g.addColorStop(0, stops[0]); g.addColorStop(mid, stops[1]); g.addColorStop(1, stops[2]);
         ctx.fillStyle = g;
         ctx.globalAlpha = clamp(b.alpha, 0, 1);
-        taper(ctx, cx + ca * rIn, cy + sa * rIn, cx + ca * rOut, cy + sa * rOut, b.wIn * k, b.wOut * k);
+        blade(ctx, cx, cy, b.angle, rIn, rOut, b.wIn * k, b.wOut * k, b.sweep || 0);
       }
       ctx.globalAlpha = 1;
     };
@@ -102,7 +134,7 @@ export class BodyPainter {
     const ring = sc.ring, rr = ring.r * k;
     if (rr > 0.5 && ring.alpha > 0) {
       const cg = ctx.createConicGradient(ring.turn, cx, cy);
-      for (const [pos, col] of C.ring) cg.addColorStop(pos, col);
+      for (const [pos, col] of C.ring) cg.addColorStop(pos, warmed(col, sc.ringWarm || 0));
       ctx.globalAlpha = clamp(ring.alpha, 0, 1);
       ctx.strokeStyle = cg;
       ctx.lineWidth = Math.max(1.2, 4 * scale);
@@ -151,14 +183,14 @@ export class BodyPainter {
     ctx.globalAlpha = 1;
     const shape = b => {
       if (b.alpha <= 0 || b.rOut <= b.rIn) return;
-      const ca = Math.cos(b.angle), sa = Math.sin(b.angle);
+      const ca = Math.cos(b.angle), sa = Math.sin(b.angle), ta = b.angle + (b.sweep || 0);
       const x0 = cx + ca * b.rIn * k, y0 = cy + sa * b.rIn * k;
-      const x1 = cx + ca * b.rOut * k, y1 = cy + sa * b.rOut * k;
+      const x1 = cx + Math.cos(ta) * b.rOut * k, y1 = cy + Math.sin(ta) * b.rOut * k;
       const bl = Math.round(255 * b.seed / 8);
       const g = ctx.createLinearGradient(x0, y0, x1, y1);
       g.addColorStop(0, `rgb(255,0,${bl})`); g.addColorStop(1, `rgb(255,255,${bl})`);
       ctx.fillStyle = g;
-      taper(ctx, x0, y0, x1, y1, b.wIn * k, b.wOut * k);
+      blade(ctx, cx, cy, b.angle, b.rIn * k, b.rOut * k, b.wIn * k, b.wOut * k, b.sweep || 0);
     };
     sc.blades.forEach(shape);
     sc.sticks.forEach(shape);

@@ -152,7 +152,8 @@ function applySettings(patch) {
 test('cosmetic settings preserve Codex turns and memory reviews; policy changes revoke affected work', () => {
   for (const patch of [{ scale: 0.8 }, { visible: true }, { idleAnimations: false }, { displayId: 7 }]) assert.deepEqual(applySettings(patch), []);
   assert.deepEqual(applySettings({ volume: 0.3 }), ['tts']);
-  assert.deepEqual(applySettings({ visible: false }), ['speech', 'tts', 'collaboration']);
+  // Put away she rests quietly in her corner: her initiatives stop, but a line she is saying is not cut off.
+  assert.deepEqual(applySettings({ visible: false }), ['collaboration']);
   assert.ok(applySettings({ interestsEnabled: false }).includes('collaboration'));
   for (const patch of [{ privacy: { memoryRecall: false } }, { gamingMode: true }, { codexModel: 'new-model' }]) {
     const calls = applySettings(patch);
@@ -184,4 +185,28 @@ test('memory review replaces an open Codex chat and can return to Codex without 
   assert.equal(panel.current.badge, 'LOCAL'); assert.equal(checks, 0);
   await chat.start(false);
   assert.equal(chat.open, true); assert.equal(panel.current.badge, ''); assert.equal(checks, 0); assert.equal(chat.history.length, 1);
+});
+
+test('typed chat opened while she is still gliding away brings her back', async () => {
+  const code = source('src/renderer/js/chat.js').replace("import { welcomePicker } from './welcome.js';", "const welcomePicker=()=>()=>'Hey. What is on your mind?';").replace("import { pick, fmt } from './util.js';", 'const pick=x=>x[0],fmt=x=>x;');
+  const { Chat } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+  let unstowed = 0;
+  const panel = { current: null, chatInput: { focus() {} }, hide() {}, say(msg) { this.current = msg; return true; } };
+  const stella = { stowed: false, stowing: Promise.resolve(), putAway: true, wake() {}, perform() {}, towardCenter: () => 1,
+    unstow: async () => { unstowed++; } };
+  const chat = new Chat({ panel, stella, voice: {}, brain: { t: { chat: { hello: ['Hello'], again: ['Back'] } } },
+    host: { setConfig() {}, onChatDelta() {}, focusOverlay() {}, chatStop() {}, chatStatus: async () => ({ ok: true, model: 'm' }) } });
+  await chat.start();
+  assert.equal(unstowed, 1);
+});
+
+test('"Hey Stella" voice sessions talk from her corner; they do not bring her out', () => {
+  const app = source('src/renderer/js/app.js');
+  const onStart = app.slice(app.indexOf('onStart: async checkIn =>'), app.indexOf('onPromote:'));
+  assert.doesNotMatch(onStart, /unstow/);
+});
+
+test('the possess setting is gone from every settings list', () => {
+  for (const f of ['src/main/settings-policy.js', 'src/main/codex-tools.js', 'src/main/config.js', 'src/main/reusable-routines.js'])
+    assert.doesNotMatch(source(f), /'possess'|\bpossess:/, f);
 });

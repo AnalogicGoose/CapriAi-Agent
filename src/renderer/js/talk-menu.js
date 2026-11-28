@@ -24,7 +24,7 @@ export class TalkMenu {
   show() {
     // Repeated body clicks are requests to talk, not a shortcut to dismiss.
     if (this.visible) return;
-    if (this.stella.gaming || this.stella.fullscreen || this.stella.stowed || this.stella.dragging) return;
+    if (this.stella.gaming || this.stella.fullscreen || this.stella.putAway || this.stella.dragging) return;
     this.stella.wake();
     this.greeting.textContent = this.pick(this.language());
     const es = this.language() === 'es';
@@ -48,7 +48,7 @@ export class TalkMenu {
   }
   place(head = this.stella.head(), view = this.stella.view) {
     if (!this.visible) return;
-    if (this.stella.gaming || this.stella.fullscreen || this.stella.stowed || this.stella.dragging) return this.hide();
+    if (this.stella.gaming || this.stella.fullscreen || this.stella.putAway || this.stella.dragging) return this.hide();
     const width = this.el.offsetWidth, height = this.el.offsetHeight;
     this.el.style.left = `${Math.max(10, Math.min(view.w - width - 10, head.x - width / 2))}px`;
     this.el.style.top = `${Math.max(10, Math.min(view.h - height - 10, (head.top ?? head.y - 80) - height - 12))}px`;

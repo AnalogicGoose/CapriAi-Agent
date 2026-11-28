@@ -11,6 +11,7 @@ export const Acts = {
   // Starts a motion as her current act; null when it can't play. Nothing plays while she's dragged or dormant.
   start(name) {
     if (!name || !MOTIONS[name] || this.dragging || this.dormant) return null;
+    if (this.restActive) return this.restingMotion(name); // resting in her corner: quiet, she stays curled
     const now = this.now();
     if (!this.motions.play(name, now)) return null;
     const entry = this.motions.list[this.motions.list.length - 1];
@@ -90,7 +91,7 @@ export const Acts = {
   spark() { this.play('pulse'); return true; },
   zap() { this.play('flare'); return true; },
   gaze() { this.play('pulse'); return true; },
-  earnUplink() { this.play('flare'); return true; },
+  starGaze() { this.play('flare'); return true; }, // a long job done: she lights up for the stars
 
   celebrate({ onSpeak } = {}) {
     this.play('celebrate');

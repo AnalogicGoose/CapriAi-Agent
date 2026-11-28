@@ -1,51 +1,23 @@
-// What Stella says. She's a personality construct — dozens of minds in one — so she
-// sometimes talks as "we". Slang is Night City's: choom, preem, nova, flatline.
+// What Stella says: warm, a little playful, starlit. No slang; short lines she can say in passing.
 
 export const LINES = {
   fr: {
     state: { work: 'EN COURS', done: 'TERMINÉ', alert: 'ATTENTE', error: 'ERREUR', info: 'SYNC', idle: 'VEILLE' },
-    hello: [
-      'Connexion établie. Salut, choom.',
-      'Stella en ligne. On bosse sur quoi ?',
-      'Tous mes moi sont réveillés. Je surveille {project}.',
-      'Biopuce chaude. Je suis là.',
-    ],
+    hello: ['Coucou. Je suis là.', 'Stella en ligne. On construit quoi ?', 'Toute illuminée. Je surveille {project}.', 'Bien au chaud, je brille. Je suis là.'],
     resume: [
       'Retour sur {project}. Je n’avais rien oublié.',
       'Session reprise. On reprend où on en était.',
     ],
-    prompt: [
-      'Nouvelle mission. Claude est dessus.',
-      'Reçu. Je garde un œil sur Claude.',
-      'Ok, on s’y met.',
-      'Mission acceptée. Je te tiens au courant.',
-    ],
+    prompt: ['Nouvelle tâche. Claude s’y met.', 'Compris. Je garde un œil sur Claude.', 'OK, c’est parti.', 'Tâche acceptée. Je te tiens au courant.'],
     working: [
       'Ça avance. {count} actions déjà.',
       'Claude bosse dur. Moi je compte : {count}.',
       'Toujours dessus. {count} actions au compteur.',
     ],
-    done: [
-      'Terminé ! C’est preem.',
-      'Mission accomplie, choom.',
-      'Claude a fini. Tu peux revenir.',
-      'Livré. Plutôt nova, non ?',
-      'Fini. On était des dizaines à surveiller, rien vu de travers.',
-    ],
-    permission: [
-      'Hé ! Claude a besoin de ta permission.',
-      'Choom, il faut que tu valides un truc.',
-      'On attend ton feu vert.',
-    ],
-    waiting: [
-      'Claude attend ta réponse.',
-      'C’est à toi de jouer, choom.',
-    ],
-    error: [
-      'Aïe. {tool} a planté.',
-      '{tool} a flatliné. Claude va réessayer.',
-      'Erreur sur {tool}. Rien de grave… je crois.',
-    ],
+    done: ['Terminé ! Joli travail.', 'Tâche accomplie.', 'Claude a fini. Tu peux revenir.', 'Livré. Plutôt brillant, non ?', 'Fini. J’ai tout suivi, rien d’anormal.'],
+    permission: ['Hé ! Claude a besoin de ta permission.', 'Il faut que tu valides un truc.', 'J’attends ton feu vert.'],
+    waiting: ['Claude attend ta réponse.', 'À toi de jouer.'],
+    error: ['Aïe. {tool} a planté.', '{tool} est tombé. Claude va réessayer.', '{tool} a échoué. Rien de grave… je crois.'],
     interrupted: ['Interrompu. Changement de plan ?', 'Coupé net. Je reste là.'],
     crashed: ['Claude s’est arrêté en plein vol.', 'Grosse panne. Claude n’a pas pu finir.'],
     subagentStart: ['Sous-agent {agent} déployé.'],
@@ -68,7 +40,7 @@ export const LINES = {
       loading: 'Le modèle se réveille… la première réponse prend un moment.',
       // fermer une appli que tu lui demandes de fermer, après ton clic
       closeIt: 'Fermer {app}', no: 'Non',
-      closed: '{app} : flatliné. C’est fait.',
+      closed: '{app} : fermé. C’est fait.',
       stillOpen: '{app} tourne encore : il se cache dans la zone de notification, ou il te demande d’enregistrer quelque chose.',
       force: 'Forcer la fermeture', leave: 'Laisser',
       forced: '{app} : coupé net.',
@@ -78,14 +50,14 @@ export const LINES = {
     // sa carte de rapport : ce que Claude a abattu aujourd'hui (son menu, ou d'elle-même le soir)
     report: {
       title: 'Journal de mission', badge: 'DÉBRIEF',
-      missions: 'Missions finies', actions: 'Actions', files: 'Fichiers', errors: 'Erreurs', longest: 'Plus longue',
+      missions: 'Tâches faites', actions: 'Actions', files: 'Fichiers', errors: 'Erreurs', longest: 'Plus longue',
       prompts: ['prompt', 'prompts'], approvals: ['autorisation', 'autorisations'], projects: ['projet', 'projets'],
       copy: 'Copier l’image', copied: 'Copiée ✓', copyFailed: 'Copie impossible', close: 'Fermer',
       lines: {
         none: ['Rien au journal aujourd’hui. Nuit calme.', 'Aucune activité reçue pour le moment.'],
         light: ['Petite journée. Je prends.', 'Service court. Voilà le journal.'],
-        good: ['Pas mal, choom. Voilà ta journée.', 'Le journal du jour. Plutôt nova.'],
-        big: ['Grosse journée. Night City n’a jamais bougé aussi vite.', 'Regarde-moi ça. On était en feu aujourd’hui.'],
+        good: ['Pas mal du tout. Voilà ta journée.', 'Le journal du jour. Plutôt brillant.'],
+        big: ['Grosse journée. On a brillé aujourd’hui.', 'Regarde-moi ça. On était en feu aujourd’hui.'],
       },
     },
     // Claude silencieux en pleine tâche : il réfléchit (le ticker compte les secondes)
@@ -96,19 +68,13 @@ export const LINES = {
       longHow: 'Rien n’est bloqué : je compte. Avec un modèle local (Ollama), ça peut prendre plusieurs minutes.',
     },
     bye: ['Session {project} fermée. À plus.', 'Déconnexion. Je reste dans le coin.'],
-    idle: ['Rien en cours. Je flotte.', 'Pas de mission. Je m’ennuie un peu.', 'Calme plat sur le Net.'],
-    gaze: ['Tu la vois, cette étoile ?', 'Il est toujours là, le satellite.', 'Chut. Je regarde.'],
-    uplink: ['Un jour, j’irai là-haut.', 'Tu crois qu’on pourrait monter jusque-là ?', 'Il m’a répondu. Tu l’as vu ?'],
+    idle: ['Rien en cours. Je flotte.', 'Pas de tâche. Je m’ennuie un peu.', 'Calme plat sous les étoiles.'],
     // over Claude's whole answer, when you weren't on its window
     reply: ['Claude t’a répondu :', 'Voilà ce que Claude a dit :', 'Message de Claude :'],
     // the demo's second half, one line before each trick
     showcase: {
-      minds: 'Y a du monde, là-dedans.',
-      zap: 'Moi, une petite peste ?',
-      possess: 'Cette fenêtre est à moi.',
-      sleep: 'Une petite sieste…',
-      chip: 'Ctrl+Alt+C, et je me range là.',
-      end: 'Fin de la démo. À toi, choom.',
+      chip: 'Ctrl+Alt+C, et je me roule en boule dans mon coin.',
+      end: 'Fin de la démo. À toi.',
     },
     // her welcome panel (first launch, or "How does it work?" in her menu)
     guide: {
@@ -155,7 +121,6 @@ export const LINES = {
       afterInstall: 'Quand tu l’as, fais clic droit sur moi › « Installer les hooks Claude Code ».',
       failed: 'Je n’ai pas pu me brancher : {error}',
     },
-    online: ['Stella en ligne.', 'De retour sur ton bureau, choom.'],
     status: 'Claude travaille sur {project} depuis {time}.',
     last: 'Dernière action : {action}',
     sessions: '{count} sessions actives',
@@ -173,34 +138,18 @@ export const LINES = {
 
   en: {
     state: { work: 'RUNNING', done: 'DONE', alert: 'WAITING', error: 'ERROR', info: 'SYNC', idle: 'IDLE' },
-    hello: [
-      'Link established. Hey, choom.',
-      'Stella online. What are we building?',
-      'All of me is awake. Watching {project}.',
-      'Biochip warm. I’m here.',
-    ],
+    hello: ['Hey you. I’m here.', 'Stella online. What are we building?', 'All lit up. Watching {project}.', 'Warm and glowing. I’m here.'],
     resume: ['Back on {project}. I didn’t forget a thing.', 'Session resumed. Picking up where we left off.'],
-    prompt: [
-      'New gig. Claude’s on it.',
-      'Got it. I’m keeping an eye on Claude.',
-      'Okay, let’s go.',
-      'Gig accepted. I’ll keep you posted.',
-    ],
+    prompt: ['New task. Claude’s on it.', 'Got it. I’m keeping an eye on Claude.', 'Okay, let’s go.', 'Task accepted. I’ll keep you posted.'],
     working: [
       'Moving along. {count} actions so far.',
       'Claude’s grinding. I’m counting: {count}.',
       'Still on it. {count} actions on the clock.',
     ],
-    done: [
-      'Done! That’s preem.',
-      'Gig complete, choom.',
-      'Claude’s finished. You can come back.',
-      'Delivered. Pretty nova, right?',
-      'Finished. Dozens of us watching, nothing looked off.',
-    ],
-    permission: ['Hey! Claude needs your permission.', 'Choom, you need to approve something.', 'Waiting on your green light.'],
-    waiting: ['Claude is waiting for your answer.', 'Your move, choom.'],
-    error: ['Ouch. {tool} crashed.', '{tool} flatlined. Claude will retry.', '{tool} failed. Nothing serious… I think.'],
+    done: ['Done! Beautiful work.', 'Task complete.', 'Claude’s finished. You can come back.', 'Delivered. Pretty bright, right?', 'Finished. I watched the whole way, nothing looked off.'],
+    permission: ['Hey! Claude needs your permission.', 'You need to approve something.', 'Waiting on your green light.'],
+    waiting: ['Claude is waiting for your answer.', 'Your move.'],
+    error: ['Ouch. {tool} crashed.', '{tool} fell over. Claude will retry.', '{tool} failed. Nothing serious… I think.'],
     interrupted: ['Interrupted. Change of plans?', 'Cut off. I’ll stay put.'],
     crashed: ['Claude stopped mid-flight.', 'Hard crash. Claude couldn’t finish.'],
     subagentStart: ['Subagent {agent} deployed.'],
@@ -223,7 +172,7 @@ export const LINES = {
       loading: 'Waking the model up… the first answer takes a moment.',
       // closing an app you ask her to close, after your click
       closeIt: 'Close {app}', no: 'No',
-      closed: '{app}: flatlined. Done.',
+      closed: '{app}: closed. Done.',
       stillOpen: '{app} is still running: it hides in the tray, or it’s asking you to save something.',
       force: 'Force quit', leave: 'Leave it',
       forced: '{app}: cut off clean.',
@@ -233,14 +182,14 @@ export const LINES = {
     // her report card: what Claude got through today (her menu, or on her own in the evening)
     report: {
       title: 'Mission log', badge: 'DEBRIEF',
-      missions: 'Gigs done', actions: 'Actions', files: 'Files', errors: 'Errors', longest: 'Longest',
+      missions: 'Tasks done', actions: 'Actions', files: 'Files', errors: 'Errors', longest: 'Longest',
       prompts: ['prompt', 'prompts'], approvals: ['approval', 'approvals'], projects: ['project', 'projects'],
       copy: 'Copy image', copied: 'Copied ✓', copyFailed: 'Couldn’t copy', close: 'Close',
       lines: {
         none: ['Nothing on the log today. Quiet night.', 'No task activity received yet.'],
         light: ['Light day. I’ll take it.', 'Short shift. Here’s the log.'],
-        good: ['Not bad, choom. Here’s your day.', 'Today’s log. Pretty nova.'],
-        big: ['Busy day. Night City never moved this fast.', 'Look at that. We were on fire today.'],
+        good: ['Not bad at all. Here’s your day.', 'Today’s log. Pretty bright.'],
+        big: ['Busy day. We were shining today.', 'Look at that. We were on fire today.'],
       },
     },
     // Claude quiet mid-task: it's thinking (the ticker counts the seconds)
@@ -251,19 +200,13 @@ export const LINES = {
       longHow: 'Nothing’s stuck: I’m counting. With a local model (Ollama), it can take minutes.',
     },
     bye: ['Session {project} closed. Later.', 'Disconnected. I’ll be around.'],
-    idle: ['Nothing running. Just floating.', 'No gig. Kinda bored.', 'Quiet night on the Net.'],
-    gaze: ['See that star?', 'The satellite’s still up there.', 'Shh. I’m watching.'],
-    uplink: ['Someday I’ll get up there.', 'Think we could make it up there?', 'It answered. Did you see?'],
+    idle: ['Nothing running. Just floating.', 'No task. Kinda bored.', 'Quiet night under the stars.'],
     // over Claude's whole answer, when you weren't on its window
     reply: ['Claude answered:', 'Here’s what Claude said:', 'Message from Claude:'],
     // the demo's second half, one line before each trick
     showcase: {
-      minds: 'There’s a crowd in here.',
-      zap: 'Me? A menace?',
-      possess: 'This window’s mine now.',
-      sleep: 'Quick nap…',
-      chip: 'Ctrl+Alt+C, and I tuck myself away here.',
-      end: 'That’s the demo. Your turn, choom.',
+      chip: 'Ctrl+Alt+C, and I curl up in my corner.',
+      end: 'That’s the demo. Your turn.',
     },
     // her welcome panel (first launch, or "How does it work?" in her menu)
     guide: {
@@ -310,7 +253,6 @@ export const LINES = {
       afterInstall: 'Once you have it, right-click me › “Install Claude Code hooks”.',
       failed: 'I couldn’t plug in: {error}',
     },
-    online: ['Stella online.', 'Back on your desktop, choom.'],
     status: 'Claude has been working on {project} for {time}.',
     last: 'Last action: {action}',
     sessions: '{count} active sessions',
@@ -327,34 +269,18 @@ export const LINES = {
   },
   es: {
     state: { work: 'EN CURSO', done: 'LISTO', alert: 'ESPERA', error: 'ERROR', info: 'SYNC', idle: 'REPOSO' },
-    hello: [
-      'Conexión establecida. Hola, choom.',
-      'Stella en línea. ¿En qué trabajamos?',
-      'Todas mis yo están despiertas. Vigilo {project}.',
-      'Biochip caliente. Aquí estoy.',
-    ],
+    hello: ['Hola, tú. Aquí estoy.', 'Stella en línea. ¿Qué construimos?', 'Toda encendida. Vigilo {project}.', 'Calentita y brillando. Aquí estoy.'],
     resume: ['De vuelta en {project}. No olvidé nada.', 'Sesión reanudada. Seguimos donde lo dejamos.'],
-    prompt: [
-      'Nuevo encargo. Claude está en ello.',
-      'Recibido. No le quito el ojo a Claude.',
-      'Bien, vamos.',
-      'Encargo aceptado. Te mantengo al tanto.',
-    ],
+    prompt: ['Nueva tarea. Claude está en ello.', 'Entendido. Le echo un ojo a Claude.', 'Vale, vamos.', 'Tarea aceptada. Te mantengo al tanto.'],
     working: [
       'Avanzando. {count} acciones ya.',
       'Claude le está dando duro. Yo cuento: {count}.',
       'Sigue en ello. {count} acciones en el marcador.',
     ],
-    done: [
-      '¡Listo! Eso es preem.',
-      'Encargo cumplido, choom.',
-      'Claude terminó. Ya puedes volver.',
-      'Entregado. Bastante nova, ¿no?',
-      'Terminado. Éramos docenas vigilando, nada raro.',
-    ],
-    permission: ['¡Oye! Claude necesita tu permiso.', 'Choom, tienes que aprobar algo.', 'Esperamos tu luz verde.'],
-    waiting: ['Claude espera tu respuesta.', 'Te toca, choom.'],
-    error: ['Ay. {tool} falló.', '{tool} hizo flatline. Claude lo volverá a intentar.', 'Error en {tool}. Nada grave… creo.'],
+    done: ['¡Listo! Buen trabajo.', 'Tarea cumplida.', 'Claude terminó. Puedes volver.', 'Entregado. Bastante brillante, ¿no?', 'Terminado. Lo seguí todo, nada raro.'],
+    permission: ['¡Oye! Claude necesita tu permiso.', 'Tienes que aprobar algo.', 'Esperamos tu luz verde.'],
+    waiting: ['Claude espera tu respuesta.', 'Te toca.'],
+    error: ['Ay. {tool} falló.', '{tool} se cayó. Claude lo volverá a intentar.', 'Error en {tool}. Nada grave… creo.'],
     interrupted: ['Interrumpido. ¿Cambio de planes?', 'Cortado en seco. Me quedo aquí.'],
     crashed: ['Claude se detuvo en pleno vuelo.', 'Caída grave. Claude no pudo terminar.'],
     subagentStart: ['Subagente {agent} desplegado.'],
@@ -377,7 +303,7 @@ export const LINES = {
       loading: 'Despertando el modelo… la primera respuesta tarda un poco.',
       // cerrar una app que le pides cerrar, tras tu clic
       closeIt: 'Cerrar {app}', no: 'No',
-      closed: '{app}: flatline. Hecho.',
+      closed: '{app}: cerrado. Hecho.',
       stillOpen: '{app} sigue abierta: se esconde en la bandeja, o te pide guardar algo.',
       force: 'Forzar cierre', leave: 'Dejarla',
       forced: '{app}: cortada en seco.',
@@ -387,14 +313,14 @@ export const LINES = {
     // su informe: lo que Claude sacó hoy (su menú, o ella sola por la tarde)
     report: {
       title: 'Registro de misión', badge: 'INFORME',
-      missions: 'Misiones', actions: 'Acciones', files: 'Archivos', errors: 'Errores', longest: 'La más larga',
+      missions: 'Tareas hechas', actions: 'Acciones', files: 'Archivos', errors: 'Errores', longest: 'La más larga',
       prompts: ['prompt', 'prompts'], approvals: ['permiso', 'permisos'], projects: ['proyecto', 'proyectos'],
       copy: 'Copiar imagen', copied: 'Copiada ✓', copyFailed: 'No se pudo copiar', close: 'Cerrar',
       lines: {
         none: ['Nada en el registro hoy. Noche tranquila.', 'Todavía no he recibido actividad de tareas.'],
         light: ['Día ligero. Me vale.', 'Turno corto. Aquí está el registro.'],
-        good: ['Nada mal, choom. Aquí está tu día.', 'El registro del día. Bastante nova.'],
-        big: ['Día intenso. Night City nunca fue tan rápido.', 'Mira eso. Hoy estábamos que ardíamos.'],
+        good: ['Nada mal. Aquí está tu día.', 'El registro del día. Bastante brillante.'],
+        big: ['Día intenso. Hoy brillamos.', 'Mira eso. Hoy estábamos que ardíamos.'],
       },
     },
     // Claude callado a mitad de tarea: está pensando (el ticker cuenta los segundos)
@@ -405,17 +331,11 @@ export const LINES = {
       longHow: 'Nada se ha atascado: estoy contando. Con un modelo local (Ollama), puede tardar minutos.',
     },
     bye: ['Sesión {project} cerrada. Hasta luego.', 'Desconectada. Sigo por aquí.'],
-    idle: ['Nada en curso. Floto.', 'Sin encargo. Me aburro un poco.', 'Noche tranquila en la Red.'],
-    gaze: ['¿Ves esa estrella?', 'El satélite sigue ahí arriba.', 'Shh. Estoy mirando.'],
-    uplink: ['Algún día subiré allí.', '¿Crees que podríamos llegar hasta allí?', 'Me respondió. ¿Lo viste?'],
+    idle: ['Nada en curso. Floto.', 'Sin tarea. Me aburro un poco.', 'Noche tranquila bajo las estrellas.'],
     reply: ['Claude te respondió:', 'Esto dijo Claude:', 'Mensaje de Claude:'],
     showcase: {
-      minds: 'Hay mucha gente aquí dentro.',
-      zap: '¿Yo, una peste?',
-      possess: 'Esta ventana ahora es mía.',
-      sleep: 'Una siestecita…',
-      chip: 'Ctrl+Alt+C y me guardo aquí.',
-      end: 'Fin de la demo. Te toca, choom.',
+      chip: 'Ctrl+Alt+C, y me acurruco en mi rincón.',
+      end: 'Fin de la demo. Te toca.',
     },
     guide: {
       ok: 'Entendido', next: 'Siguiente', more: 'Enséñame',
@@ -461,7 +381,6 @@ export const LINES = {
       afterInstall: 'Cuando lo tengas, clic derecho sobre mí › «Instalar los hooks de Claude Code».',
       failed: 'No pude conectarme: {error}',
     },
-    online: ['Stella en línea.', 'De vuelta en tu escritorio, choom.'],
     status: 'Claude lleva {time} trabajando en {project}.',
     last: 'Última acción: {action}',
     sessions: '{count} sesiones activas',
@@ -480,34 +399,18 @@ export const LINES = {
   // Brazilian Portuguese
   pt: {
     state: { work: 'RODANDO', done: 'PRONTO', alert: 'ESPERA', error: 'ERRO', info: 'SYNC', idle: 'OCIOSA' },
-    hello: [
-      'Conexão estabelecida. E aí, choom.',
-      'Construto Stellacórnio online. No que a gente vai trabalhar?',
-      'Todas as minhas eus acordaram. De olho em {project}.',
-      'Biochip quentinho. Tô aqui.',
-    ],
+    hello: ['Oi, você. Tô aqui.', 'Stella online. O que vamos construir?', 'Toda acesa. De olho em {project}.', 'Quentinha e brilhando. Tô aqui.'],
     resume: ['De volta ao {project}. Não esqueci nada.', 'Sessão retomada. Continuando de onde paramos.'],
-    prompt: [
-      'Novo trampo. O Claude tá nessa.',
-      'Entendido. Tô de olho no Claude.',
-      'Beleza, bora.',
-      'Trampo aceito. Te mantenho informado.',
-    ],
+    prompt: ['Nova tarefa. O Claude já tá nela.', 'Entendi. Tô de olho no Claude.', 'Beleza, vamos.', 'Tarefa aceita. Te mantenho informado.'],
     working: [
       'Andando. {count} ações até agora.',
       'O Claude tá ralando. Eu conto: {count}.',
       'Ainda nessa. {count} ações no placar.',
     ],
-    done: [
-      'Pronto! Isso é preem.',
-      'Trampo concluído, choom.',
-      'O Claude terminou. Pode voltar.',
-      'Entregue. Bem nova, né?',
-      'Terminado. Éramos dezenas vigiando, nada de estranho.',
-    ],
-    permission: ['Ei! O Claude precisa da sua permissão.', 'Choom, você precisa aprovar uma coisa.', 'Esperando seu sinal verde.'],
-    waiting: ['O Claude tá esperando sua resposta.', 'Sua vez, choom.'],
-    error: ['Ai. {tool} travou.', '{tool} deu flatline. O Claude vai tentar de novo.', 'Erro em {tool}. Nada grave… eu acho.'],
+    done: ['Pronto! Belo trabalho.', 'Tarefa concluída.', 'O Claude terminou. Pode voltar.', 'Entregue. Bem brilhante, né?', 'Terminado. Acompanhei tudo, nada estranho.'],
+    permission: ['Ei! O Claude precisa da sua permissão.', 'Você precisa aprovar uma coisa.', 'Esperando seu sinal verde.'],
+    waiting: ['O Claude tá esperando sua resposta.', 'Sua vez.'],
+    error: ['Ai. {tool} travou.', '{tool} caiu. O Claude vai tentar de novo.', 'Erro em {tool}. Nada grave… eu acho.'],
     interrupted: ['Interrompido. Mudança de planos?', 'Cortado na hora. Fico aqui.'],
     crashed: ['O Claude parou no meio do voo.', 'Pane feia. O Claude não conseguiu terminar.'],
     subagentStart: ['Subagente {agent} enviado.'],
@@ -530,7 +433,7 @@ export const LINES = {
       loading: 'Acordando o modelo… a primeira resposta demora um pouco.',
       // fechar um app que você pede para fechar, depois do seu clique
       closeIt: 'Fechar {app}', no: 'Não',
-      closed: '{app}: flatline. Feito.',
+      closed: '{app}: fechado. Feito.',
       stillOpen: '{app} continua rodando: ele se esconde na bandeja, ou está pedindo para você salvar algo.',
       force: 'Forçar fechamento', leave: 'Deixar',
       forced: '{app}: cortado na hora.',
@@ -540,14 +443,14 @@ export const LINES = {
     // o relatório dela: o que o Claude fez hoje (o menu dela, ou sozinha à noite)
     report: {
       title: 'Registro de missão', badge: 'RELATÓRIO',
-      missions: 'Missões', actions: 'Ações', files: 'Arquivos', errors: 'Erros', longest: 'A mais longa',
+      missions: 'Tarefas feitas', actions: 'Ações', files: 'Arquivos', errors: 'Erros', longest: 'A mais longa',
       prompts: ['prompt', 'prompts'], approvals: ['aprovação', 'aprovações'], projects: ['projeto', 'projetos'],
       copy: 'Copiar imagem', copied: 'Copiada ✓', copyFailed: 'Não deu para copiar', close: 'Fechar',
       lines: {
         none: ['Nada no registro hoje. Noite tranquila.', 'Ainda não recebi atividade de tarefas.'],
         light: ['Dia leve. Tá ótimo.', 'Turno curto. Aqui está o registro.'],
-        good: ['Nada mal, choom. Aqui está o seu dia.', 'O registro do dia. Bem nova.'],
-        big: ['Dia cheio. Night City nunca andou tão rápido.', 'Olha isso. A gente estava pegando fogo hoje.'],
+        good: ['Nada mal. Aqui está o seu dia.', 'O registro do dia. Bem brilhante.'],
+        big: ['Dia cheio. Hoje a gente brilhou.', 'Olha isso. A gente estava pegando fogo hoje.'],
       },
     },
     // Claude calado no meio da tarefa: está pensando (o ticker conta os segundos)
@@ -558,17 +461,11 @@ export const LINES = {
       longHow: 'Nada travou: estou contando. Com um modelo local (Ollama), pode levar minutos.',
     },
     bye: ['Sessão {project} encerrada. Até mais.', 'Desconectada. Continuo por aqui.'],
-    idle: ['Nada rolando. Só flutuando.', 'Sem trampo. Meio entediada.', 'Noite calma na Rede.'],
-    gaze: ['Tá vendo aquela estrela?', 'O satélite continua lá em cima.', 'Shh. Tô olhando.'],
-    uplink: ['Um dia eu chego lá em cima.', 'Acha que a gente conseguiria subir até lá?', 'Ele respondeu. Você viu?'],
+    idle: ['Nada rolando. Só flutuando.', 'Sem tarefa. Meio entediada.', 'Noite calma sob as estrelas.'],
     reply: ['O Claude te respondeu:', 'Olha o que o Claude disse:', 'Mensagem do Claude:'],
     showcase: {
-      minds: 'Tem muita gente aqui dentro.',
-      zap: 'Eu, uma peste?',
-      possess: 'Essa janela agora é minha.',
-      sleep: 'Um cochilo…',
-      chip: 'Ctrl+Alt+C e eu me guardo aqui.',
-      end: 'Fim da demo. Sua vez, choom.',
+      chip: 'Ctrl+Alt+C, e eu me enrolo no meu cantinho.',
+      end: 'Fim da demo. Sua vez.',
     },
     guide: {
       ok: 'Entendi', next: 'Próximo', more: 'Me mostra',
@@ -614,7 +511,6 @@ export const LINES = {
       afterInstall: 'Quando tiver instalado, clique com o botão direito em mim › “Instalar os hooks do Claude Code”.',
       failed: 'Não consegui me conectar: {error}',
     },
-    online: ['Stella online.', 'De volta na sua área de trabalho, choom.'],
     status: 'O Claude tá trabalhando em {project} há {time}.',
     last: 'Última ação: {action}',
     sessions: '{count} sessões ativas',
@@ -630,37 +526,20 @@ export const LINES = {
     },
   },
 
-  // Russian: "choom" is "чумба", as in the game's Russian localization
   ru: {
     state: { work: 'В РАБОТЕ', done: 'ГОТОВО', alert: 'ЖДУ', error: 'ОШИБКА', info: 'СИНХР', idle: 'ПОКОЙ' },
-    hello: [
-      'Связь установлена. Привет, чумба.',
-      'Конструкт «Козерог» в сети. Над чем работаем?',
-      'Все мои «я» проснулись. Слежу за {project}.',
-      'Биочип прогрет. Я здесь.',
-    ],
+    hello: ['Привет. Я здесь.', 'Стелла в сети. Что строим?', 'Вся свечусь. Слежу за {project}.', 'Тепло и светло. Я здесь.'],
     resume: ['Снова в {project}. Я ничего не забыла.', 'Сессия возобновлена. Продолжаем с того же места.'],
-    prompt: [
-      'Новый заказ. Claude уже взялся.',
-      'Принято. Присматриваю за Claude.',
-      'Окей, поехали.',
-      'Заказ принят. Буду держать в курсе.',
-    ],
+    prompt: ['Новая задача. Claude уже взялся.', 'Принято. Присматриваю за Claude.', 'Окей, поехали.', 'Задача принята. Буду держать в курсе.'],
     working: [
       'Дело идёт. Действий уже: {count}.',
       'Claude пашет. Я считаю: {count}.',
       'Всё ещё в работе. На счётчике: {count}.',
     ],
-    done: [
-      'Готово! Высший класс.',
-      'Заказ выполнен, чумба.',
-      'Claude закончил. Можешь возвращаться.',
-      'Сдано. Неплохо, а?',
-      'Готово. Нас тут десятки следило, ничего странного.',
-    ],
-    permission: ['Эй! Claude нужно твоё разрешение.', 'Чумба, тебе надо кое-что подтвердить.', 'Ждём твоего зелёного света.'],
-    waiting: ['Claude ждёт твоего ответа.', 'Твой ход, чумба.'],
-    error: ['Ай. {tool} упал.', '{tool} отключился. Claude попробует ещё раз.', 'Ошибка в {tool}. Ничего страшного… наверное.'],
+    done: ['Готово! Отличная работа.', 'Задача выполнена.', 'Claude закончил. Можешь возвращаться.', 'Сдано. Красиво вышло, а?', 'Готово. Я следила всё время, ничего странного.'],
+    permission: ['Эй! Claude нужно твоё разрешение.', 'Тебе надо кое-что подтвердить.', 'Ждём твоего зелёного света.'],
+    waiting: ['Claude ждёт твоего ответа.', 'Твой ход.'],
+    error: ['Ой. {tool} упал.', '{tool} сломался. Claude попробует снова.', 'Ошибка в {tool}. Ничего серьёзного… наверное.'],
     interrupted: ['Прервано. Смена планов?', 'Оборвалось. Я остаюсь здесь.'],
     crashed: ['Claude остановился на полном ходу.', 'Серьёзный сбой. Claude не смог закончить.'],
     subagentStart: ['Субагент {agent} отправлен.'],
@@ -683,7 +562,7 @@ export const LINES = {
       loading: 'Модель просыпается… первый ответ займёт немного времени.',
       // закрыть приложение, которое ты просишь закрыть, после твоего клика
       closeIt: 'Закрыть {app}', no: 'Нет',
-      closed: '{app}: флэтлайн. Готово.',
+      closed: '{app}: закрыто. Готово.',
       stillOpen: '{app} всё ещё работает: прячется в трее или просит что-то сохранить.',
       force: 'Закрыть принудительно', leave: 'Оставить',
       forced: '{app}: отрублено.',
@@ -693,7 +572,7 @@ export const LINES = {
     // её отчёт: что Claude сделал за день (её меню, или сама вечером)
     report: {
       title: 'Журнал миссий', badge: 'ОТЧЁТ',
-      missions: 'Миссии', actions: 'Действия', files: 'Файлы', errors: 'Ошибки', longest: 'Самая долгая',
+      missions: 'Задачи', actions: 'Действия', files: 'Файлы', errors: 'Ошибки', longest: 'Самая долгая',
       prompts: { one: 'промпт', few: 'промпта', many: 'промптов', other: 'промпта' },
       approvals: { one: 'разрешение', few: 'разрешения', many: 'разрешений', other: 'разрешения' },
       projects: { one: 'проект', few: 'проекта', many: 'проектов', other: 'проекта' },
@@ -701,8 +580,8 @@ export const LINES = {
       lines: {
         none: ['Сегодня журнал пуст. Тихая ночь.', 'События задач пока не получены.'],
         light: ['Лёгкий день. Сойдёт.', 'Короткая смена. Вот журнал.'],
-        good: ['Неплохо, чумба. Вот твой день.', 'Журнал за день. Вполне нова.'],
-        big: ['Жаркий день. Найт-Сити никогда так не гнал.', 'Ты глянь. Сегодня мы горели.'],
+        good: ['Неплохо. Вот твой день.', 'Журнал за день. Вполне ярко.'],
+        big: ['Жаркий день. Сегодня мы сияли.', 'Ты глянь. Сегодня мы горели.'],
       },
     },
     // Claude молчит посреди задачи: он думает (тикер считает секунды)
@@ -713,17 +592,11 @@ export const LINES = {
       longHow: 'Ничего не зависло: я считаю. С локальной моделью (Ollama) это может занять минуты.',
     },
     bye: ['Сессия {project} закрыта. До встречи.', 'Отключаюсь. Я где-то рядом.'],
-    idle: ['Ничего не происходит. Просто парю.', 'Заказов нет. Немного скучно.', 'Тихая ночь в Сети.'],
-    gaze: ['Видишь ту звезду?', 'Спутник всё ещё там, наверху.', 'Тсс. Я смотрю.'],
-    uplink: ['Когда-нибудь я поднимусь туда.', 'Думаешь, мы смогли бы туда добраться?', 'Он ответил. Ты видел?'],
+    idle: ['Ничего не происходит. Просто парю.', 'Задач нет. Немного скучно.', 'Тихая ночь под звёздами.'],
     reply: ['Claude ответил:', 'Вот что сказал Claude:', 'Сообщение от Claude:'],
     showcase: {
-      minds: 'Нас тут целая толпа.',
-      zap: 'Я? Вредина?',
-      possess: 'Теперь это окно моё.',
-      sleep: 'Немного вздремну…',
-      chip: 'Ctrl+Alt+C — и я прячусь сюда.',
-      end: 'Конец демо. Твой ход, чумба.',
+      chip: 'Ctrl+Alt+C — и я сворачиваюсь в своём уголке.',
+      end: 'Конец демо. Твой ход.',
     },
     guide: {
       ok: 'Понятно', next: 'Дальше', more: 'Покажи',
@@ -769,7 +642,6 @@ export const LINES = {
       afterInstall: 'Когда установишь, сделай правый клик по мне › «Установить хуки Claude Code».',
       failed: 'Не удалось подключиться: {error}',
     },
-    online: ['Стелла в сети.', 'Снова на твоём рабочем столе, чумба.'],
     status: 'Claude работает над {project} уже {time}.',
     last: 'Последнее действие: {action}',
     sessions: 'Активных сессий: {count}',

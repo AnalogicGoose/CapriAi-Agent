@@ -76,7 +76,7 @@ class Agent {
       this.lastResult = result.kind;
       this.audit('decision', result.kind);
       if (!explicit && result.kind === 'suggest' && result.message) this.notify(result.message);
-      return result.kind === 'wait' ? (explicit ? 'Nothing needs doing right now, choom.' : '') : result.message;
+      return result.kind === 'wait' ? (explicit ? 'Nothing needs doing right now.' : '') : result.message;
     } catch (err) {
       this.lastResult = signal.aborted ? 'cancelled' : 'unavailable';
       this.audit('decision', this.lastResult);
