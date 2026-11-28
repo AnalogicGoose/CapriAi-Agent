@@ -1,6 +1,6 @@
 // Stella: her motions as acts — playing, performing, reacting to tools and her own
 // agent, and the music pulse. Installed on Stella's prototype; `this` is the controller.
-import { MOTIONS, motionForAct, motionForAgentTool, motionForCodexTool } from './motions.js';
+import { MOTIONS, MOTION_CUES, motionForAct, motionForAgentTool, motionForCodexTool } from './motions.js';
 import { letGo } from './focus.js';
 
 const THINK_MS = 2000, MUSIC_MS = 45000, CELEBRATE_SPEAK_MS = 600;
@@ -19,6 +19,9 @@ export const Acts = {
     const act = { name, entry, until: def.hold ? Infinity : now + def.duration };
     act.promise = new Promise(done => { act.done = done; });
     this._act = act;
+    // Deferred: a cold audio context must never stall the motion's first frames.
+    const cue = MOTION_CUES[name];
+    if (cue) globalThis.setTimeout(() => this.voice?.play?.(cue, { ambient: true }), 0);
     return act;
   },
 

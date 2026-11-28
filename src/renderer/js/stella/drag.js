@@ -42,6 +42,7 @@ export const Drag = {
     if (!this.dragging) {
       if (Math.hypot(x - d.x, y - d.y) <= DRAG_THRESHOLD) return;
       this.dragging = true;
+      this.voice?.play?.('grab');
       this.wake();
       this.endAct(false);
       this.traveler.stop(false); // the drag takes over any travel; a focus keeps aiming
@@ -72,6 +73,7 @@ export const Drag = {
     this.dragging = false;
     try { if (this.root?.hasPointerCapture?.(d.id)) this.root.releasePointerCapture(d.id); } catch {}
     if (wasDragging) {
+      if (!cancelled) this.voice?.play?.('drop');
       const drop = to || { ...this.pos };
       this.homeToken++; // she stays where dropped: pending returns are off
       this.anchor = { ...drop };
