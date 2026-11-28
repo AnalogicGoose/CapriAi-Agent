@@ -1,4 +1,4 @@
-// Stella: folding away. Put away, a game starting or a fullscreen app on her display: her points
+// Stella: folding away. A game starting or a fullscreen app on her display: her points
 // retract into the ring, the ring collapses into one bright point and the point fades. Coming back
 // unfolds her the same way in reverse. Reduced motion fades her out and in instead. Installed on
 // Stella's prototype (getters included); `this` is the controller.
@@ -64,45 +64,6 @@ export const Fold = {
     if (this.focus || this.pointing) { this.focus = this.pointing = null; this.homeToken++; }
   },
 
-  // Ctrl+Alt+C: folds away; stowed (onStow) once folded. A second call joins the first.
-  stow() {
-    if (this.stowed) return Promise.resolve();
-    if (this.stowing) return this.stowing;
-    this.letGoAll();
-    this.announce(true);
-    const p = this.foldTo(1).then(reached => {
-      if (this.stowing !== p) return;
-      this.stowing = null;
-      if (!reached) return;
-      this.stowed = true;
-      this.onStow?.();
-    });
-    this.stowing = p;
-    return p;
-  },
-
-  // Already away, no show (put away last time, she starts that way).
-  stowNow() {
-    this.stowing = null;
-    this.letGoAll();
-    this.traveler.stop(false);
-    this.foldTo(1, { instant: true });
-    this.stowed = true;
-    this.announce(true);
-    this.onStow?.();
-    this.place();
-  },
-
-  // Back out where she was: unfolds (from wherever a fold in progress had got to).
-  unstow() {
-    if (!this.stowed && !this.stowing) return Promise.resolve();
-    this.stowed = false;
-    this.stowing = null;
-    this.onUnstow?.();
-    if (this.mode === 'sleep') this.setMode('idle');
-    return this.unfold();
-  },
-
   unfold() {
     return this.foldTo(0).then(reached => {
       if (!reached) return;
@@ -132,10 +93,10 @@ export const Fold = {
 
   // Before the overlay shows again: folded, unseen, back at her anchor.
   prepareGamingReturn() {
-    if (this.stowed) return;
     this.traveler.stop(false);
     this.foldTo(1, { instant: true });
-    if (this.anchor) this.pos = clampToView(this.anchor, this.radius, this.view);
+    if (this.restActive) this.pos = this.restPath(this.rest.q); // resting: back in her corner
+    else if (this.anchor) this.pos = clampToView(this.anchor, this.radius, this.view);
     this.gamingReturn = true;
     this.drawFrame();
   },
@@ -143,7 +104,7 @@ export const Fold = {
   gamingArrival() {
     if (!this.gamingReturn) return Promise.resolve();
     this.gamingReturn = false;
-    return this.stowed ? Promise.resolve() : this.unfold();
+    return this.unfold();
   },
 
   // A fullscreen app came or went (FullscreenPresence keeps the timing): only a soft sound, no particles.

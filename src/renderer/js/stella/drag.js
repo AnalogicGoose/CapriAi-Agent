@@ -39,6 +39,7 @@ export const Drag = {
   pointerMove(x, y, id = 0) {
     const d = this.down;
     if (!d || id !== d.id) return;
+    if (this.restActive) { if (Math.hypot(x - d.x, y - d.y) > DRAG_THRESHOLD) d.moved = true; return; } // the bud stays put
     if (!this.dragging) {
       if (Math.hypot(x - d.x, y - d.y) <= DRAG_THRESHOLD) return;
       this.dragging = true;
@@ -81,6 +82,8 @@ export const Drag = {
       if (this.reduced()) { this.pos = { ...drop }; this.traveler.stop(true); } // she followed 1:1: nothing to settle
       else this.traveler.settle(drop);
       this.nextMove = this.now() + restDuration(this.random); // the wander timer restarts from the drop
+    } else if (!cancelled && this.stowed) {
+      if (!d.moved) this.onBudClick?.(); // a click (not a drag attempt) on her resting in the corner brings her back
     } else if (!cancelled) {
       this.resting = false; // a click ends a nap
       this.onClick?.();

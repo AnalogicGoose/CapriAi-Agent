@@ -92,7 +92,7 @@ export const Focus = {
   },
 
   approach(maxDist, reason) {
-    if (this.focus) return resolved();
+    if (this.focus || this.restActive) return resolved(); // resting in her corner: she stays there
     this.homeToken++;
     return this.traveler.go(approachCenter(this.pos, maxDist, this.bandRadius, this.view), { reason, fn: true });
   },
@@ -101,7 +101,7 @@ export const Focus = {
   // or waiting on an approval, she's already placed: just the rings.
   remind() {
     this.play('chime');
-    if (this.focus || this.approvalOn) return resolved();
+    if (this.focus || this.approvalOn || this.restActive) return resolved();
     const arrive = this.approach(NUDGE, 'remind');
     const token = this.homeToken;
     this.after(REMIND_STAY, () => { if (token === this.homeToken && !this.focus && !this.approvalOn) this.goHome(); });
@@ -114,7 +114,7 @@ export const Focus = {
     if (on === this.approvalOn) return resolved();
     this.approvalOn = on;
     if (on) return this.approach(NUDGE, 'approval');
-    if (this.focus) return resolved();
+    if (this.focus || this.restActive) return resolved();
     this.homeToken++;
     return this.goHome();
   },
