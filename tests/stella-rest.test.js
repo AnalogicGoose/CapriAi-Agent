@@ -240,3 +240,23 @@ test('review: a click while she is gliding away does not open her awake menu', a
   if (stella.pointerDown(p.x, p.y, 3)) stella.pointerUp(p.x, p.y, 3);
   assert.equal(clicked, 0);
 });
+
+test('putAway is true from the moment she is sent away until she starts coming back', async () => {
+  const { stella, step, run } = await make();
+  assert.equal(stella.putAway, false);
+  stella.stow(); step(1000 / 60, 10);
+  assert.equal(stella.stowed, false);
+  assert.equal(stella.putAway, true, 'mid-glide');
+  run(1600);
+  assert.equal(stella.putAway, true, 'resting');
+  stella.unstow();
+  assert.equal(stella.putAway, false, 'coming back');
+});
+
+test('her voice is drawn at full rate while she talks from the corner', async () => {
+  const { stella, run, draws } = await make();
+  stella.stow(); run(1600);
+  const from = draws.length;
+  for (let i = 0; i < 60; i++) { stella.speechLevel = 0.5; run(1000 / 60); }
+  assert.ok(draws.length - from >= 50, `only ${draws.length - from} draws in 1 s of speech`);
+});

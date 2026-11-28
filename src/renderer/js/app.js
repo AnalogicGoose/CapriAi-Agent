@@ -101,7 +101,7 @@ async function boot() {
     (!stella.hidden && stella.pos && Math.hypot(mouse.x - stella.pos.x, mouse.y - stella.pos.y) <= 0.45 * stella.size * stella.compact + NEAR * 1.5)
     || within(panel.rect(), NEAR) || (talkMenu?.visible && within(talkMenu.el?.getBoundingClientRect(), NEAR))
     || (!document.getElementById('voice-indicator').hidden && within(document.getElementById('voice-indicator').getBoundingClientRect(), NEAR))));
-  const onBud = () => Boolean(stella.stowed && mouse && stella.restHit(mouse.x, mouse.y));
+  const onBud = () => Boolean(stella.putAway && mouse && stella.restHit(mouse.x, mouse.y));
   const refreshHit = (force = false) => {
     if (stella.fullscreen && !wakeListener?.session) return setInteractive(false, force);
     if (stella.pointerHeld || stella.dragging) return setInteractive(true, force);
@@ -243,7 +243,6 @@ async function boot() {
   const dictation = new Dictation({ panel, host, language: () => brain.lang,
     canListen: () => chat.open && (!stella.gaming && !stella.fullscreen || wakeListener?.session),
     beforeStart: async () => { voiceCall?.end(); voice.spoken.stop(); wakeListener?.pause(); commandListener?.pause(); } });
-  let restoreStowed = false;
   voiceCall = new VoiceCall({ host, speaker: voice.spoken, history: chat,
     indicator: document.getElementById('voice-indicator'),
     onThinking: on => stella.setChatThinking(on),
@@ -257,7 +256,6 @@ async function boot() {
       }
       dictation.cancel(); chat.close(); panel.hide(); panel.setTicker(null); talkMenu?.hide();
       wakeListener.session = true; document.body.classList.add('voice-session');
-      restoreStowed = stella.stowed; if (stella.stowed) await stella.unstow();
       stella.wake(); stella.nextMove = stella.nextGaze = performance.now() + 60000;
       voiceCall.place(stella.head(), stella.view); publishCompanionState(); refreshHit(true);
     },
@@ -267,7 +265,6 @@ async function boot() {
     },
     onEnd: () => {
       wakeListener.session = false; document.body.classList.remove('voice-session');
-      if (restoreStowed) stella.stowNow(); restoreStowed = false;
       publishCompanionState(); refreshHit(true);
     } });
   chat.onStart = () => voiceCall.end();
@@ -324,7 +321,7 @@ async function boot() {
     const t = brain.t.showcase, s = SHOWCASE[brain.lang] || SHOWCASE.en;
     const caption = (line) => panel.say({ kind: 'info', line, hold: 2200 });
     stella.nextMove = stella.nextGaze = performance.now() + 120000; // nothing of her own in between
-    if (stella.stowed) await stella.unstow();
+    if (stella.putAway) await stella.unstow();
     if (stella.dormant) stella.wake();
     await until(free);
     panel.hide();
@@ -500,7 +497,7 @@ async function boot() {
         await chat.send('/routines list');
         break;
       case 'report': // "Mission report" in her menu
-        if (stella.stowed) {
+        if (stella.putAway) {
           host.setConfig({ visible: true });
           await stella.unstow();
         }

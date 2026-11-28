@@ -89,7 +89,7 @@ export class Chat {
       if (mode !== 'voice') this.panel.chatInput.focus();
       return;
     }
-    if (stella.stowed && !voiceWake) {
+    if (stella.putAway && !voiceWake) {
       host.setConfig({ visible: true });
       await stella.unstow();
     }

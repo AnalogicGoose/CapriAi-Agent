@@ -26,6 +26,8 @@ export const restState = () => ({ q: 0, dir: 0, from: null, reduced: false, opac
 
 export const Rest = {
   get restActive() { return this.rest.q > 0 || this.rest.dir !== 0; },
+  // Put away: resting, or still on her way to her corner (callers that need her out unstow on this).
+  get putAway() { return this.stowed || Boolean(this.stowing); },
   // Fully curled and settled: drawn at a gentle rate.
   get restQuiet() { return this.stowed && this.rest.q === 1 && this.rest.dir === 0; },
   get curl() {
@@ -155,5 +157,8 @@ export const Rest = {
   },
 
   // Skip a draw while she rests curled and still, keeping to REST_FPS.
-  restSkipsDraw(now) { return this.restQuiet && this.drawnAt != null && now - this.drawnAt < 1000 / REST_FPS - 1e-6; },
+  // Not while she's talking: her voice energy stays smooth.
+  restSkipsDraw(now) {
+    return this.restQuiet && now >= this.speakUntil && this.drawnAt != null && now - this.drawnAt < 1000 / REST_FPS - 1e-6;
+  },
 };
