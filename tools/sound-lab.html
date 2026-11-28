@@ -1,0 +1,58 @@
+<!doctype html>
+<!-- Stella's sound lab: hear every synthesized cue. Serve the repo root (python -m http.server 8765)
+     and open http://localhost:8765/tools/sound-lab.html -->
+<meta charset="utf-8">
+<title>Stella · sound lab</title>
+<style>
+  body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% 30%, #241a4a, #0b0820 70%);
+    color: #e8e2ff; font: 15px/1.4 system-ui, sans-serif; display: grid; place-items: center; }
+  main { max-width: 720px; padding: 32px; }
+  h1 { font-weight: 500; letter-spacing: .04em; margin: 0 0 4px; }
+  p { color: #a99fd6; margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  button { border: 1px solid transparent; border-radius: 999px; padding: 10px 14px; cursor: pointer; color: #f3eeff;
+    background: linear-gradient(#1a1438, #1a1438) padding-box, linear-gradient(90deg, #e8c27a, #e59ab8, #7f8cff) border-box; }
+  button:hover { background: linear-gradient(#2a2058, #2a2058) padding-box, linear-gradient(90deg, #e8c27a, #e59ab8, #7f8cff) border-box; }
+  small { display: block; color: #8f86bd; font-size: 12px; }
+  label { display: block; margin-top: 24px; color: #a99fd6; }
+</style>
+<main>
+  <h1>Stella · sound lab</h1>
+  <p>Every cue she can play. Click to hear it; each one is new and randomizes slightly.</p>
+  <div class="grid" id="grid"></div>
+  <label>Volume <input id="vol" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+</main>
+<script type="module">
+  import { Voice, CUES } from '../src/renderer/js/voice.js';
+  const WHEN = {
+    hello: 'greeting', blip: 'talking (text)', tick: 'working', done: 'task finished', alert: 'needs you',
+    error: 'something failed', 'teleport-out': 'leaves for a game', 'teleport-in': 'comes back', listen: '"Hey Stella" heard',
+    grab: 'you pick her up', drop: 'you set her down', chime: 'reminder', celebrate: 'victory', flare: 'opens an app',
+    remember: 'saves a memory', recall: 'looks something up', approval: 'asks permission', wave: 'waves', dance: 'spins',
+  };
+  const voice = new Voice();
+  window.voice = voice;
+  const grid = document.getElementById('grid');
+  for (const cue of CUES) {
+    const b = document.createElement('button');
+    b.innerHTML = `${cue}<small>${WHEN[cue] ?? ''}</small>`;
+    b.onclick = () => {
+      if (cue === 'blip') { let i = 0; const id = setInterval(() => { voice.play('blip'); if (++i > 14) clearInterval(id); }, 70); }
+      else voice.play(cue);
+    };
+    grid.append(b);
+  }
+  document.getElementById('vol').oninput = (e) => voice.configure({ volume: Number(e.target.value) });
+
+  // For checks: render a cue offline and report its length, peak and loudness.
+  window.measure = async (cue, seconds = 3) => {
+    const v = new Voice();
+    const ctx = new OfflineAudioContext(1, 44100 * seconds, 44100);
+    v.ensure(() => ctx);
+    v.play(cue);
+    const d = (await ctx.startRendering()).getChannelData(0);
+    let peak = 0, sum = 0, last = 0;
+    for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); peak = Math.max(peak, a); sum += a * a; if (a > 0.002) last = i; }
+    return { cue, peak: +peak.toFixed(3), rms: +Math.sqrt(sum / (last + 1)).toFixed(4), seconds: +(last / 44100).toFixed(2) };
+  };
+</script>

@@ -9,6 +9,14 @@ export const MOTIONS = {
   wake: m(600, 2), pulse: m(500, 1), doublePulse: m(900, 1), spinBurst: m(1500, 2), breath: m(1600, 1),
 };
 
+// Her motions that also make a sound (voice.js cues, played by acts.js). Frequent working motions (scan, ticks, radar,
+// pulse, breath, aim) stay silent so a long task never turns into a stream of pings; glitch
+// stays silent because the failure that causes it already plays `error`.
+export const MOTION_CUES = {
+  wake: 'listen', chime: 'chime', celebrate: 'celebrate', flare: 'flare', swirlIn: 'remember',
+  swirlOut: 'recall', approval: 'approval', doublePulse: 'wave', spinBurst: 'dance',
+};
+
 const APP_FLARE = new Set(['open_url', 'open_app', 'open_workspace', 'open_media', 'play_music', 'play_video',
   'youtube_latest', 'open_result']);
 const APP_RADAR = new Set(['search_web', 'search_news', 'steam_deals']);
