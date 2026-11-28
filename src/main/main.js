@@ -644,11 +644,14 @@ function setOverlayFocusable(on) {
 // Click-through only when it changes: re-applying it rewrites the overlay's native window styles, and Windows
 // then resets the cursor of whatever is under her (the control room's hand cursor flickered to an arrow every
 // 150 ms while her pointer recovery re-sent the same state). Forgotten on show, in case Windows reset it.
-let overlayIgnore = null;
-function setOverlayIgnore(ignore) {
-  if (!overlay || overlay.isDestroyed() || ignore === overlayIgnore) return;
-  overlayIgnore = ignore;
-  overlay.setIgnoreMouseEvents(ignore, { forward: true });
+// forward: mouse moves are forwarded to her only while the pointer is near her. Each forwarded move makes her
+// window set its own (arrow) cursor over whatever app is under it, so forwarding everywhere made every other
+// cursor flicker while moving; away from her, her renderer's cursor polling notices the pointer coming close.
+let overlayIgnore = null, overlayForward = true;
+function setOverlayIgnore(ignore, forward = overlayForward) {
+  if (!overlay || overlay.isDestroyed() || (ignore === overlayIgnore && forward === overlayForward)) return;
+  overlayIgnore = ignore; overlayForward = forward;
+  overlay.setIgnoreMouseEvents(ignore, ignore ? { forward } : undefined);
 }
 
 function fitOverlay() {
@@ -659,7 +662,7 @@ function fitOverlay() {
 }
 
 function createOverlay() {
-  overlayIgnore = null; // a new window starts with no click-through applied
+  overlayIgnore = null; overlayForward = true; // a new window starts with no click-through applied
   const { workArea } = targetDisplay();
   overlay = new BrowserWindow({
     ...workArea,
@@ -1272,11 +1275,11 @@ function registerIpc() {
     catch(error) { return {ok:false,error:error.message}; }
   });
   ipcMain.handle('integration:status', () => codexEvents.snapshot());
-  ipcMain.on('overlay:interactive', (event, on) => {
+  ipcMain.on('overlay:interactive', (event, on, near = true) => {
     if (!speechCaller(event) || typeof on !== 'boolean' || !overlay || overlay.isDestroyed()) return;
     const ignore = ((fullscreenState.active || config.load().gamingMode) && !voiceSession) || !on;
     if (!ignore && !overlay.isFocusable()) setOverlayFocusable(true);
-    setOverlayIgnore(ignore);
+    setOverlayIgnore(ignore, near !== false);
   });
   ipcMain.handle('overlay:cursor', () => {
     const p = screen.getCursorScreenPoint();

@@ -48,7 +48,7 @@ contextBridge.exposeInMainWorld('host', {
   reminderReady: () => ipcRenderer.send('reminder:ready'),
   reminderShown: (id, firedDue) => ipcRenderer.send('reminder:shown', id, firedDue),
   reminderAction: (id, action, firedDue, minutes) => ipcRenderer.invoke('reminder:action', id, action, firedDue, minutes),
-  setInteractive: (on) => ipcRenderer.send('overlay:interactive', Boolean(on)),
+  setInteractive: (on, near = true) => ipcRenderer.send('overlay:interactive', Boolean(on), near !== false),
   cursor: () => ipcRenderer.invoke('overlay:cursor'),
   getConfig: () => ipcRenderer.invoke('config:get'),
   openLink: url => ipcRenderer.invoke('link:open', url),

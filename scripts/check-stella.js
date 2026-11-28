@@ -412,6 +412,20 @@ window.host = new Proxy({}, { get(_, key) {
       check(c.act && c.act.player.name === 'radar', 'agent search_web start: act ' + (c.act && c.act.player.name));
       for (const f of act) f({ tool: 'stella_apps', op: 'search_web', phase: 'end', ok: true });
       notes.push('agent search_web -> radar');
+      // Chat opened before she has ever moved sits next to her, not in the top-left corner.
+      {
+        const panelEl = document.getElementById('panel');
+        for (const f of S.listeners.onCommand || []) f({ name: 'chat' });
+        await until(() => panelEl.classList.contains('is-chat') && !panelEl.hidden, 3000, 'chat panel opens before any move');
+        await wait(100);
+        const r = panelEl.querySelector('.panel__frame').getBoundingClientRect();
+        const gap = Math.hypot(Math.max(r.left - c.pos.x, 0, c.pos.x - r.right), Math.max(r.top - c.pos.y, 0, c.pos.y - r.bottom));
+        check(gap < 0.6 * c.size + 60, 'chat before any move opened ' + gap.toFixed(0) + ' px from her (panel at ' + Math.round(r.left) + ',' + Math.round(r.top) + ', she is at ' + Math.round(c.pos.x) + ',' + Math.round(c.pos.y) + ')');
+        notes.push('chat before any move opens beside her (' + gap.toFixed(0) + ' px)');
+        panelEl.querySelector('.panel__close').click();
+        await until(() => panelEl.hidden || !panelEl.classList.contains('is-chat'), 3000, 'chat panel closes');
+        await wait(600);
+      }
       // a drag with synthetic pointer events moves her and saves the anchor
       const root = document.getElementById('stella'), from = { ...c.pos };
       const ev = (type, x, y) => root.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0,
