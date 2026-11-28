@@ -1,7 +1,6 @@
 # Stella personality and conversation update
 
-The old prompt told Stella to love the satellite and dream of reaching it on
-every turn. It also required one to three sentences and prohibited lists or
+An older prompt pushed one recurring piece of lore into every turn. It also required one to three sentences and prohibited lists or
 code formatting. Only twelve conversation messages reached a 4,096-token
 window, with 240 output tokens. Those are concrete sources of repetitive lore,
 short answers and missing context; they do not establish that the model itself
@@ -9,13 +8,10 @@ has been retrained or that every conversational weakness is solved.
 
 ## Character and practical behavior
 
-Stella remains a fan interpretation of the many-minds digital ghost: curious,
-quick-witted, mischievous and warm, with occasional natural plural speech.
-Her personality comes through reactions and phrasing rather than repeated
-biography, slogans or a fictional ambition injected into unrelated answers.
-The satellite is still available as an animation and a topic when asked about.
-Its explanatory lore is added to the prompt only when the current user message
-mentions it. This update does not change the art or animations.
+Stella is curious, quick-witted, a little mischievous and warm. Her personality
+comes through reactions and phrasing rather than repeated biography, slogans or
+a fictional ambition injected into unrelated answers. This update does not
+change the art or animations.
 
 She now adapts answer depth to the task, uses readable paragraphs or steps,
 preserves exact code, applies corrections and connects follow-ups to the goal.
@@ -89,7 +85,7 @@ registry and Ollama request construction, with inference mocked and an isolated
 profile. It verifies the original project detail reaches later requests, code
 and indentation survive streaming, and longer answers scroll in the panel.
 
-The live check tests practical answers after an old satellite digression,
+The live check tests practical answers after an off-topic digression,
 recall of a corrected budget and offline/no-subscription constraints after 35
 intervening synthetic turns, Spanish replies, and exact Python code. The initial
 run passed all three scenarios. Ollama reported 32,768 context and approximately

@@ -41,16 +41,16 @@ const fullyVisible = (s, p = s.pos) =>
 test('exposes every member the renderer calls', async () => {
   const { stella } = await make();
   const members = ['act', 'attend', 'busy', 'cancelDrag', 'canSit', 'celebrate', 'chatThinking', 'companion',
-    'dormant', 'dragging', 'earnUplink', 'endAct', 'gaze', 'goToWork', 'head', 'hit', 'hurt', 'intro', 'mode',
+    'dormant', 'dragging', 'starGaze', 'endAct', 'gaze', 'goToWork', 'head', 'hit', 'hurt', 'intro', 'mode',
     'onClick', 'onBudClick', 'onGaze', 'onIdleWave', 'onMenu', 'onMode', 'onMove', 'onPointerHold', 'onStow', 'onTeleport',
-    'onUnstow', 'perform', 'pickSeat', 'pointerHeld', 'pos', 'possess', 'possessWindows', 'pulse', 'reactToAction',
+    'onUnstow', 'perform', 'pickSeat', 'pointerHeld', 'pos', 'pulse', 'reactToAction',
     'reactToTool', 'requestPosture', 'scale', 'setChatThinking', 'setMode', 'setScale', 'setView', 'setWindows', 'sitOn',
     'spark', 'speechLevel', 'spot', 'towardCenter', 'unpeek', 'view', 'wake', 'windows', 'zap',
     'agentActivity', 'wakeHeard', 'stance', 'stow', 'unstow', 'stowNow', 'curl', 'compact'];
   for (const k of members) assert.ok(k in stella, `missing ${k}`);
   for (const k of ['setMode', 'wake', 'endAct', 'setChatThinking', 'setScale', 'setView', 'head', 'towardCenter', 'hit',
     'spot', 'cancelDrag', 'perform', 'reactToTool', 'reactToAction', 'agentActivity', 'wakeHeard', 'pulse', 'hurt',
-    'celebrate', 'spark', 'zap', 'gaze', 'earnUplink', 'attend', 'goToWork', 'sitOn', 'possess', 'unpeek',
+    'celebrate', 'spark', 'zap', 'gaze', 'starGaze', 'attend', 'goToWork', 'sitOn', 'unpeek',
     'intro', 'canSit', 'pickSeat', 'requestPosture', 'setWindows']) assert.equal(typeof stella[k], 'function', k);
   assert.equal(stella.stance, 'float');
   assert.equal(stella.mode, 'idle');

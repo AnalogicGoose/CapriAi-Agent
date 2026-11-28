@@ -64,7 +64,6 @@ export class Stella {
     this.chatThinking = false;
     this.companion = null;
     this.windows = { fg: 0, wins: [] };
-    this.possessWindows = true; // ignored: she doesn't possess windows anymore
     this.wander = wander !== false;
     this.resting = false;     // napping (body action): no wandering until woken
     this.approvalOn = false;
@@ -241,7 +240,6 @@ export class Stella {
   // ---------- removed pet behaviors: safe no-ops ----------
 
   sitOn() { return resolved(); }
-  possess() { return resolved(); }
   unpeek() { return resolved(); }
   intro(spot) { return this.materialize(spot); }
   canSit() { return false; }

@@ -860,14 +860,14 @@ function toggleVisible(force) {
   rebuildTray();
 }
 
-// During the demo, a little fake terminal for her to sit on and take over (window tracking is
+// During the demo, a little fake terminal beside her (window tracking is
 // Windows only, so only there). Opened without stealing focus; closing it drops her off it.
 let demoWin = null;
 const DEMO_TERMINAL = `<body style="margin:0;background:#14101c;color:#8f8aa3;font:13px/1.7 Consolas,monospace;padding:14px 18px">
-<div style="color:#36ff7a">PS C:\\night-city-api&gt; npm test -- gigs</div>
-<div>&nbsp;&nbsp;GET /gigs</div><div style="color:#36ff7a">&nbsp;&nbsp;&nbsp;&nbsp;✓ returns 20 items per page</div>
-<div style="color:#36ff7a">&nbsp;&nbsp;&nbsp;&nbsp;✓ paginates with a cursor</div><div style="color:#36ff7a">&nbsp;&nbsp;&nbsp;&nbsp;✓ rejects a bad cursor</div>
-<div>&nbsp;&nbsp;6 passing (212ms)</div><div style="color:#36ff7a">PS C:\\night-city-api&gt; _</div></body>`;
+<div style="color:#b9a4f5">PS C:\\star-notes-api&gt; npm test -- notes</div>
+<div>&nbsp;&nbsp;GET /notes</div><div style="color:#b9a4f5">&nbsp;&nbsp;&nbsp;&nbsp;✓ returns 20 items per page</div>
+<div style="color:#b9a4f5">&nbsp;&nbsp;&nbsp;&nbsp;✓ paginates with a cursor</div><div style="color:#b9a4f5">&nbsp;&nbsp;&nbsp;&nbsp;✓ rejects a bad cursor</div>
+<div>&nbsp;&nbsp;6 passing (212ms)</div><div style="color:#b9a4f5">PS C:\\star-notes-api&gt; _</div></body>`;
 
 function demoWindow(open) {
   demoWin?.destroy();
@@ -876,7 +876,7 @@ function demoWindow(open) {
   const b = overlay.getBounds();
   demoWin = new BrowserWindow({
     x: Math.round(b.x + b.width * 0.5 - 310), y: Math.round(b.y + b.height * 0.42), width: 620, height: 300,
-    show: false, alwaysOnTop: true, title: 'night-city-api — npm test', backgroundColor: '#14101c', autoHideMenuBar: true,
+    show: false, alwaysOnTop: true, title: 'star-notes-api — npm test', backgroundColor: '#14101c', autoHideMenuBar: true,
   });
   demoWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(DEMO_TERMINAL)}`);
   demoWin.once('ready-to-show', () => demoWin?.showInactive());

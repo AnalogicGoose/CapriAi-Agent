@@ -546,7 +546,7 @@ export class Panel {
     this.place();
   }
 
-  // Sit on the tips of her mane, leaning toward the middle of the screen; tail points at her.
+  // Sit beside her blade tips, leaning toward the middle of the screen; tail points at her.
   place() {
     if (!this.el.hidden) this.resizeChatInput();
     const { x, y, top: crown = y - 80, lean = 0 } = this.anchor;

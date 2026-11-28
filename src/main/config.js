@@ -51,7 +51,6 @@ const DEFAULTS = {
   displayId: null,   // null = primary display
   stellaAnchor: null, // where Stella last stood: { x, y } or null
   wander: true,      // calm wandering around the edges when idle
-  possess: true,     // now and then she dives into the window she sits on and takes it over
   visible: true,
   welcomed: false,   // she has introduced herself (her welcome panel)
   linked: false,     // a Claude Code event has reached her at least once

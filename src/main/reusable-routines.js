@@ -11,7 +11,7 @@ const clean = (text, max = 1000) => {
   if (value.length > max || /[\x00-\x1f\x7f]/.test(value)) throw Error('Use a short single line for each routine field.');
   return value;
 };
-const SETTINGS = ['muted', 'volume', 'scale', 'lang', 'wander', 'possess', 'windowTracking', 'idleAnimations',
+const SETTINGS = ['muted', 'volume', 'scale', 'lang', 'wander', 'windowTracking', 'idleAnimations',
   'cursorInteractions', 'personality', 'dailyRoutine', 'surpriseAnimations', 'ttsEnabled'];
 const ACTIONS = ['app', 'url', 'setting', 'command', 'task'];
 const EFFECTS = ['stella_body', 'stella_input', 'stella_settings_change', 'stella_desktop_step', 'stella_close_app', 'stella_control'];

@@ -50,7 +50,7 @@ matching official track, Stella opens the search results to help you choose.
 
 ## Presence and conversation
 
-Normal greetings, idle remarks, satellite commentary and completion chatter no
+Normal greetings, idle remarks, star-gazing asides and completion chatter no
 longer come from the old dialogue banks. Clicking Stella opens AI conversation;
 gestures and posture in normal chat use an AI-selected body tool and an AI-written
 reply. Operational labels, actual error/approval text and the offline maintenance

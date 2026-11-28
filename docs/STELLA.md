@@ -1,7 +1,6 @@
 # Stella
 
-Stella is the on-screen character of the assistant. She replaced the old sprite character
-(the retired Stella renderer, see [ANIMATIONS.md](ANIMATIONS.md)). Her code lives in
+Stella is the on-screen character of the assistant. Her code lives in
 `src/renderer/js/stella/`; `src/renderer/js/app.js` creates her on `#stella` / `#stella-canvas`.
 Voice, personality, memory and abilities are unchanged. The design is in
 [the spec](superpowers/specs/2026-11-24-stella-character-design.md); the visual reference is
@@ -45,9 +44,15 @@ speed shift, counter-turn, sway, breath pulse, shine wave, dot drift, globe tilt
 - Reduced motion: no travel (she is placed with a short fade), spin and sheen nearly still, no variations.
 - Drag: press and move; she follows with a slight lag and leans, and settles where dropped (no gravity). A plain click keeps its old behavior.
 
-## Folding away
+## Away mode (put away)
 
-Put away (Ctrl+Alt+C), a game, or a fullscreen app on her display: her points retract into the ring, the ring collapses to a point of light and fades. Returning reverses it. Timing guarantees come from the existing fullscreen/Gaming pipeline (a game never waits more than about 1.1 s for her to fold). Reduced motion makes this a short fade.
+Ctrl+Alt+C, the tray's "Put her away" or the control room's "Put away" tile (`rest.js`): she glides in a soft arc to the bottom-left corner over 1.5 s, shrinking to 40 % of her size, and over the second half her blades and sticks curl round into a closed bud hugging the ring (`curl` in `scene.js`). Resting, she breathes slowly, her globe and blades crawl at a tenth of their speed, a few dots drift, and about every 9 s she does a sleepy stretch that half-opens the bud. She is drawn at 18 fps while still. Waiting on a permission, her ring warms to gold and her breath quickens; she stays curled.
+
+She is resting but quiet: she still answers "Hey Stella" and voice chat, shows reminders and finished tasks in her bubble above the bud, but starts nothing on her own, and her victory pose, glides and tool reactions are skipped. Putting her away never cuts off a line she is saying. A click on the bud (not a drag, not a hover) brings her back: she unfurls and floats back to where she was. Right-click opens her menu. Typed chat, walkthroughs, pointing, the mission report and the demo bring her out too. Put away when the app last quit, she starts curled in the corner. Sounds: `curl-up` and `unfurl` ([SOUNDS.md](SOUNDS.md)). Reduced motion fades her out where she is and in at the corner, with no arc or stretch.
+
+## Folding away (games, fullscreen)
+
+A game or a fullscreen app on her display: her points retract into the ring, the ring collapses to a point of light and fades. Returning reverses it. Timing guarantees come from the existing fullscreen/Gaming pipeline (a game never waits more than about 1.1 s for her to fold). Resting in her corner, she folds the same way and comes back to her corner. Reduced motion makes this a short fade.
 
 ## Function to motion
 

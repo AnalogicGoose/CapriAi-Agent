@@ -214,7 +214,7 @@ if(process.argv.includes('--requests-only')) {
         steps:[input.availableResults?{tool:'open_result',query:'',index:0}:{tool:'search_web',query:'Netflix official website',index:0}]});
       return JSON.stringify({intent:'chat',message:'',goals:[],steps:[]});
     }
-    delta('Hello, choom.');return 'Hello, choom.';
+    delta('Hello there.');return 'Hello there.';
   };
 }
 if (process.argv.includes('--conversation-only')) {
@@ -804,7 +804,7 @@ app.whenReady().then(async () => {
       await until(()=>js("document.querySelector('.panel__line').textContent.includes('Sent https://www.netflix.com/ to Firefox.')"),'website task receipt');
       assert.deepEqual(requestEffects,[{url:'https://www.netflix.com/',browser:'Firefox'}]);
       await submit('Hello');
-      await until(()=>js("document.querySelector('.panel__line').textContent==='Hello, choom.'"),'ordinary conversation');
+      await until(()=>js("document.querySelector('.panel__line').textContent==='Hello there.'"),'ordinary conversation');
       assert.equal(requestEffects.length,1);
       console.log('PASS: actual chat form → main semantic interpreter → search observation → browser constraint propagation → website executor → receipt; ordinary chat still answers. Isolated profile, model/search/launch effects mocked.');
       clearTimeout(limit);app.exit(0);return;

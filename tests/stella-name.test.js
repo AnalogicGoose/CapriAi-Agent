@@ -79,3 +79,17 @@ test('tray, windows and the app build use Stella’s icon', () => {
   assert.doesNotMatch(main + read('src/main/settings-window.js'), /tray\.png/);
   assert.equal(JSON.parse(read('package.json')).build.win.icon ?? JSON.parse(read('package.json')).build.icon, 'assets/icons/stella.ico');
 });
+
+test('nothing of the old character’s world is left (biochip, satellite, slang, the old corner mask…)', () => {
+  const { execSync } = require('node:child_process');
+  const root = path.join(__dirname, '..');
+  const old = /\b(?:biochip|satellite|away-mask|night.city|personality construct|dozens of minds|red light|mane|in the show|gigs?|choom|preem|flatlined?|edgerunners?)\b|satélite|спутник|чумба|биочип/i;
+  const files = execSync('git ls-files', { cwd: root, encoding: 'utf8' }).split('\n')
+    .filter(f => f && !f.startsWith('docs/superpowers/') && f !== 'tests/stella-name.test.js' && /\.(js|cjs|mjs|json|md|html|css|txt)$/.test(f));
+  const hits = [];
+  for (const f of files) {
+    const text = fs.readFileSync(path.join(root, f), 'utf8');
+    text.split('\n').forEach((line, i) => { if (old.test(line) && !/doesNotMatch/.test(line)) hits.push(`${f}:${i + 1}: ${line.trim().slice(0, 120)}`); });
+  }
+  assert.deepEqual(hits, []);
+});

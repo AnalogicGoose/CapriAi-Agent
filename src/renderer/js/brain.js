@@ -6,7 +6,7 @@ import { pick, fmt, duration, basename, rand } from './util.js';
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const HACKING_TOOLS = new Set(['Bash', 'PowerShell', 'WebFetch', 'WebSearch', 'Agent', 'Task']);
 const WORKING_EVERY = 20; // say something about progress every N tool calls
-const LONG_JOB_MS = 8 * 60 * 1000; // a job this long (or this busy) earns the whole satellite sequence
+const LONG_JOB_MS = 8 * 60 * 1000; // a job this long (or this busy) earns a look at the stars
 const LONG_JOB_ACTIONS = 50;
 // mid-task with not a word from Claude: this long and the ticker starts counting (it's thinking),
 // this long and she says something about it, this long and she tells you nothing's stuck
@@ -155,7 +155,7 @@ export class Brain {
     const now = performance.now();
     if (now > th.fidget && !this.stella.stowed) {
       th.fidget = now + rand(9000, 16000);
-      // once in a long think she looks up at the satellite; otherwise a little something
+      // once in a long think she gazes up at the stars; otherwise a little something
       const gazed = !th.gazed && quiet > 25000 && this.stella.gaze({ big: false });
       if (gazed) th.gazed = true;
       else this.stella.reactToAction('think');
@@ -282,8 +282,8 @@ export class Brain {
     if (bigJob) await this.stella.teleport(this.stella.spot('stage'));
     // the panel comes in once she's back down from her victory pose
     this.stella.celebrate({ onSpeak: () => done({ summary, hold: 14000 }) });
-    // a long one: she'll send the red light up to the satellite once it's all quiet
-    if ((s.taskStart && Date.now() - s.taskStart >= LONG_JOB_MS) || s.count >= LONG_JOB_ACTIONS) this.stella.earnUplink();
+    // a long one: once it's all quiet she lights up for the stars
+    if ((s.taskStart && Date.now() - s.taskStart >= LONG_JOB_MS) || s.count >= LONG_JOB_ACTIONS) this.stella.starGaze();
   }
 
   // Is the window you typed your prompt in (Claude's) no longer the one in front?

@@ -91,7 +91,7 @@ export const Acts = {
   spark() { this.play('pulse'); return true; },
   zap() { this.play('flare'); return true; },
   gaze() { this.play('pulse'); return true; },
-  earnUplink() { this.play('flare'); return true; },
+  starGaze() { this.play('flare'); return true; }, // a long job done: she lights up for the stars
 
   celebrate({ onSpeak } = {}) {
     this.play('celebrate');

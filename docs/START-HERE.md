@@ -51,7 +51,7 @@ warning. Quit Stella for the lowest possible overlay overhead.
 
 Normal chat requests up to a 32,768-token context, capped by the installed model's advertised limit, and allows up to 1,536 generated tokens per reply (less for smaller-context models). Prompt selection reserves space for the answer and model template, using a conservative UTF-8 byte budget. Structured action/memory decisions retain their separate 8,192-token/400-token settings. Only one reply runs at a time, with no warmup or idle inference. `keep_alive: 0` asks Ollama to release the model after each reply. Larger contexts can use more memory. On this laptop, the live Qwen check reported a 32,768-token allocation entirely on GPU, about 6.56 GB. See [PERSONALITY-AND-CONTINUITY.md](PERSONALITY-AND-CONTINUITY.md) for the test conditions and limits.
 
-Ctrl+Alt+C uses upstream's small biochip view; it is **not** gaming mode.
+Ctrl+Alt+C puts her away: she curls up resting in the bottom-left corner and stays quiet until you talk to her or click her. It is **not** gaming mode.
 
 ## Desktop permissions and privacy
 
@@ -86,7 +86,7 @@ The local event bridge remains on `127.0.0.1:47823` and rejects browser Origin h
 
 - No model: open Ollama and run `ollama pull llama3.2:3b`, then reopen chat.
 - Cannot reach Ollama: if installed in the standard Windows location, Stella offers **Start Ollama**. It starts Stella's hidden local server without preloading a model. Check `http://127.0.0.1:11435/api/tags` and remove an unintended `OLLAMA_HOST` override. Gaming mode blocks the Start button.
-- Stella absent: check the tray's Gaming mode setting. Also try Ctrl+Alt+C for the biochip state.
+- Stella absent: check the tray's Gaming mode setting. Also try Ctrl+Alt+C: she may be resting in the bottom-left corner.
 - Port occupied: quit another Stella instance. For development, set `$env:STELLA_PORT='47825'` before starting; hooks must use the same port.
 - A very slow or failed first reply: inspect Ollama's logs and update Ollama/NVIDIA drivers from official sources. No automatic paid fallback exists.
 

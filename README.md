@@ -79,7 +79,7 @@ Stella appears in the lower-right part of your screen. Click her to talk. Right-
 
 ## What's next
 
-- A new intro animation and a redesigned away mode for Stella
+- A new intro animation for Stella
 - A packaged installer with updates, so Node.js isn't needed
 
 See the [roadmap](docs/ROADMAP.md) for more.

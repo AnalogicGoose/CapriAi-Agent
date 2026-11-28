@@ -521,14 +521,6 @@ async function boot() {
         if (cmd.on) stella.stow();
         else stella.unstow();
         break;
-      case 'satellite': // tray: out of her biochip if put away, awake, a curious pulse
-        if (stella.stowed) {
-          host.setConfig({ visible: true });
-          await stella.unstow();
-        }
-        stella.wake();
-        stella.perform('curious');
-        break;
       // --dev helpers
       case 'intro': // her entrance again, as when she starts
         panel.hide();

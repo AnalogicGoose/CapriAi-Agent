@@ -406,15 +406,15 @@ class CodexTools {
     }
     if (name === 'stella_settings_read') {
       shape(args, []); const state = this.state();
-      return { config: Object.fromEntries(['preferredBrowser', 'crunchyrollProfile', 'muted', 'volume', 'scale', 'lang', 'wander', 'possess', 'windowTracking', 'gamingMode', 'desktopActions', 'privacy', 'wakeWordEnabled', 'dailyReviewEnabled', 'dailyReviewNotify', 'projectCuriosityEnabled', 'routinesEnabled'].map(key => [key, state.config[key]])), displays: state.displays };
+      return { config: Object.fromEntries(['preferredBrowser', 'crunchyrollProfile', 'muted', 'volume', 'scale', 'lang', 'wander', 'windowTracking', 'gamingMode', 'desktopActions', 'privacy', 'wakeWordEnabled', 'dailyReviewEnabled', 'dailyReviewNotify', 'projectCuriosityEnabled', 'routinesEnabled'].map(key => [key, state.config[key]])), displays: state.displays };
     }
     if (name === 'stella_settings_change') {
       shape(args, ['patch']);
       if (typeof args.patch !== 'string' || args.patch.length > 2000 || (!interpreted && hypothetical(text))) throw Error('A direct settings request is required.');
       const patch = settingsPatch(JSON.parse(args.patch), this.state().displays);
-      const allowed = ['preferredBrowser', 'crunchyrollProfile', 'muted', 'volume', 'scale', 'lang', 'wander', 'possess', 'windowTracking', 'displayId', 'idleAnimations', 'cursorInteractions', 'personality', 'dailyRoutine', 'surpriseAnimations', 'ttsEnabled', 'wakeWordEnabled', 'dailyReviewEnabled', 'dailyReviewNotify', 'projectCuriosityEnabled', 'routinesEnabled'];
+      const allowed = ['preferredBrowser', 'crunchyrollProfile', 'muted', 'volume', 'scale', 'lang', 'wander', 'windowTracking', 'displayId', 'idleAnimations', 'cursorInteractions', 'personality', 'dailyRoutine', 'surpriseAnimations', 'ttsEnabled', 'wakeWordEnabled', 'dailyReviewEnabled', 'dailyReviewNotify', 'projectCuriosityEnabled', 'routinesEnabled'];
       if (!Object.keys(patch).length || Object.keys(patch).some(key => !allowed.includes(key))) throw Error('Use the control room for that preference.');
-      if (!interpreted && !/\b(?:browser|firefox|chrome|crunchyroll|profile|mute|unmute|volume|sound|settings|language|english|spanish|french|size|smaller|bigger|larger|scale|wander|roam|possess|tracking|display|monitor|animation|personality|routine|surprise|voice|speak|wake|listening|listen|review|recap|resumen|curiosity|feedback|routines?|workflow|process|silencia|volumen|idioma|tamano|mover|habla)\b/i.test(text)) throw Error('No current request to change that setting.');
+      if (!interpreted && !/\b(?:browser|firefox|chrome|crunchyroll|profile|mute|unmute|volume|sound|settings|language|english|spanish|french|size|smaller|bigger|larger|scale|wander|roam|tracking|display|monitor|animation|personality|routine|surprise|voice|speak|wake|listening|listen|review|recap|resumen|curiosity|feedback|routines?|workflow|process|silencia|volumen|idioma|tamano|mover|habla)\b/i.test(text)) throw Error('No current request to change that setting.');
       check(); this.patch(patch); return { changed: true, patch };
     }
     if (name === 'stella_close_app') {

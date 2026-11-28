@@ -388,7 +388,6 @@ export class Chat {
       'Use only the supplied context for task activity. No events received does not mean ChatGPT or Codex is idle. Old conversation claims about Claude or connected tools may be outdated or wrong; correct them instead of repeating them.',
       `Right now: ${this.brain.context()}`,
       this.stella.companion?.context() || '',
-      ...(/satellite|sat[eé]lite/i.test(this.history.at(-1)?.content || '') ? ['The fictional satellite in the desktop animation is a decorative character motif, not a live orbit tracker. You can be curious about it when discussing it, without turning it into a recurring agenda.'] : []),
     ].join('\n');
   }
 }

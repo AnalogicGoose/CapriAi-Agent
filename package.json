@@ -42,9 +42,7 @@
   "keywords": [
     "claude-code",
     "desktop-pet",
-    "electron",
-    "cyberpunk",
-    "edgerunners"
+    "electron"
   ],
   "license": "MIT",
   "engines": {

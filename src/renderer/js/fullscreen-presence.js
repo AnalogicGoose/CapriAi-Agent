@@ -37,7 +37,7 @@ export class FullscreenPresence {
     this.stella.fullscreenProgress = this.progress;
     document.body.classList.toggle('fullscreen-presence', this.stella.fullscreen);
     if (active) this.stella.endAct(false);
-    // Reuse the original red/violet teleport language, without piling up emitters.
+    // Her soft dissolve/gather sound, without piling up effects.
     if (Math.abs(this.target - this.from) > 0.00001 && !reducedMotion.matches
         && now - (this.lastEffect ?? -Infinity) > 120 && !this.stella.hidden && !this.stella.gaming) {
       this.lastEffect = now;
