@@ -581,7 +581,7 @@ function endVoiceSession() {
   voiceSession = false;
   if (speech.current?.wakeActivated) speech.cancel();
   if (overlay && !overlay.isDestroyed() && (fullscreenState.active || config.load().gamingMode)) {
-    overlay.setIgnoreMouseEvents(true, { forward: true }); setOverlayFocusable(false); overlay.hide();
+    setOverlayIgnore(true); setOverlayFocusable(false); overlay.hide();
   }
 }
 
@@ -641,6 +641,16 @@ function setOverlayFocusable(on) {
   overlay.setAlwaysOnTop(true, 'screen-saver');
 }
 
+// Click-through only when it changes: re-applying it rewrites the overlay's native window styles, and Windows
+// then resets the cursor of whatever is under her (the control room's hand cursor flickered to an arrow every
+// 150 ms while her pointer recovery re-sent the same state). Forgotten on show, in case Windows reset it.
+let overlayIgnore = null;
+function setOverlayIgnore(ignore) {
+  if (!overlay || overlay.isDestroyed() || ignore === overlayIgnore) return;
+  overlayIgnore = ignore;
+  overlay.setIgnoreMouseEvents(ignore, { forward: true });
+}
+
 function fitOverlay() {
   if (!overlay) return;
   const { workArea } = targetDisplay();
@@ -649,6 +659,7 @@ function fitOverlay() {
 }
 
 function createOverlay() {
+  overlayIgnore = null; // a new window starts with no click-through applied
   const { workArea } = targetDisplay();
   overlay = new BrowserWindow({
     ...workArea,
@@ -684,13 +695,14 @@ function createOverlay() {
   overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlay.webContents.on('will-navigate', e => e.preventDefault());
   overlay.setAlwaysOnTop(true, 'screen-saver');
-  overlay.setIgnoreMouseEvents(true, { forward: true });
+  setOverlayIgnore(true);
   const microphonePermission = (contents, permission, details={}) =>
     contents === overlay?.webContents && permission === 'media' && Boolean(speech.current)
       && speech.permitted(speech.current) && (!details.mediaTypes || details.mediaTypes.every(type=>type==='audio'))
       && (!details.mediaType || details.mediaType==='audio');
   overlay.webContents.session.setPermissionRequestHandler((contents, permission, callback, details) => callback(microphonePermission(contents,permission,details)));
   overlay.webContents.session.setPermissionCheckHandler((contents, permission, origin, details) => microphonePermission(contents,permission,details));
+  overlay.on('show', () => { const ignore = overlayIgnore ?? true; overlayIgnore = null; setOverlayIgnore(ignore); });
   overlay.loadURL('stella://app/src/renderer/index.html');
   // always shown: put away, she's still there as her biochip in the corner
   overlay.once('ready-to-show', () => {
@@ -816,7 +828,7 @@ function onFullscreen(active) {
   if (!overlay || overlay.isDestroyed()) return;
   overlay.webContents.setBackgroundThrottling(false);
   if (active) {
-    overlay.setIgnoreMouseEvents(true, { forward: true });
+    setOverlayIgnore(true);
     if (!voiceSession) setOverlayFocusable(false);
     // Renderer normally acknowledges in 160 ms. This also handles a frozen renderer.
     fullscreenHideTimer = setTimeout(() => {
@@ -829,7 +841,7 @@ function onFullscreen(active) {
     // setFocusable(false) on departure changes native mouse activation too.
     // Restore it without activating or focusing over the user's foreground app.
     setOverlayFocusable(true);
-    overlay.setIgnoreMouseEvents(true, { forward: true });
+    setOverlayIgnore(true);
     overlay.showInactive();
   }
   overlay.webContents.send('fullscreen:state', fullscreenState);
@@ -1264,7 +1276,7 @@ function registerIpc() {
     if (!speechCaller(event) || typeof on !== 'boolean' || !overlay || overlay.isDestroyed()) return;
     const ignore = ((fullscreenState.active || config.load().gamingMode) && !voiceSession) || !on;
     if (!ignore && !overlay.isFocusable()) setOverlayFocusable(true);
-    overlay.setIgnoreMouseEvents(ignore, { forward: true });
+    setOverlayIgnore(ignore);
   });
   ipcMain.handle('overlay:cursor', () => {
     const p = screen.getCursorScreenPoint();
