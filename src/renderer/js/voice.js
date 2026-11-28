@@ -15,7 +15,8 @@ const BLIP_NOTES = [74, 76, 78, 81, 83, 86];
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
 
 export const CUES = ['hello', 'blip', 'tick', 'done', 'alert', 'error', 'teleport-out', 'teleport-in',
-  'listen', 'grab', 'drop', 'chime', 'celebrate', 'flare', 'remember', 'recall', 'approval', 'wave', 'dance'];
+  'listen', 'grab', 'drop', 'chime', 'celebrate', 'flare', 'remember', 'recall', 'approval', 'wave', 'dance',
+  'curl-up', 'unfurl'];
 
 // The same cue never stacks on itself faster than this.
 const MIN_GAP = 140;
@@ -122,6 +123,8 @@ export class Voice {
       approval: () => this.approval(),
       wave: () => this.wave(),
       dance: () => this.dance(),
+      'curl-up': () => this.curlUp(),
+      unfurl: () => this.unfurl(),
     }[cue];
     try { fn?.(); } catch (err) { console.warn('[stella] sound failed', cue, err); }
   }
@@ -356,6 +359,25 @@ export class Voice {
     const t = this.ctx.currentTime;
     this.bell(midi(83), t, 0.22, 0.055, { detune: 0 });
     this.bell(midi(83), t + 0.2, 0.3, 0.05, { detune: 0 });
+  }
+
+  // put away: she curls up in her corner with a sigh — two bells settling down, a low bloom, air falling away
+  curlUp() {
+    const t = this.ctx.currentTime;
+    this.bell(midi(86), t, 0.7, 0.07, { bright: 0.8, send: 0.45 });
+    this.bell(midi(81), t + 0.22, 1.1, 0.065, { bright: 0.7, send: 0.5 });
+    this.tone(midi(50), t + 0.3, 1.0, 0.07, { attack: 0.12, send: 0.3 });
+    this.air(t, 0.9, 0.045, 3000, 600, { attack: 0.15 });
+  }
+
+  // coming back: air rising, a bell run opening up and a bright open fifth on top
+  unfurl() {
+    const t = this.ctx.currentTime;
+    this.air(t, 0.5, 0.045, 600, 5000, { attack: 0.12 });
+    [74, 78, 81, 86].forEach((n, i) => this.bell(midi(n), t + 0.1 + i * 0.08, 0.35, 0.055, { send: 0.4 }));
+    const top = t + 0.45;
+    this.bell(midi(86), top, 0.9, 0.08, { bright: 1.3 });
+    this.bell(midi(93), top + 0.01, 0.8, 0.05);
   }
 
   // spinning: a quick up-and-down twirl

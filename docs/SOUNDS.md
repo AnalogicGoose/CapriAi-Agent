@@ -26,6 +26,8 @@ Hear them all in the sound lab: run `python -m http.server 8765` in the repo roo
 | `approval` | She asks for permission |
 | `wave` | She waves |
 | `dance` | She spins or dances |
+| `curl-up` | You put her away: she curls up in the corner |
+| `unfurl` | She comes back out of her corner |
 
 Motion sounds (`listen` and everything from `chime` down) are mapped in `MOTION_CUES`
 (`src/renderer/js/stella/motions.js`). They stay quiet while she is speaking aloud, and her frequent
