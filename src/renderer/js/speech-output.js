@@ -1,10 +1,12 @@
 // Audio stays in the overlay; the local worker streams signed 16-bit PCM.
 // Change the silence between phrases while playing each generated sample as-is.
 const PHRASE_PAUSES = { neutral: 0.06, playful: 0.02, comforting: 0.19, pleased: 0.12, curious: 0.04 };
-// The local voice generates only a little faster than real time, in chunks that sometimes arrive late.
-// Starting a line, play this far ahead so that jitter is absorbed instead of heard as pauses; if the queue
-// still runs dry mid-line, pick up again with a shorter one (measured on the RTX laptop: no gaps with both).
-const START_LEAD = 0.6, RESTART_LEAD = 0.3;
+// The local 1.7B voice runs only ~0.9-1.3x real time on the RTX laptop (slowest in its first second), so a
+// line that started right away would catch up with it and stall mid-word. Each line (or batch of sentences)
+// starts this far ahead: at least START_LEAD, more for longer text (LEAD_PER_CHAR, up to MAX_LEAD), so the
+// wait falls between sentences, like a breath. If a line still runs dry, it picks up RESTART_LEAD ahead, twice
+// that the next time, and so on (up to MAX_LEAD), so a slow run stalls once, not over and over.
+const START_LEAD = 0.6, LEAD_PER_CHAR = 0.008, MAX_LEAD = 2.5, RESTART_LEAD = 0.3;
 // Most text sent in one request: the worker stops after 600 tokens (~48 s, ~800 characters at her pace).
 const BATCH_CHARS = 400;
 const SENTENCE_PUNCTUATION = /([.!?]+)["'\u2019\u201d)\]]*(?=\s|$)/g;
@@ -112,11 +114,20 @@ export class SpeechPlayer {
     }
     const source = this.source = ctx.createBufferSource();
     source.buffer = buffer; source.connect(this.analyser);
-    const pause = utterance && !utterance.started && this.nextTime
+    const fresh = utterance && !utterance.started;
+    const pause = fresh && this.nextTime
       ? (Object.hasOwn(PHRASE_PAUSES, utterance.mood) ? PHRASE_PAUSES[utterance.mood] : PHRASE_PAUSES.neutral) : 0;
-    // Nothing queued: the first audio of a line gets the full head start, a queue that ran dry a short one.
-    const queued = this.nextTime + pause >= ctx.currentTime + 0.06;
-    const at = queued ? this.nextTime + pause : ctx.currentTime + (this.nextTime ? RESTART_LEAD : START_LEAD);
+    let at;
+    if (fresh || !this.nextTime) {
+      // A new line: never before its head start, whatever is still playing ahead of it.
+      const lead = Math.min(MAX_LEAD, Math.max(START_LEAD, (utterance?.text?.length || 0) * LEAD_PER_CHAR));
+      at = Math.max(this.nextTime + pause, ctx.currentTime + lead);
+      this.restartLead = RESTART_LEAD;
+    } else if (this.nextTime >= ctx.currentTime + 0.06) at = this.nextTime;
+    else { // ran dry mid-line
+      at = ctx.currentTime + (this.restartLead || RESTART_LEAD);
+      this.restartLead = Math.min(MAX_LEAD, (this.restartLead || RESTART_LEAD) * 2);
+    }
     // A chunk that starts after a gap (first one, or late from a busy GPU) would pop: ramp it in over 4 ms.
     if (!this.nextTime || at > this.nextTime + 0.002) fadeIn(buffer);
     if (utterance) utterance.started = true;

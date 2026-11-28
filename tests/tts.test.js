@@ -217,3 +217,34 @@ test('a batch stays well under what the voice can say in one request', async () 
     assert.equal(sent.join(' '), sentence.repeat(14).trim());
   } finally { Object.assign(global, old); }
 });
+
+test('a longer line waits a little longer before it starts, and a line that runs dry waits longer each time', async () => {
+  const source = await fs.readFile(require.resolve('../src/renderer/js/speech-output.js'), 'utf8');
+  const { SpeechPlayer } = await import('data:text/javascript;base64,' + Buffer.from(withRichText(source)).toString('base64'));
+  const old = { window: global.window, document: global.document, cancelAnimationFrame: global.cancelAnimationFrame,
+    requestAnimationFrame: global.requestAnimationFrame };
+  global.window = global.document = { addEventListener() {} };
+  global.cancelAnimationFrame = () => {}; global.requestAnimationFrame = () => 0;
+  try {
+    const starts = [];
+    const ctx = { currentTime: 10, state: 'running',
+      createAnalyser: () => ({ connect() {}, disconnect() {}, getFloatTimeDomainData() {} }),
+      createBufferSource: () => ({ connect() {}, disconnect() {}, start: at => starts.push(at), context: ctx }) };
+    const player = new SpeechPlayer({ host: { ttsCancel() {} }, voice: { master: { gain: { value: 1 } }, muted: false } });
+    player.configure({ ttsEnabled: true });
+    const chunk = () => ({ duration: 0.5, sampleRate: 24000, getChannelData: () => new Float32Array(100) });
+    player.pending = { text: 'x'.repeat(30), mood: 'neutral' };   // a short line: the base head start
+    player.schedule(ctx, chunk());
+    assert.ok(Math.abs(starts[0] - 10.6) < 1e-9, `short line at ${starts[0]}`);
+    player.pending = { text: 'y'.repeat(250), mood: 'neutral' };  // the next, longer batch: about 2 s of breath
+    ctx.currentTime = 10.7; player.schedule(ctx, chunk());
+    assert.ok(Math.abs(starts[1] - (10.7 + 250 * 0.008)) < 1e-9, `long batch at ${starts[1]}`);
+    ctx.currentTime = 20; player.schedule(ctx, chunk());          // ran dry inside it: 0.3 s
+    assert.ok(Math.abs(starts[2] - 20.3) < 1e-9, `first restart at ${starts[2]}`);
+    ctx.currentTime = 30; player.schedule(ctx, chunk());          // dry again: twice that
+    assert.ok(Math.abs(starts[3] - 30.6) < 1e-9, `second restart at ${starts[3]}`);
+    player.stop(false); player.pending = { text: 'z'.repeat(1000), mood: 'neutral' };
+    ctx.currentTime = 40; player.schedule(ctx, chunk());          // never more than 2.5 s
+    assert.ok(Math.abs(starts[4] - 42.5) < 1e-9, `capped at ${starts[4]}`);
+  } finally { Object.assign(global, old); }
+});
